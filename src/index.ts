@@ -85,6 +85,19 @@ module.exports = (app: ServerAPI): Plugin => {
         }
       })
 
+      // POST /plugins/signalk-units-preference/signalk-metadata
+      // Receive SignalK metadata from frontend
+      router.post('/signalk-metadata', async (req: Request, res: Response) => {
+        try {
+          const metadata = req.body
+          unitsManager.setSignalKMetadata(metadata)
+          res.json({ success: true })
+        } catch (error) {
+          app.error(`Error setting SignalK metadata: ${error}`)
+          res.status(500).json({ error: 'Internal server error' })
+        }
+      })
+
       // GET /plugins/signalk-units-preference/conversion/:path
       // Get conversion info for a specific path
       router.get('/conversion/:path(*)', (req: Request, res: Response) => {

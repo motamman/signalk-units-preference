@@ -19,6 +19,7 @@ export class UnitsManager {
   private metadata: UnitsMetadataStore
   private preferences: UnitsPreferences
   private unitDefinitions: Record<string, UnitMetadata>
+  private signalKMetadata: Record<string, string> // path -> units
   private metadataPath: string
   private preferencesPath: string
   private definitionsPath: string
@@ -37,6 +38,7 @@ export class UnitsManager {
       pathOverrides: {}
     }
     this.unitDefinitions = {}
+    this.signalKMetadata = {}
   }
 
   /**
@@ -46,6 +48,14 @@ export class UnitsManager {
     await this.loadMetadata()
     await this.loadPreferences()
     await this.loadUnitDefinitions()
+  }
+
+  /**
+   * Set SignalK metadata from frontend
+   */
+  setSignalKMetadata(metadata: Record<string, string>): void {
+    this.signalKMetadata = metadata
+    this.app.debug(`Received SignalK metadata for ${Object.keys(metadata).length} paths`)
   }
 
   /**
@@ -268,7 +278,9 @@ export class UnitsManager {
       // If still no metadata, try to infer from SignalK metadata
       if (!metadata) {
         const skMetadata = this.app.getMetadata(pathStr)
+        this.app.debug(`SignalK metadata for ${pathStr}: ${JSON.stringify(skMetadata)}`)
         if (skMetadata?.units) {
+          this.app.debug(`Found units in SignalK metadata: ${skMetadata.units}`)
           const inferred = this.inferMetadataFromSignalK(pathStr, skMetadata.units)
           if (!inferred) {
             this.app.debug(`Could not infer metadata for path: ${pathStr}`)
@@ -276,8 +288,9 @@ export class UnitsManager {
             return this.getPassThroughConversion(pathStr, skMetadata.units)
           }
           metadata = inferred
+          this.app.debug(`Inferred metadata: ${JSON.stringify(metadata)}`)
         } else {
-          this.app.debug(`No metadata found for path: ${pathStr}`)
+          this.app.debug(`No SignalK metadata units found for path: ${pathStr}`)
           // Return pass-through conversion
           return this.getPassThroughConversion(pathStr)
         }
@@ -332,9 +345,14 @@ export class UnitsManager {
     // Check SignalK metadata if not provided
     let unit = signalKUnit
     if (!unit) {
-      const skMetadata = this.app.getMetadata(pathStr)
-      if (skMetadata?.units) {
-        unit = skMetadata.units
+      // First check the metadata from frontend
+      unit = this.signalKMetadata[pathStr]
+      if (!unit) {
+        // Fallback to app.getMetadata
+        const skMetadata = this.app.getMetadata(pathStr)
+        if (skMetadata?.units) {
+          unit = skMetadata.units
+        }
       }
     }
 
@@ -547,7 +565,21 @@ export class UnitsManager {
       return similarPath[1]
     }
 
-    return null
+    // Try comprehensive defaults
+    const comprehensivePath = Object.entries(comprehensiveDefaultUnits).find(
+      ([_, meta]) => meta.category === category && meta.baseUnit === units
+    )
+
+    if (comprehensivePath) {
+      return comprehensivePath[1]
+    }
+
+    // Return basic metadata with baseUnit and category, no conversions
+    return {
+      baseUnit: units,
+      category: category,
+      conversions: {}
+    }
   }
 
   /**
