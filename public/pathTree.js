@@ -1,0 +1,222 @@
+// Path tree utility functions
+
+// Extract paths from SignalK API response
+function extractPathsFromSignalK(obj) {
+  const paths = []
+
+  function extractRecursive(obj, prefix = '') {
+    if (!obj || typeof obj !== 'object') return
+
+    for (const key in obj) {
+      if (key === 'meta' || key === 'timestamp' || key === 'source' || key === '$source' || key === 'values' || key === 'sentence') continue
+
+      const currentPath = prefix ? `${prefix}.${key}` : key
+
+      if (obj[key] && typeof obj[key] === 'object') {
+        if (obj[key].value !== undefined) {
+          paths.push(currentPath)
+        }
+        extractRecursive(obj[key], currentPath)
+      }
+    }
+  }
+
+  // Get the self vessel ID
+  const selfVesselId = obj.self
+  const actualSelfId = selfVesselId && selfVesselId.startsWith('vessels.') ?
+    selfVesselId.replace('vessels.', '') : selfVesselId
+
+  // Process self vessel if it exists
+  if (obj.vessels && actualSelfId && obj.vessels[actualSelfId]) {
+    extractRecursive(obj.vessels[actualSelfId], '')
+  }
+
+  return paths.sort()
+}
+
+// Load available paths from SignalK API
+async function loadPaths() {
+  try {
+    const res = await fetch('/signalk/v1/api/')
+    if (!res.ok) throw new Error('Failed to load SignalK data')
+
+    const data = await res.json()
+    availablePaths = extractPathsFromSignalK(data)
+
+    // Build tree structure
+    pathTree = buildPathTree(availablePaths)
+
+    // Render tree
+    renderPathTree()
+  } catch (error) {
+    console.error('Failed to load paths:', error)
+  }
+}
+
+// Build hierarchical tree from flat path list
+function buildPathTree(paths) {
+  const tree = {}
+
+  paths.forEach(path => {
+    const parts = path.split('.')
+    let current = tree
+
+    parts.forEach((part, index) => {
+      if (!current[part]) {
+        current[part] = {
+          _children: {},
+          _fullPath: parts.slice(0, index + 1).join('.'),
+          _hasValue: index === parts.length - 1
+        }
+      }
+      current = current[part]._children
+    })
+  })
+
+  return tree
+}
+
+// Render path tree
+function renderPathTree() {
+  const container = document.getElementById('pathTreeContainer')
+  if (!container) return
+
+  container.innerHTML = renderTreeNode(pathTree, 0)
+
+  // Setup search
+  const searchInput = document.getElementById('pathTreeSearch')
+  if (searchInput) {
+    searchInput.addEventListener('input', (e) => filterPathTree(e.target.value, 'pathTreeContainer'))
+  }
+
+  // Also render for metadata tab
+  const metadataContainer = document.getElementById('metadataPathTree')
+  if (metadataContainer) {
+    metadataContainer.innerHTML = renderTreeNode(pathTree, 0)
+
+    const metadataSearchInput = document.getElementById('metadataPathSearch')
+    if (metadataSearchInput) {
+      metadataSearchInput.addEventListener('input', (e) => filterPathTree(e.target.value, 'metadataPathTree'))
+    }
+  }
+}
+
+// Render a tree node
+function renderTreeNode(node, level) {
+  let html = ''
+
+  const keys = Object.keys(node).sort()
+
+  keys.forEach(key => {
+    const item = node[key]
+    const hasChildren = Object.keys(item._children).length > 0
+    const classes = ['path-tree-item']
+
+    if (item._hasValue) {
+      classes.push('has-value')
+    }
+
+    html += `<div class="path-tree-node" data-level="${level}">`
+    html += `<div class="${classes.join(' ')}" onclick="selectPath('${item._fullPath}')" data-path="${item._fullPath}">`
+
+    if (hasChildren) {
+      html += `<span class="path-tree-toggle" onclick="event.stopPropagation(); toggleTreeNode(this)">▶</span>`
+    } else {
+      html += `<span class="path-tree-toggle"></span>`
+    }
+
+    html += `<span class="path-tree-label">${key}</span>`
+    html += `</div>`
+
+    if (hasChildren) {
+      html += `<div class="path-tree-children">`
+      html += renderTreeNode(item._children, level + 1)
+      html += `</div>`
+    }
+
+    html += `</div>`
+  })
+
+  return html
+}
+
+// Toggle tree node expansion
+function toggleTreeNode(toggle) {
+  const treeNode = toggle.closest('.path-tree-node')
+  const children = treeNode.querySelector('.path-tree-children')
+
+  if (children) {
+    const isExpanded = children.classList.contains('expanded')
+    children.classList.toggle('expanded')
+    toggle.textContent = isExpanded ? '▶' : '▼'
+  }
+}
+
+// Select a path
+function selectPath(path) {
+  // Determine which tree this is from
+  const clickedItem = event.target.closest('.path-tree-item')
+  const container = clickedItem.closest('.path-tree-container')
+  const isMetadataTree = container.id === 'metadataPathTree'
+
+  // Remove previous selection in this container only
+  container.querySelectorAll('.path-tree-item.selected').forEach(el => {
+    el.classList.remove('selected')
+  })
+
+  // Add selection to clicked item
+  clickedItem.classList.add('selected')
+
+  if (isMetadataTree) {
+    // Metadata tab
+    selectMetadataPath(path)
+  } else {
+    // Override tab
+    document.getElementById('newOverridePath').value = path
+    document.getElementById('selectedPathDisplay').textContent = path
+  }
+}
+
+// Filter path tree based on search
+function filterPathTree(searchTerm, containerId) {
+  const container = document.getElementById(containerId)
+  if (!container) return
+
+  if (!searchTerm) {
+    // Show all, collapse all
+    container.querySelectorAll('.path-tree-children').forEach(el => {
+      el.classList.remove('expanded')
+    })
+    container.querySelectorAll('.path-tree-toggle').forEach(el => {
+      if (el.textContent) el.textContent = '▶'
+    })
+    container.querySelectorAll('.path-tree-node').forEach(el => {
+      el.style.display = ''
+    })
+    return
+  }
+
+  const lowerSearch = searchTerm.toLowerCase()
+
+  // Filter and expand matching paths
+  container.querySelectorAll('.path-tree-node').forEach(node => {
+    const pathItem = node.querySelector('.path-tree-item')
+    const path = pathItem.dataset.path
+
+    if (path && path.toLowerCase().includes(lowerSearch)) {
+      // Show this node
+      node.style.display = ''
+
+      // Expand all parents
+      let parent = node.parentElement
+      while (parent && parent.classList.contains('path-tree-children')) {
+        parent.classList.add('expanded')
+        const toggle = parent.previousElementSibling?.querySelector('.path-tree-toggle')
+        if (toggle && toggle.textContent) toggle.textContent = '▼'
+        parent = parent.parentElement?.parentElement
+      }
+    } else {
+      node.style.display = 'none'
+    }
+  })
+}

@@ -1,0 +1,32 @@
+{
+  "name": "signalk-units-preference",
+  "version": "1.0.0",
+  "description": "SignalK plugin for managing unit conversions and display preferences",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "signalk-node-server-plugin",
+    "signalk-category-utility",
+    "signalk-webapp"
+  ],
+  "author": "",
+  "license": "Apache-2.0",
+  "signalk": {
+    "appIcon": "./icon.png",
+    "displayName": "Units Preference"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  },
+  "devDependencies": {
+    "@signalk/server-api": "^2.8.0",
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.3.0"
+  },
+  "signalk-plugin-enabled-by-default": false
+}

@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Units Preference Manager</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            padding: 30px;
+        }
+
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: #7f8c8d;
+            margin-bottom: 30px;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 10px;
+            border-bottom: 2px solid #ecf0f1;
+            margin-bottom: 30px;
+        }
+
+        .tab {
+            padding: 10px 20px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+            color: #7f8c8d;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -2px;
+            transition: all 0.3s;
+        }
+
+        .tab:hover {
+            color: #3498db;
+        }
+
+        .tab.active {
+            color: #3498db;
+            border-bottom-color: #3498db;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .section {
+            margin-bottom: 30px;
+        }
+
+        .section h2 {
+            color: #2c3e50;
+            margin-bottom: 15px;
+            font-size: 20px;
+        }
+
+        .category-list, .override-list {
+            display: grid;
+            gap: 15px;
+        }
+
+        .category-item, .override-item {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 6px;
+            border: 1px solid #e9ecef;
+        }
+
+        .category-header, .override-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .category-name, .path-name {
+            font-weight: 600;
+            color: #2c3e50;
+            font-family: monospace;
+        }
+
+        .form-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        .input-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .input-group label {
+            font-size: 14px;
+            color: #5a6c7d;
+            margin-bottom: 5px;
+        }
+
+        .input-group input,
+        .input-group select {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .input-group input:focus,
+        .input-group select:focus {
+            outline: none;
+            border-color: #3498db;
+        }
+
+        button {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: #3498db;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #2980b9;
+        }
+
+        .btn-danger {
+            background: #e74c3c;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #c0392b;
+        }
+
+        .btn-success {
+            background: #2ecc71;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #27ae60;
+        }
+
+        .btn-secondary {
+            background: #95a5a6;
+            color: white;
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .btn-secondary:hover {
+            background: #7f8c8d;
+        }
+
+        .add-override {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr auto;
+            gap: 10px;
+            align-items: end;
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+        }
+
+        .status-message {
+            padding: 12px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .status-message.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status-message.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .status-message.show {
+            display: block;
+        }
+
+        .loader {
+            text-align: center;
+            padding: 40px;
+            color: #7f8c8d;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #7f8c8d;
+        }
+
+        /* Path Tree Styles */
+        .path-tree-container {
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background: white;
+            max-height: 400px;
+            overflow-y: auto;
+            padding: 8px;
+            margin-bottom: 10px;
+        }
+
+        .path-tree-search {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-bottom: 8px;
+        }
+
+        .path-tree-node {
+            margin-left: 20px;
+        }
+
+        .path-tree-item {
+            padding: 4px 8px;
+            cursor: pointer;
+            user-select: none;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .path-tree-item:hover {
+            background: #f0f8ff;
+        }
+
+        .path-tree-item.selected {
+            background: #d0e8ff;
+            font-weight: 500;
+        }
+
+        .path-tree-item.has-value {
+            color: #0066cc;
+        }
+
+        .path-tree-toggle {
+            width: 16px;
+            height: 16px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            flex-shrink: 0;
+        }
+
+        .path-tree-children {
+            margin-left: 20px;
+            display: none;
+        }
+
+        .path-tree-children.expanded {
+            display: block;
+        }
+
+        .path-tree-label {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Units Preference Manager</h1>
+        <p class="subtitle">Configure unit conversions and display preferences for SignalK data</p>
+
+        <div id="statusMessage" class="status-message"></div>
+
+        <div class="tabs">
+            <button class="tab active" data-tab="categories">Category Preferences</button>
+            <button class="tab" data-tab="patterns">Path Patterns</button>
+            <button class="tab" data-tab="metadata">Metadata</button>
+        </div>
+
+        <div id="categories" class="tab-content active">
+            <div class="section">
+                <h2>Category Preferences</h2>
+                <p style="color: #7f8c8d; margin-bottom: 20px;">
+                    Set default units for each category. These apply to all paths unless overridden.
+                </p>
+                <div id="categoryList" class="category-list loader">Loading...</div>
+            </div>
+        </div>
+
+        <div id="patterns" class="tab-content">
+            <div class="section">
+                <h2>Add Path Pattern</h2>
+                <p style="color: #7f8c8d; margin-bottom: 20px;">
+                    Define patterns to automatically categorize paths. Use * for wildcards (e.g., *.temperature, environment.**)
+                </p>
+                <div class="add-override">
+                    <div class="input-group">
+                        <label>Pattern</label>
+                        <input type="text" id="newPatternPattern" placeholder="e.g., *.temperature">
+                    </div>
+                    <div class="input-group">
+                        <label>Category</label>
+                        <input type="text" id="newPatternCategory" placeholder="e.g., temperature">
+                    </div>
+                    <div class="input-group">
+                        <label>Base Unit</label>
+                        <input type="text" id="newPatternBase" placeholder="e.g., K">
+                    </div>
+                    <div class="input-group">
+                        <label>Target Unit</label>
+                        <input type="text" id="newPatternUnit" placeholder="e.g., celsius">
+                    </div>
+                    <div class="input-group">
+                        <label>Display Format</label>
+                        <input type="text" id="newPatternFormat" placeholder="e.g., 0.0">
+                    </div>
+                    <div class="input-group">
+                        <label>Priority</label>
+                        <input type="number" id="newPatternPriority" placeholder="100" value="100">
+                    </div>
+                    <button class="btn-success" onclick="addPattern()">Add Pattern</button>
+                </div>
+            </div>
+
+            <div class="section">
+                <h2>Path Patterns</h2>
+                <p style="color: #7f8c8d; margin-bottom: 20px;">
+                    Patterns are checked in priority order (higher = first). Example: *.temperature matches any path ending in .temperature
+                </p>
+                <div id="patternList" class="override-list loader">Loading...</div>
+            </div>
+        </div>
+
+        <div id="metadata" class="tab-content">
+            <div class="section">
+                <h2>Add/Edit Unit Metadata</h2>
+                <p style="color: #7f8c8d; margin-bottom: 20px;">
+                    Define base units and conversions for paths.
+                </p>
+                <div style="background: #f8f9fa; padding: 20px; border-radius: 6px; margin-bottom: 20px;">
+                    <div class="input-group" style="margin-bottom: 15px;">
+                        <label>Select Path</label>
+                        <input type="text" id="metadataPathSearch" class="path-tree-search" placeholder="🔍 Search paths...">
+                        <div id="metadataPathTree" class="path-tree-container"></div>
+                        <input type="hidden" id="selectedMetadataPath">
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+                        <div class="input-group">
+                            <label>Base Unit</label>
+                            <select id="metadataBaseUnit" onchange="handleBaseUnitChange()">
+                                <option value="">-- Select Base Unit --</option>
+                                <option value="m/s">m/s (speed)</option>
+                                <option value="K">K (temperature)</option>
+                                <option value="Pa">Pa (pressure)</option>
+                                <option value="m">m (distance/depth)</option>
+                                <option value="rad">rad (angle)</option>
+                                <option value="m3">m³ (volume)</option>
+                                <option value="V">V (voltage)</option>
+                                <option value="A">A (current)</option>
+                                <option value="W">W (power)</option>
+                                <option value="Hz">Hz (frequency)</option>
+                                <option value="ratio">ratio (percentage)</option>
+                                <option value="s">s (time)</option>
+                                <option value="C">C (charge)</option>
+                                <option value="deg">deg (latitude/longitude)</option>
+                                <option value="custom">✏️ Custom...</option>
+                            </select>
+                            <input type="text" id="metadataBaseUnitCustom" placeholder="Enter custom base unit" style="display: none; margin-top: 5px;">
+                        </div>
+                        <div class="input-group">
+                            <label>Category</label>
+                            <select id="metadataCategory">
+                                <option value="">-- Select Category --</option>
+                                <option value="speed">speed</option>
+                                <option value="temperature">temperature</option>
+                                <option value="pressure">pressure</option>
+                                <option value="distance">distance</option>
+                                <option value="depth">depth</option>
+                                <option value="angle">angle</option>
+                                <option value="volume">volume</option>
+                                <option value="voltage">voltage</option>
+                                <option value="current">current</option>
+                                <option value="power">power</option>
+                                <option value="frequency">frequency</option>
+                                <option value="percentage">percentage</option>
+                                <option value="time">time</option>
+                                <option value="charge">charge</option>
+                                <option value="volumeRate">volumeRate</option>
+                            </select>
+                        </div>
+                        <div style="padding-top: 24px;">
+                            <strong>Selected:</strong> <span id="selectedMetadataDisplay" style="color: #667eea;">None</span>
+                        </div>
+                    </div>
+
+                    <div style="background: white; padding: 15px; border-radius: 4px; margin-bottom: 15px;">
+                        <h4 style="margin: 0 0 10px 0;">Conversions</h4>
+                        <div id="conversionsList" style="margin-bottom: 10px;"></div>
+                        <div style="display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: end; margin-bottom: 10px;">
+                            <div class="input-group">
+                                <label>Conversion Template</label>
+                                <select id="conversionTemplate" onchange="handleConversionTemplateChange()">
+                                    <option value="">-- Select Conversion --</option>
+                                    <option value="custom">✏️ Custom Conversion...</option>
+                                </select>
+                            </div>
+                            <button class="btn-success" onclick="addConversionToMetadata()">Add Conversion</button>
+                        </div>
+                        <div id="customConversionInputs" style="display: none; grid-template-columns: 1fr 2fr 2fr 1fr; gap: 10px; align-items: end;">
+                            <div class="input-group">
+                                <label>Unit Name</label>
+                                <input type="text" id="newConversionUnit" placeholder="e.g., knots">
+                            </div>
+                            <div class="input-group">
+                                <label>Formula</label>
+                                <input type="text" id="newConversionFormula" placeholder="e.g., value * 1.94384">
+                            </div>
+                            <div class="input-group">
+                                <label>Inverse Formula</label>
+                                <input type="text" id="newConversionInverseFormula" placeholder="e.g., value * 0.514444">
+                            </div>
+                            <div class="input-group">
+                                <label>Symbol</label>
+                                <input type="text" id="newConversionSymbol" placeholder="e.g., kn">
+                            </div>
+                        </div>
+                    </div>
+
+                    <button onclick="saveMetadata()" style="background: #2ecc71;">Save Metadata</button>
+                    <button onclick="clearMetadataForm()" class="btn-secondary">Clear</button>
+                </div>
+            </div>
+
+            <div class="section">
+                <h2>All Unit Metadata</h2>
+                <p style="color: #7f8c8d; margin-bottom: 20px;">
+                    View all unit definitions and available conversions.
+                </p>
+                <div id="metadataList" class="loader">Loading...</div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+    <script src="pathTree.js"></script>
+</body>
+</html>
