@@ -550,6 +550,22 @@ export class UnitsManager {
     // This ensures standard SignalK categories use the correct base units
     const categoryToBaseUnitMap: Record<string, string> = { ...categoryToBaseUnit }
 
+    // Scan custom categories from preferences
+    for (const [category, pref] of Object.entries(this.preferences.categories || {})) {
+      if (pref.baseUnit) {
+        // This is a custom category
+        categoriesSet.add(category)
+        baseUnitsSet.add(pref.baseUnit)
+        categoryToBaseUnitMap[category] = pref.baseUnit
+
+        // Add the target unit to the targetUnitsByBase mapping
+        if (!targetUnitsByBase[pref.baseUnit]) {
+          targetUnitsByBase[pref.baseUnit] = new Set()
+        }
+        targetUnitsByBase[pref.baseUnit].add(pref.targetUnit)
+      }
+    }
+
     // Scan all metadata (including comprehensive defaults)
     const allMetadata = { ...comprehensiveDefaultUnits, ...this.metadata }
 

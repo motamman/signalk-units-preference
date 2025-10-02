@@ -563,8 +563,13 @@ async function addCustomCategory() {
     document.getElementById('newCategoryName').value = ''
     document.getElementById('newCategoryFormat').value = '0.0'
 
-    // Reload data and re-render
+    // Reload schema and data to pick up new category
+    await loadSchema()
     await loadData()
+
+    // Reinitialize dropdowns to include new category
+    initializePatternDropdowns()
+    initializeCustomCategoryDropdowns()
   } catch (error) {
     showStatus('Failed to create category: ' + error.message, 'error')
   }
@@ -585,8 +590,13 @@ async function deleteCategory(category) {
 
     showStatus(`Deleted category: ${category}`, 'success')
 
-    // Reload data and re-render
+    // Reload schema and data to remove deleted category
+    await loadSchema()
     await loadData()
+
+    // Reinitialize dropdowns to remove deleted category
+    initializePatternDropdowns()
+    initializeCustomCategoryDropdowns()
   } catch (error) {
     showStatus('Failed to delete category: ' + error.message, 'error')
   }
