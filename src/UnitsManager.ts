@@ -18,8 +18,10 @@ import { evaluateFormula, formatNumber } from './formulaEvaluator'
 export class UnitsManager {
   private metadata: UnitsMetadataStore
   private preferences: UnitsPreferences
+  private unitDefinitions: Record<string, UnitMetadata>
   private metadataPath: string
   private preferencesPath: string
+  private definitionsPath: string
 
   constructor(
     private app: ServerAPI,
@@ -27,12 +29,14 @@ export class UnitsManager {
   ) {
     this.metadataPath = path.join(dataDir, 'units-metadata.json')
     this.preferencesPath = path.join(dataDir, 'units-preferences.json')
+    this.definitionsPath = path.join(dataDir, 'units-definitions.json')
     // Merge both default sets, with comprehensive taking precedence
     this.metadata = { ...defaultUnitsMetadata, ...comprehensiveDefaultUnits }
     this.preferences = {
       categories: {},
       pathOverrides: {}
     }
+    this.unitDefinitions = {}
   }
 
   /**
@@ -41,6 +45,7 @@ export class UnitsManager {
   async initialize(): Promise<void> {
     await this.loadMetadata()
     await this.loadPreferences()
+    await this.loadUnitDefinitions()
   }
 
   /**
@@ -149,6 +154,91 @@ export class UnitsManager {
     } catch (error) {
       this.app.error(`Failed to save preferences: ${error}`)
       throw error
+    }
+  }
+
+  /**
+   * Load unit definitions from file
+   */
+  private async loadUnitDefinitions(): Promise<void> {
+    try {
+      if (fs.existsSync(this.definitionsPath)) {
+        const data = fs.readFileSync(this.definitionsPath, 'utf-8')
+        this.unitDefinitions = JSON.parse(data)
+        this.app.debug('Loaded unit definitions from file')
+      } else {
+        this.unitDefinitions = {}
+        await this.saveUnitDefinitions()
+        this.app.debug('Created default unit definitions file')
+      }
+    } catch (error) {
+      this.app.error(`Failed to load unit definitions: ${error}`)
+      throw error
+    }
+  }
+
+  /**
+   * Save unit definitions to file
+   */
+  async saveUnitDefinitions(): Promise<void> {
+    try {
+      fs.writeFileSync(
+        this.definitionsPath,
+        JSON.stringify(this.unitDefinitions, null, 2),
+        'utf-8'
+      )
+      this.app.debug('Saved unit definitions')
+    } catch (error) {
+      this.app.error(`Failed to save unit definitions: ${error}`)
+      throw error
+    }
+  }
+
+  /**
+   * Get all unit definitions
+   */
+  getUnitDefinitions(): Record<string, UnitMetadata> {
+    return this.unitDefinitions
+  }
+
+  /**
+   * Add or update a unit definition
+   */
+  async addUnitDefinition(baseUnit: string, definition: UnitMetadata): Promise<void> {
+    this.unitDefinitions[baseUnit] = definition
+    await this.saveUnitDefinitions()
+  }
+
+  /**
+   * Delete a unit definition
+   */
+  async deleteUnitDefinition(baseUnit: string): Promise<void> {
+    delete this.unitDefinitions[baseUnit]
+    await this.saveUnitDefinitions()
+  }
+
+  /**
+   * Add a conversion to a unit definition
+   */
+  async addConversionToUnit(
+    baseUnit: string,
+    targetUnit: string,
+    conversion: ConversionDefinition
+  ): Promise<void> {
+    if (!this.unitDefinitions[baseUnit]) {
+      throw new Error(`Base unit ${baseUnit} not found`)
+    }
+    this.unitDefinitions[baseUnit].conversions[targetUnit] = conversion
+    await this.saveUnitDefinitions()
+  }
+
+  /**
+   * Delete a conversion from a unit definition
+   */
+  async deleteConversionFromUnit(baseUnit: string, targetUnit: string): Promise<void> {
+    if (this.unitDefinitions[baseUnit]?.conversions[targetUnit]) {
+      delete this.unitDefinitions[baseUnit].conversions[targetUnit]
+      await this.saveUnitDefinitions()
     }
   }
 
@@ -305,6 +395,15 @@ export class UnitsManager {
     if (!baseUnit) {
       this.app.debug(`No base unit found for category: ${pattern.category}`)
       return null
+    }
+
+    // Check unit definitions first
+    if (this.unitDefinitions[baseUnit]) {
+      return {
+        baseUnit: baseUnit,
+        category: pattern.category,
+        conversions: this.unitDefinitions[baseUnit].conversions
+      }
     }
 
     // Try to find default conversions for this base unit
@@ -563,6 +662,20 @@ export class UnitsManager {
           targetUnitsByBase[pref.baseUnit] = new Set()
         }
         targetUnitsByBase[pref.baseUnit].add(pref.targetUnit)
+      }
+    }
+
+    // Scan custom unit definitions
+    for (const [baseUnit, def] of Object.entries(this.unitDefinitions)) {
+      baseUnitsSet.add(baseUnit)
+
+      if (def.conversions) {
+        if (!targetUnitsByBase[baseUnit]) {
+          targetUnitsByBase[baseUnit] = new Set()
+        }
+        for (const targetUnit of Object.keys(def.conversions)) {
+          targetUnitsByBase[baseUnit].add(targetUnit)
+        }
       }
     }
 

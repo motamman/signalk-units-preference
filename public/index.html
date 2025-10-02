@@ -381,7 +381,9 @@
 
         <div class="tabs">
             <button class="tab active" data-tab="categories">Category Preferences</button>
+            <button class="tab" data-tab="units">Unit Definitions</button>
             <button class="tab" data-tab="patterns">Path Patterns</button>
+            <button class="tab" data-tab="overrides">Path Overrides</button>
             <button class="tab" data-tab="metadata">Metadata</button>
         </div>
 
@@ -480,108 +482,117 @@
             </div>
         </div>
 
-        <div id="metadata" class="tab-content">
+        <div id="units" class="tab-content">
             <div class="section">
-                <h2>Add/Edit Unit Metadata</h2>
+                <h2>Add Base Unit</h2>
                 <p style="color: #7f8c8d; margin-bottom: 20px;">
-                    Define base units and conversions for paths.
+                    Define a new base unit that can be used across paths.
                 </p>
-                <div style="background: #f8f9fa; padding: 20px; border-radius: 6px; margin-bottom: 20px;">
-                    <div class="input-group" style="margin-bottom: 15px;">
-                        <label>Select Path</label>
-                        <input type="text" id="metadataPathSearch" class="path-tree-search" placeholder="🔍 Search paths...">
-                        <div id="metadataPathTree" class="path-tree-container"></div>
-                        <input type="hidden" id="selectedMetadataPath">
+                <div class="add-override" style="display: grid; grid-template-columns: 2fr 3fr auto; gap: 15px; align-items: end;">
+                    <div class="input-group">
+                        <label>Base Unit Symbol</label>
+                        <input type="text" id="newBaseUnitSymbol" placeholder="e.g., L/h, bar, psi">
                     </div>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-bottom: 15px;">
-                        <div class="input-group">
-                            <label>Base Unit</label>
-                            <select id="metadataBaseUnit" onchange="handleBaseUnitChange()">
-                                <option value="">-- Select Base Unit --</option>
-                                <option value="m/s">m/s (speed)</option>
-                                <option value="K">K (temperature)</option>
-                                <option value="Pa">Pa (pressure)</option>
-                                <option value="m">m (distance/depth)</option>
-                                <option value="rad">rad (angle)</option>
-                                <option value="m3">m³ (volume)</option>
-                                <option value="V">V (voltage)</option>
-                                <option value="A">A (current)</option>
-                                <option value="W">W (power)</option>
-                                <option value="Hz">Hz (frequency)</option>
-                                <option value="ratio">ratio (percentage)</option>
-                                <option value="s">s (time)</option>
-                                <option value="C">C (charge)</option>
-                                <option value="deg">deg (latitude/longitude)</option>
-                                <option value="custom">✏️ Custom...</option>
-                            </select>
-                            <input type="text" id="metadataBaseUnitCustom" placeholder="Enter custom base unit" style="display: none; margin-top: 5px;">
-                        </div>
-                        <div class="input-group">
-                            <label>Category</label>
-                            <select id="metadataCategory">
-                                <option value="">-- Select Category --</option>
-                                <option value="speed">speed</option>
-                                <option value="temperature">temperature</option>
-                                <option value="pressure">pressure</option>
-                                <option value="distance">distance</option>
-                                <option value="depth">depth</option>
-                                <option value="angle">angle</option>
-                                <option value="volume">volume</option>
-                                <option value="voltage">voltage</option>
-                                <option value="current">current</option>
-                                <option value="power">power</option>
-                                <option value="frequency">frequency</option>
-                                <option value="percentage">percentage</option>
-                                <option value="time">time</option>
-                                <option value="charge">charge</option>
-                                <option value="volumeRate">volumeRate</option>
-                            </select>
-                        </div>
-                        <div style="padding-top: 24px;">
-                            <strong>Selected:</strong> <span id="selectedMetadataDisplay" style="color: #667eea;">None</span>
-                        </div>
+                    <div class="input-group">
+                        <label>Description (optional)</label>
+                        <input type="text" id="newBaseUnitDesc" placeholder="e.g., Liters per hour, Pressure">
                     </div>
-
-                    <div style="background: white; padding: 15px; border-radius: 4px; margin-bottom: 15px;">
-                        <h4 style="margin: 0 0 10px 0;">Conversions</h4>
-                        <div id="conversionsList" style="margin-bottom: 10px;"></div>
-                        <div style="display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: end; margin-bottom: 10px;">
-                            <div class="input-group">
-                                <label>Conversion Template</label>
-                                <select id="conversionTemplate" onchange="handleConversionTemplateChange()">
-                                    <option value="">-- Select Conversion --</option>
-                                    <option value="custom">✏️ Custom Conversion...</option>
-                                </select>
-                            </div>
-                            <button class="btn-success" onclick="addConversionToMetadata()">Add Conversion</button>
-                        </div>
-                        <div id="customConversionInputs" style="display: none; grid-template-columns: 1fr 2fr 2fr 1fr; gap: 10px; align-items: end;">
-                            <div class="input-group">
-                                <label>Unit Name</label>
-                                <input type="text" id="newConversionUnit" placeholder="e.g., knots">
-                            </div>
-                            <div class="input-group">
-                                <label>Formula</label>
-                                <input type="text" id="newConversionFormula" placeholder="e.g., value * 1.94384">
-                            </div>
-                            <div class="input-group">
-                                <label>Inverse Formula</label>
-                                <input type="text" id="newConversionInverseFormula" placeholder="e.g., value * 0.514444">
-                            </div>
-                            <div class="input-group">
-                                <label>Symbol</label>
-                                <input type="text" id="newConversionSymbol" placeholder="e.g., kn">
-                            </div>
-                        </div>
-                    </div>
-
-                    <button onclick="saveMetadata()" style="background: #2ecc71;">Save Metadata</button>
-                    <button onclick="clearMetadataForm()" class="btn-secondary">Clear</button>
+                    <button class="btn-success" onclick="addBaseUnit()" style="padding: 10px 24px;">Add Base Unit</button>
                 </div>
             </div>
 
             <div class="section">
-                <h2>All Unit Metadata</h2>
+                <h2>Add Conversion Formula</h2>
+                <p style="color: #7f8c8d; margin-bottom: 20px;">
+                    Add a conversion formula to an existing base unit.
+                </p>
+                <div class="add-override">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+                        <div class="input-group">
+                            <label>Base Unit</label>
+                            <div id="conversionBaseUnitContainer"></div>
+                        </div>
+                        <div class="input-group">
+                            <label>Target Unit Name</label>
+                            <input type="text" id="conversionTargetUnit" placeholder="e.g., gal/h, fahrenheit">
+                        </div>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+                        <div class="input-group">
+                            <label>
+                                Formula (base → target)
+                                <span class="tooltip-icon" data-tooltip="JavaScript expression using 'value' variable. Example: value * 0.264172 to convert L/h to gal/h">?</span>
+                            </label>
+                            <input type="text" id="conversionFormula" placeholder="e.g., value * 0.264172">
+                        </div>
+                        <div class="input-group">
+                            <label>
+                                Inverse Formula (target → base)
+                                <span class="tooltip-icon" data-tooltip="JavaScript expression to convert back. Example: value * 3.78541">?</span>
+                            </label>
+                            <input type="text" id="conversionInverseFormula" placeholder="e.g., value * 3.78541">
+                        </div>
+                        <div class="input-group">
+                            <label>Symbol</label>
+                            <input type="text" id="conversionSymbol" placeholder="e.g., gal/h, °F">
+                        </div>
+                    </div>
+                    <button class="btn-success" onclick="addConversion()" style="padding: 10px 24px;">Add Conversion</button>
+                </div>
+            </div>
+
+            <div class="section">
+                <h2>All Unit Definitions</h2>
+                <p style="color: #7f8c8d; margin-bottom: 20px;">
+                    View all defined base units and their available conversions.
+                </p>
+                <div id="unitDefinitionsList" class="loader">Loading...</div>
+            </div>
+        </div>
+
+        <div id="overrides" class="tab-content">
+            <div class="section">
+                <h2>Add Path Override</h2>
+                <p style="color: #7f8c8d; margin-bottom: 20px;">
+                    Assign units to specific paths that don't fit a pattern.
+                </p>
+                <div class="add-override">
+                    <div style="display: grid; grid-template-columns: 2fr 1fr 1fr 1fr auto; gap: 15px; align-items: end;">
+                        <div class="input-group">
+                            <label>Path</label>
+                            <input type="text" id="overridePathSearch" class="path-tree-search" placeholder="🔍 Search paths...">
+                            <div id="overridePathTree" class="path-tree-container" style="display: none;"></div>
+                            <input type="hidden" id="selectedOverridePath">
+                        </div>
+                        <div class="input-group">
+                            <label>Base Unit</label>
+                            <div id="overrideBaseUnitContainer"></div>
+                        </div>
+                        <div class="input-group">
+                            <label>Target Unit</label>
+                            <div id="overrideTargetUnitContainer"></div>
+                        </div>
+                        <div class="input-group">
+                            <label>Display Format</label>
+                            <input type="text" id="overrideFormat" placeholder="e.g., 0.0" value="0.0">
+                        </div>
+                        <button class="btn-success" onclick="addPathOverride()" style="padding: 10px 24px;">Add Override</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="section">
+                <h2>Path Overrides</h2>
+                <p style="color: #7f8c8d; margin-bottom: 20px;">
+                    Specific path configurations that override pattern and category defaults.
+                </p>
+                <div id="pathOverridesList" class="loader">Loading...</div>
+            </div>
+        </div>
+
+        <div id="metadata" class="tab-content">
+            <div class="section">
+                <h2>All Paths - Metadata Reference</h2>
                 <p style="color: #7f8c8d; margin-bottom: 20px;">
                     View all unit definitions and available conversions.
                 </p>

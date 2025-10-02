@@ -76,8 +76,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadSchema()
   await loadData()
   await loadPaths()
+  await loadUnitDefinitions()
   initializePatternDropdowns()
   initializeCustomCategoryDropdowns()
+  initializeUnitDefinitionsDropdowns()
+  initializePathOverridesDropdowns()
+  renderUnitDefinitions()
+  renderPathOverrides()
 })
 
 // Initialize pattern form dropdowns
@@ -1077,4 +1082,383 @@ function showStatus(message, type) {
   setTimeout(() => {
     statusEl.classList.remove('show')
   }, 5000)
+}
+
+// ============================================================================
+// UNIT DEFINITIONS TAB
+// ============================================================================
+
+// Unit definitions storage (loaded from backend)
+let unitDefinitions = {}
+
+// Add a new base unit
+async function addBaseUnit() {
+  const symbol = document.getElementById('newBaseUnitSymbol').value.trim()
+  const description = document.getElementById('newBaseUnitDesc').value.trim()
+
+  if (!symbol) {
+    showStatus('Please enter a base unit symbol', 'error')
+    return
+  }
+
+  try {
+    const res = await fetch(`${API_BASE}/unit-definitions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        baseUnit: symbol,
+        description: description || symbol,
+        conversions: {}
+      })
+    })
+
+    if (!res.ok) throw new Error('Failed to add base unit')
+
+    showStatus(`Added base unit: ${symbol}`, 'success')
+
+    // Clear form
+    document.getElementById('newBaseUnitSymbol').value = ''
+    document.getElementById('newBaseUnitDesc').value = ''
+
+    // Reload schema and unit definitions
+    await loadSchema()
+    await loadUnitDefinitions()
+    renderUnitDefinitions()
+
+    // Reinitialize all dropdowns to include new base unit
+    initializePatternDropdowns()
+    initializeCustomCategoryDropdowns()
+    initializeUnitDefinitionsDropdowns()
+    initializePathOverridesDropdowns()
+  } catch (error) {
+    showStatus('Failed to add base unit: ' + error.message, 'error')
+  }
+}
+
+// Add a conversion formula to an existing base unit
+async function addConversion() {
+  const baseSelect = document.getElementById('conversionBaseUnit')
+  const baseUnit = baseSelect.value.trim()
+  const targetUnit = document.getElementById('conversionTargetUnit').value.trim()
+  const formula = document.getElementById('conversionFormula').value.trim()
+  const inverseFormula = document.getElementById('conversionInverseFormula').value.trim()
+  const symbol = document.getElementById('conversionSymbol').value.trim()
+
+  if (!baseUnit || !targetUnit || !formula || !inverseFormula || !symbol) {
+    showStatus('Please fill in all conversion fields', 'error')
+    return
+  }
+
+  try {
+    const res = await fetch(`${API_BASE}/unit-definitions/${baseUnit}/conversions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        targetUnit,
+        formula,
+        inverseFormula,
+        symbol
+      })
+    })
+
+    if (!res.ok) throw new Error('Failed to add conversion')
+
+    showStatus(`Added conversion: ${baseUnit} → ${targetUnit}`, 'success')
+
+    // Clear form
+    document.getElementById('conversionTargetUnit').value = ''
+    document.getElementById('conversionFormula').value = ''
+    document.getElementById('conversionInverseFormula').value = ''
+    document.getElementById('conversionSymbol').value = ''
+
+    // Reload schema and unit definitions
+    await loadSchema()
+    await loadUnitDefinitions()
+    renderUnitDefinitions()
+
+    // Reinitialize all dropdowns to include new conversion
+    initializePatternDropdowns()
+    initializeCustomCategoryDropdowns()
+    initializeUnitDefinitionsDropdowns()
+    initializePathOverridesDropdowns()
+  } catch (error) {
+    showStatus('Failed to add conversion: ' + error.message, 'error')
+  }
+}
+
+// Load unit definitions from backend
+async function loadUnitDefinitions() {
+  try {
+    const res = await fetch(`${API_BASE}/unit-definitions`)
+    if (!res.ok) throw new Error('Failed to load')
+    unitDefinitions = await res.json()
+  } catch (error) {
+    console.error('Error loading unit definitions:', error)
+    unitDefinitions = {}
+  }
+}
+
+// Render unit definitions list
+function renderUnitDefinitions() {
+  const container = document.getElementById('unitDefinitionsList')
+
+  const defs = Object.entries(unitDefinitions)
+  if (defs.length === 0) {
+    container.innerHTML = '<div class="empty-state">No custom unit definitions yet</div>'
+    return
+  }
+
+  container.innerHTML = defs.map(([baseUnit, def]) => {
+    const conversions = Object.entries(def.conversions || {})
+
+    return `
+      <div style="background: #f8f9fa; padding: 20px; border-radius: 6px; margin-bottom: 15px; border: 1px solid #e9ecef;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+          <div>
+            <h3 style="margin: 0; color: #2c3e50; font-family: monospace;">${baseUnit}</h3>
+            <p style="margin: 5px 0 0 0; color: #7f8c8d; font-size: 14px;">${def.description || baseUnit}</p>
+          </div>
+          <button class="btn-danger" onclick="deleteBaseUnit('${baseUnit}')" style="padding: 6px 16px; font-size: 13px;">Delete Unit</button>
+        </div>
+
+        ${conversions.length > 0 ? `
+          <div style="background: white; padding: 15px; border-radius: 4px;">
+            <h4 style="margin: 0 0 10px 0;">Available Conversions</h4>
+            <table style="width: 100%; border-collapse: collapse;">
+              <thead>
+                <tr style="border-bottom: 2px solid #dee2e6; text-align: left;">
+                  <th style="padding: 8px;">Target Unit</th>
+                  <th style="padding: 8px;">Formula</th>
+                  <th style="padding: 8px;">Inverse Formula</th>
+                  <th style="padding: 8px;">Symbol</th>
+                  <th style="padding: 8px;"></th>
+                </tr>
+              </thead>
+              <tbody>
+                ${conversions.map(([target, conv]) => `
+                  <tr style="border-bottom: 1px solid #f0f0f0;">
+                    <td style="padding: 8px; font-family: monospace;">${target}</td>
+                    <td style="padding: 8px; font-family: monospace; font-size: 12px;">${conv.formula}</td>
+                    <td style="padding: 8px; font-family: monospace; font-size: 12px;">${conv.inverseFormula}</td>
+                    <td style="padding: 8px;">${conv.symbol}</td>
+                    <td style="padding: 8px;">
+                      <button class="btn-danger" onclick="deleteConversion('${baseUnit}', '${target}')" style="padding: 4px 12px; font-size: 12px;">Delete</button>
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        ` : '<p style="color: #7f8c8d; font-style: italic;">No conversions defined yet</p>'}
+      </div>
+    `
+  }).join('')
+}
+
+// Delete a base unit
+async function deleteBaseUnit(baseUnit) {
+  if (!confirm(`Delete base unit "${baseUnit}" and all its conversions?`)) return
+
+  try {
+    const res = await fetch(`${API_BASE}/unit-definitions/${baseUnit}`, {
+      method: 'DELETE'
+    })
+
+    if (!res.ok) throw new Error('Failed to delete')
+
+    showStatus(`Deleted base unit: ${baseUnit}`, 'success')
+
+    // Reload schema and unit definitions
+    await loadSchema()
+    await loadUnitDefinitions()
+    renderUnitDefinitions()
+
+    // Reinitialize all dropdowns to remove deleted base unit
+    initializePatternDropdowns()
+    initializeCustomCategoryDropdowns()
+    initializeUnitDefinitionsDropdowns()
+    initializePathOverridesDropdowns()
+  } catch (error) {
+    showStatus('Failed to delete: ' + error.message, 'error')
+  }
+}
+
+// Delete a conversion
+async function deleteConversion(baseUnit, targetUnit) {
+  if (!confirm(`Delete conversion ${baseUnit} → ${targetUnit}?`)) return
+
+  try {
+    const res = await fetch(`${API_BASE}/unit-definitions/${baseUnit}/conversions/${targetUnit}`, {
+      method: 'DELETE'
+    })
+
+    if (!res.ok) throw new Error('Failed to delete')
+
+    showStatus(`Deleted conversion: ${baseUnit} → ${targetUnit}`, 'success')
+
+    // Reload schema and unit definitions
+    await loadSchema()
+    await loadUnitDefinitions()
+    renderUnitDefinitions()
+
+    // Reinitialize all dropdowns to remove deleted conversion
+    initializePatternDropdowns()
+    initializeCustomCategoryDropdowns()
+    initializeUnitDefinitionsDropdowns()
+    initializePathOverridesDropdowns()
+  } catch (error) {
+    showStatus('Failed to delete: ' + error.message, 'error')
+  }
+}
+
+// Initialize Unit Definitions dropdowns
+function initializeUnitDefinitionsDropdowns() {
+  // Populate base unit dropdown for adding conversions
+  const container = document.getElementById('conversionBaseUnitContainer')
+  if (!container) return
+
+  const baseUnits = unitSchema.baseUnits || []
+
+  container.innerHTML = `
+    <select id="conversionBaseUnit">
+      <option value="">-- Select Base Unit --</option>
+      ${baseUnits.map(unit => `
+        <option value="${unit.value}">${unit.label}</option>
+      `).join('')}
+    </select>
+  `
+}
+
+// ============================================================================
+// PATH OVERRIDES TAB
+// ============================================================================
+
+// Path overrides list
+let pathOverrides = {}
+
+// Add a path override
+async function addPathOverride() {
+  const path = document.getElementById('selectedOverridePath').value.trim()
+  const baseSelect = document.getElementById('overrideBaseUnit')
+  const targetSelect = document.getElementById('overrideTargetUnit')
+  const format = document.getElementById('overrideFormat').value.trim()
+
+  const baseUnit = baseSelect.value.trim()
+  const targetUnit = targetSelect.value.trim()
+
+  if (!path || !baseUnit || !targetUnit || !format) {
+    showStatus('Please fill in all fields', 'error')
+    return
+  }
+
+  try {
+    const res = await fetch(`${API_BASE}/overrides/${path}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        path,
+        targetUnit,
+        displayFormat: format
+      })
+    })
+
+    if (!res.ok) throw new Error('Failed to add override')
+
+    showStatus(`Added path override: ${path}`, 'success')
+
+    // Clear form
+    document.getElementById('selectedOverridePath').value = ''
+    document.getElementById('overridePathSearch').value = ''
+    document.getElementById('overrideFormat').value = '0.0'
+
+    // Reload
+    await loadData()
+    renderPathOverrides()
+  } catch (error) {
+    showStatus('Failed to add override: ' + error.message, 'error')
+  }
+}
+
+// Render path overrides list
+function renderPathOverrides() {
+  const container = document.getElementById('pathOverridesList')
+
+  const overrides = Object.values(preferences.pathOverrides || {})
+  if (overrides.length === 0) {
+    container.innerHTML = '<div class="empty-state">No path overrides configured</div>'
+    return
+  }
+
+  container.innerHTML = overrides.map(override => {
+    return `
+      <div class="override-item">
+        <div class="override-header">
+          <span class="path-name">${override.path}</span>
+          <button class="btn-danger" onclick="deletePathOverride('${override.path}')">Delete</button>
+        </div>
+        <div class="form-group">
+          <div class="input-group">
+            <label>Target Unit</label>
+            <input type="text" value="${override.targetUnit}" readonly style="background: #f8f9fa;">
+          </div>
+          <div class="input-group">
+            <label>Display Format</label>
+            <input type="text" value="${override.displayFormat}" readonly style="background: #f8f9fa;">
+          </div>
+        </div>
+      </div>
+    `
+  }).join('')
+}
+
+// Delete path override
+async function deletePathOverride(path) {
+  if (!confirm(`Delete path override for "${path}"?`)) return
+
+  try {
+    const res = await fetch(`${API_BASE}/overrides/${path}`, {
+      method: 'DELETE'
+    })
+
+    if (!res.ok) throw new Error('Failed to delete')
+
+    showStatus(`Deleted path override: ${path}`, 'success')
+    await loadData()
+    renderPathOverrides()
+  } catch (error) {
+    showStatus('Failed to delete: ' + error.message, 'error')
+  }
+}
+
+// Initialize Path Overrides dropdowns
+function initializePathOverridesDropdowns() {
+  // Base unit dropdown
+  const baseContainer = document.getElementById('overrideBaseUnitContainer')
+  if (baseContainer) {
+    baseContainer.innerHTML = createBaseUnitDropdown('overrideBaseUnit', '', false)
+
+    // Handle base unit change
+    document.getElementById('overrideBaseUnit').addEventListener('change', function() {
+      const targetContainer = document.getElementById('overrideTargetUnitContainer')
+      if (this.value) {
+        targetContainer.innerHTML = createTargetUnitDropdown('overrideTargetUnit', this.value, '', false)
+      } else {
+        targetContainer.innerHTML = `
+          <select id="overrideTargetUnit" disabled>
+            <option value="">-- Select Base Unit First --</option>
+          </select>
+        `
+      }
+    })
+  }
+
+  // Initialize target dropdown (disabled initially)
+  const targetContainer = document.getElementById('overrideTargetUnitContainer')
+  if (targetContainer) {
+    targetContainer.innerHTML = `
+      <select id="overrideTargetUnit" disabled>
+        <option value="">-- Select Base Unit First --</option>
+      </select>
+    `
+  }
 }

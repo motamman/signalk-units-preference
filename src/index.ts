@@ -208,6 +208,87 @@ module.exports = (app: ServerAPI): Plugin => {
         }
       })
 
+      // GET /plugins/signalk-units-preference/unit-definitions
+      // Get all unit definitions
+      router.get('/unit-definitions', (req: Request, res: Response) => {
+        try {
+          const definitions = unitsManager.getUnitDefinitions()
+          res.json(definitions)
+        } catch (error) {
+          app.error(`Error getting unit definitions: ${error}`)
+          res.status(500).json({ error: 'Internal server error' })
+        }
+      })
+
+      // POST /plugins/signalk-units-preference/unit-definitions
+      // Add a new base unit
+      router.post('/unit-definitions', async (req: Request, res: Response) => {
+        try {
+          const { baseUnit, description, conversions } = req.body
+          if (!baseUnit) {
+            return res.status(400).json({ error: 'baseUnit is required' })
+          }
+          await unitsManager.addUnitDefinition(baseUnit, {
+            baseUnit,
+            category: description || baseUnit,
+            conversions: conversions || {}
+          })
+          res.json({ success: true, baseUnit })
+        } catch (error) {
+          app.error(`Error adding unit definition: ${error}`)
+          res.status(500).json({ error: 'Internal server error' })
+        }
+      })
+
+      // DELETE /plugins/signalk-units-preference/unit-definitions/:baseUnit
+      // Delete a base unit
+      router.delete('/unit-definitions/:baseUnit', async (req: Request, res: Response) => {
+        try {
+          const baseUnit = req.params.baseUnit
+          await unitsManager.deleteUnitDefinition(baseUnit)
+          res.json({ success: true, baseUnit })
+        } catch (error) {
+          app.error(`Error deleting unit definition: ${error}`)
+          res.status(500).json({ error: 'Internal server error' })
+        }
+      })
+
+      // POST /plugins/signalk-units-preference/unit-definitions/:baseUnit/conversions
+      // Add a conversion to a base unit
+      router.post('/unit-definitions/:baseUnit/conversions', async (req: Request, res: Response) => {
+        try {
+          const baseUnit = req.params.baseUnit
+          const { targetUnit, formula, inverseFormula, symbol } = req.body
+          if (!targetUnit || !formula || !inverseFormula || !symbol) {
+            return res.status(400).json({
+              error: 'targetUnit, formula, inverseFormula, and symbol are required'
+            })
+          }
+          await unitsManager.addConversionToUnit(baseUnit, targetUnit, {
+            formula,
+            inverseFormula,
+            symbol
+          })
+          res.json({ success: true, baseUnit, targetUnit })
+        } catch (error) {
+          app.error(`Error adding conversion: ${error}`)
+          res.status(500).json({ error: 'Internal server error' })
+        }
+      })
+
+      // DELETE /plugins/signalk-units-preference/unit-definitions/:baseUnit/conversions/:targetUnit
+      // Delete a conversion
+      router.delete('/unit-definitions/:baseUnit/conversions/:targetUnit', async (req: Request, res: Response) => {
+        try {
+          const { baseUnit, targetUnit } = req.params
+          await unitsManager.deleteConversionFromUnit(baseUnit, targetUnit)
+          res.json({ success: true, baseUnit, targetUnit })
+        } catch (error) {
+          app.error(`Error deleting conversion: ${error}`)
+          res.status(500).json({ error: 'Internal server error' })
+        }
+      })
+
       // GET /plugins/signalk-units-preference/categories
       // Get all category preferences
       router.get('/categories', (req: Request, res: Response) => {
