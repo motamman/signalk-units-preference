@@ -89,7 +89,6 @@ export class UnitsManager {
             {
               pattern: '*.temperature',
               category: 'temperature',
-              baseUnit: 'K',
               targetUnit: 'celsius',
               displayFormat: '0',
               priority: 100
@@ -97,7 +96,6 @@ export class UnitsManager {
             {
               pattern: '*.pressure',
               category: 'pressure',
-              baseUnit: 'Pa',
               targetUnit: 'hPa',
               displayFormat: '0',
               priority: 100
@@ -105,7 +103,6 @@ export class UnitsManager {
             {
               pattern: '*.speed*',
               category: 'speed',
-              baseUnit: 'm/s',
               targetUnit: 'knots',
               displayFormat: '0.0',
               priority: 90
@@ -302,21 +299,47 @@ export class UnitsManager {
    * Generate metadata from a pattern rule using comprehensive defaults
    */
   private generateMetadataFromPattern(pattern: PathPatternRule): UnitMetadata | null {
+    // Use pattern's baseUnit if provided, otherwise derive from category
+    const baseUnit = pattern.baseUnit || this.getBaseUnitForCategory(pattern.category)
+
+    if (!baseUnit) {
+      this.app.debug(`No base unit found for category: ${pattern.category}`)
+      return null
+    }
+
     // Try to find default conversions for this base unit
     const defaultsForBaseUnit = Object.values(comprehensiveDefaultUnits).find(
-      (meta) => meta.baseUnit === pattern.baseUnit
+      (meta) => meta.baseUnit === baseUnit
     )
 
     if (!defaultsForBaseUnit) {
-      this.app.debug(`No default conversions found for base unit: ${pattern.baseUnit}`)
+      this.app.debug(`No default conversions found for base unit: ${baseUnit}`)
       return null
     }
 
     return {
-      baseUnit: pattern.baseUnit,
+      baseUnit: baseUnit,
       category: pattern.category,
       conversions: defaultsForBaseUnit.conversions
     }
+  }
+
+  /**
+   * Get base unit for a category from preferences or schema
+   */
+  private getBaseUnitForCategory(category: string): string | null {
+    // Check if category preference has a custom baseUnit
+    const categoryPref = this.preferences.categories?.[category]
+    if (categoryPref?.baseUnit) {
+      return categoryPref.baseUnit
+    }
+
+    // Look up in comprehensive defaults
+    const defaultMeta = Object.values(comprehensiveDefaultUnits).find(
+      (meta) => meta.category === category
+    )
+
+    return defaultMeta?.baseUnit || null
   }
 
   /**
@@ -343,9 +366,12 @@ export class UnitsManager {
 
       for (const patternRule of sortedPatterns) {
         if (this.matchesPattern(pathStr, patternRule.pattern)) {
+          // Get category defaults
+          const categoryDefault = this.preferences.categories[category]
+
           return {
-            targetUnit: patternRule.targetUnit,
-            displayFormat: patternRule.displayFormat
+            targetUnit: patternRule.targetUnit || categoryDefault?.targetUnit || '',
+            displayFormat: patternRule.displayFormat || categoryDefault?.displayFormat || '0.0'
           }
         }
       }
@@ -423,6 +449,16 @@ export class UnitsManager {
   ): Promise<void> {
     this.preferences.categories[category] = preference
     await this.savePreferences()
+  }
+
+  /**
+   * Delete category preference
+   */
+  async deleteCategoryPreference(category: string): Promise<void> {
+    if (this.preferences.categories[category]) {
+      delete this.preferences.categories[category]
+      await this.savePreferences()
+    }
   }
 
   /**
@@ -509,7 +545,10 @@ export class UnitsManager {
     const baseUnitsSet = new Set<string>()
     const categoriesSet = new Set<string>()
     const targetUnitsByBase: Record<string, Set<string>> = {}
-    const categoryToBaseUnit: Record<string, string> = {}
+
+    // Start with the static category-to-baseUnit mapping from defaultUnits
+    // This ensures standard SignalK categories use the correct base units
+    const categoryToBaseUnitMap: Record<string, string> = { ...categoryToBaseUnit }
 
     // Scan all metadata (including comprehensive defaults)
     const allMetadata = { ...comprehensiveDefaultUnits, ...this.metadata }
@@ -521,9 +560,9 @@ export class UnitsManager {
 
       if (meta.category) {
         categoriesSet.add(meta.category)
-        // Map category to its base unit (first one found)
-        if (!categoryToBaseUnit[meta.category]) {
-          categoryToBaseUnit[meta.category] = meta.baseUnit
+        // For custom categories not in the static mapping, add them
+        if (!categoryToBaseUnitMap[meta.category]) {
+          categoryToBaseUnitMap[meta.category] = meta.baseUnit
         }
       }
 
@@ -553,7 +592,7 @@ export class UnitsManager {
       baseUnits,
       categories: Array.from(categoriesSet).sort(),
       targetUnitsByBase: targetUnitsMap,
-      categoryToBaseUnit
+      categoryToBaseUnit: categoryToBaseUnitMap
     }
   }
 

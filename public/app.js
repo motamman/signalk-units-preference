@@ -77,70 +77,121 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadData()
   await loadPaths()
   initializePatternDropdowns()
+  initializeCustomCategoryDropdowns()
 })
 
 // Initialize pattern form dropdowns
 function initializePatternDropdowns() {
-  // Render initial dropdowns
-  document.getElementById('newPatternCategoryContainer').innerHTML = createCategoryDropdown('newPatternCategory')
-  document.getElementById('newPatternBaseContainer').innerHTML = createBaseUnitDropdown('newPatternBase')
-  // Target unit starts disabled until base unit is selected
+  // Render category dropdown (with custom option)
+  document.getElementById('newPatternCategoryContainer').innerHTML = createCategoryDropdown('newPatternCategory', '', true)
+
+  // Initialize base unit dropdown (hidden by default)
+  document.getElementById('newPatternBaseContainer').innerHTML = createBaseUnitDropdown('newPatternBase', '', true)
+
+  // Target unit starts disabled until category is selected
   document.getElementById('newPatternTargetContainer').innerHTML = `
     <select id="newPatternTarget" disabled>
-      <option value="">Select base unit first</option>
+      <option value="">Select category first</option>
     </select>
   `
 
-  // Handle category custom input and auto-populate base unit
+  // Handle category change
   document.getElementById('newPatternCategory').addEventListener('change', function() {
-    const customInput = document.getElementById('newPatternCategoryCustom')
-    const baseSelect = document.getElementById('newPatternBase')
     const targetContainer = document.getElementById('newPatternTargetContainer')
+    const baseGroup = document.getElementById('newPatternBaseGroup')
+    const categoryCustomInput = document.getElementById('newPatternCategoryCustom')
+    const targetLabel = document.getElementById('targetUnitLabel')
+    const targetHelp = document.getElementById('targetUnitHelp')
 
     if (this.value === 'custom') {
-      customInput.style.display = 'block'
-    } else {
-      customInput.style.display = 'none'
+      // Custom category - show custom category input and base unit field
+      categoryCustomInput.style.display = 'block'
+      baseGroup.style.display = 'block'
+      targetLabel.textContent = '(required for custom category)'
+      targetHelp.textContent = 'Required when using custom category'
 
-      // Auto-populate base unit if category has a default
-      const defaultBaseUnit = unitSchema.categoryToBaseUnit[this.value]
-      if (defaultBaseUnit && this.value) {
-        baseSelect.value = defaultBaseUnit
-        // Trigger base unit change to populate target units
-        targetContainer.innerHTML = createTargetUnitDropdown('newPatternTarget', defaultBaseUnit)
+      // Enable target dropdown with custom option
+      targetContainer.innerHTML = `
+        <select id="newPatternTarget">
+          <option value="">-- Select Target Unit --</option>
+          <option value="custom">✏️ Custom...</option>
+        </select>
+      `
+      attachTargetUnitHandler()
+      attachBaseUnitHandler()
+    } else if (this.value === '' || !this.value) {
+      // No category selected
+      categoryCustomInput.style.display = 'none'
+      baseGroup.style.display = 'none'
+      targetContainer.innerHTML = `
+        <select id="newPatternTarget" disabled>
+          <option value="">Select category first</option>
+        </select>
+      `
+      targetLabel.textContent = '(optional)'
+      targetHelp.textContent = 'Leave empty to use category default'
+    } else {
+      // Known category
+      categoryCustomInput.style.display = 'none'
+      baseGroup.style.display = 'none'
+      targetLabel.textContent = '(optional)'
+      targetHelp.textContent = 'Leave empty to use category default'
+
+      // Get base unit for this category
+      const baseUnit = unitSchema.categoryToBaseUnit[this.value]
+      if (baseUnit) {
+        // Populate target units based on category's base unit
+        const dropdown = createTargetUnitDropdown('newPatternTarget', baseUnit, '', true)
+        targetContainer.innerHTML = dropdown.replace(
+          '<option value="">-- Select Target Unit --</option>',
+          '<option value="">-- Use Category Default --</option>'
+        )
+        attachTargetUnitHandler()
+      } else {
+        // Category exists but has no base unit
+        targetContainer.innerHTML = `
+          <select id="newPatternTarget">
+            <option value="">-- Use category default --</option>
+            <option value="custom">✏️ Custom...</option>
+          </select>
+        `
         attachTargetUnitHandler()
       }
     }
   })
 
-  // Handle base unit custom input and update target units
-  document.getElementById('newPatternBase').addEventListener('change', function() {
-    const customInput = document.getElementById('newPatternBaseCustom')
-    const targetContainer = document.getElementById('newPatternTargetContainer')
-
-    if (this.value === '' || !this.value) {
-      // No base unit selected, disable target dropdown
-      targetContainer.innerHTML = `
-        <select id="newPatternTarget" disabled>
-          <option value="">Select base unit first</option>
-        </select>
-      `
-    } else if (this.value === 'custom') {
-      customInput.style.display = 'block'
-      // Enable target dropdown with custom option
-      targetContainer.innerHTML = createTargetUnitDropdown('newPatternTarget', '')
-      attachTargetUnitHandler()
-    } else {
-      customInput.style.display = 'none'
-      // Update target units based on selected base unit
-      targetContainer.innerHTML = createTargetUnitDropdown('newPatternTarget', this.value)
-      // Re-attach target unit custom handler
-      attachTargetUnitHandler()
-    }
-  })
-
-  // Attach target unit custom handler initially
+  // Attach handlers initially
   attachTargetUnitHandler()
+  attachBaseUnitHandler()
+}
+
+// Helper to attach base unit custom input handler
+function attachBaseUnitHandler() {
+  const baseSelect = document.getElementById('newPatternBase')
+  const targetContainer = document.getElementById('newPatternTargetContainer')
+
+  if (baseSelect) {
+    baseSelect.addEventListener('change', function() {
+      const customInput = document.getElementById('newPatternBaseCustom')
+
+      if (this.value === 'custom') {
+        customInput.style.display = 'block'
+        // When custom base unit, also enable custom target
+        targetContainer.innerHTML = `
+          <select id="newPatternTarget">
+            <option value="">-- Select Target Unit --</option>
+            <option value="custom">✏️ Custom...</option>
+          </select>
+        `
+        attachTargetUnitHandler()
+      } else if (this.value) {
+        customInput.style.display = 'none'
+        // Populate target units based on selected base unit
+        targetContainer.innerHTML = createTargetUnitDropdown('newPatternTarget', this.value, '', true)
+        attachTargetUnitHandler()
+      }
+    })
+  }
 }
 
 // Helper to attach target unit custom input handler
@@ -241,12 +292,16 @@ function renderCategories() {
       const pref = preferences?.categories?.[category] || { targetUnit: '', displayFormat: '0.0' }
       const baseUnit = unitSchema.categoryToBaseUnit[category]
       const availableUnits = unitSchema.targetUnitsByBase[baseUnit] || []
+      const isCustom = pref.baseUnit !== undefined
 
       return `
       <div class="category-item">
         <div class="category-header">
-          <span class="category-name">${category}</span>
-          <span style="color: #7f8c8d; font-size: 13px;">Base: ${baseUnit} | Available: ${availableUnits.join(', ') || 'None'}</span>
+          <span class="category-name">${category}${isCustom ? ' <span style="color: #667eea; font-size: 12px;">(custom)</span>' : ''}</span>
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <span style="color: #7f8c8d; font-size: 13px;">Base: ${baseUnit} | Available: ${availableUnits.join(', ') || 'None'}</span>
+            ${isCustom ? `<button class="btn-danger" onclick="deleteCategory('${category}')" style="padding: 4px 12px; font-size: 12px;">Delete</button>` : ''}
+          </div>
         </div>
         <div class="form-group">
           <div class="input-group">
@@ -381,7 +436,7 @@ async function renderMetadata() {
       // Yellow: Matches a pattern rule
       color = '#fff3cd'
       status = `Pattern: ${matchingPattern.pattern}`
-      baseUnit = matchingPattern.baseUnit
+      baseUnit = matchingPattern.baseUnit || (unitSchema?.categoryToBaseUnit?.[matchingPattern.category]) || '-'
       category = matchingPattern.category
       conversions = 'Auto from pattern'
     } else if (hasSignalKMetadata) {
@@ -464,6 +519,133 @@ async function updateCategory(category, field, value) {
   }
 }
 
+// Add custom category
+async function addCustomCategory() {
+  const categoryName = document.getElementById('newCategoryName').value.trim()
+  const baseSelect = document.getElementById('newCategoryBase')
+  const targetSelect = document.getElementById('newCategoryTarget')
+  const displayFormat = document.getElementById('newCategoryFormat').value.trim()
+
+  // Get base unit (from dropdown or custom input)
+  const baseUnit = baseSelect.value === 'custom'
+    ? document.getElementById('newCategoryBaseCustom').value.trim()
+    : baseSelect.value.trim()
+
+  // Get target unit (from dropdown or custom input)
+  const targetUnit = targetSelect.value === 'custom'
+    ? document.getElementById('newCategoryTargetCustom').value.trim()
+    : targetSelect.value.trim()
+
+  // Validation
+  if (!categoryName || !baseUnit || !targetUnit || !displayFormat) {
+    showStatus('Please fill in all fields', 'error')
+    return
+  }
+
+  try {
+    const categoryPref = {
+      baseUnit,
+      targetUnit,
+      displayFormat
+    }
+
+    const res = await fetch(`${API_BASE}/categories/${categoryName}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(categoryPref)
+    })
+
+    if (!res.ok) throw new Error('Failed to create category')
+
+    showStatus(`Created custom category: ${categoryName}`, 'success')
+
+    // Clear form
+    document.getElementById('newCategoryName').value = ''
+    document.getElementById('newCategoryFormat').value = '0.0'
+
+    // Reload data and re-render
+    await loadData()
+  } catch (error) {
+    showStatus('Failed to create category: ' + error.message, 'error')
+  }
+}
+
+// Delete custom category
+async function deleteCategory(category) {
+  if (!confirm(`Are you sure you want to delete the custom category "${category}"?`)) {
+    return
+  }
+
+  try {
+    const res = await fetch(`${API_BASE}/categories/${category}`, {
+      method: 'DELETE'
+    })
+
+    if (!res.ok) throw new Error('Failed to delete')
+
+    showStatus(`Deleted category: ${category}`, 'success')
+
+    // Reload data and re-render
+    await loadData()
+  } catch (error) {
+    showStatus('Failed to delete category: ' + error.message, 'error')
+  }
+}
+
+// Initialize custom category form dropdowns
+function initializeCustomCategoryDropdowns() {
+  // Render base unit dropdown
+  document.getElementById('newCategoryBaseContainer').innerHTML = createBaseUnitDropdown('newCategoryBase', '', true)
+
+  // Initialize target unit dropdown (disabled until base is selected)
+  document.getElementById('newCategoryTargetContainer').innerHTML = `
+    <select id="newCategoryTarget" disabled>
+      <option value="">-- Select Base Unit First --</option>
+    </select>
+  `
+
+  // Handle base unit change
+  document.getElementById('newCategoryBase').addEventListener('change', function() {
+    const customInput = document.getElementById('newCategoryBaseCustom')
+    const targetContainer = document.getElementById('newCategoryTargetContainer')
+
+    if (this.value === 'custom') {
+      customInput.style.display = 'block'
+      // For custom base unit, also enable custom target
+      targetContainer.innerHTML = `
+        <select id="newCategoryTarget">
+          <option value="">-- Select Target Unit --</option>
+          <option value="custom">✏️ Custom...</option>
+        </select>
+      `
+      attachNewCategoryTargetHandler()
+    } else if (this.value) {
+      customInput.style.display = 'none'
+      // Populate target units based on selected base unit
+      targetContainer.innerHTML = createTargetUnitDropdown('newCategoryTarget', this.value, '', true)
+      attachNewCategoryTargetHandler()
+    } else {
+      customInput.style.display = 'none'
+      targetContainer.innerHTML = `
+        <select id="newCategoryTarget" disabled>
+          <option value="">-- Select Base Unit First --</option>
+        </select>
+      `
+    }
+  })
+}
+
+// Attach handler for new category target unit dropdown
+function attachNewCategoryTargetHandler() {
+  const targetSelect = document.getElementById('newCategoryTarget')
+  if (targetSelect) {
+    targetSelect.addEventListener('change', function() {
+      const customInput = document.getElementById('newCategoryTargetCustom')
+      customInput.style.display = this.value === 'custom' ? 'block' : 'none'
+    })
+  }
+}
+
 // Render path patterns
 function renderPatterns() {
   const container = document.getElementById('patternList')
@@ -476,7 +658,16 @@ function renderPatterns() {
   // Sort by priority
   const sorted = [...preferences.pathPatterns].sort((a, b) => (b.priority || 0) - (a.priority || 0))
 
-  container.innerHTML = sorted.map((pattern, index) => `
+  container.innerHTML = sorted.map((pattern, index) => {
+    // Derive base unit: use pattern's baseUnit if present, otherwise from category
+    const baseUnit = pattern.baseUnit || unitSchema.categoryToBaseUnit[pattern.category] || '(derived from category)'
+
+    // Get category defaults for display
+    const categoryDefault = preferences.categories?.[pattern.category]
+    const targetUnit = pattern.targetUnit || categoryDefault?.targetUnit || '(category default)'
+    const displayFormat = pattern.displayFormat || categoryDefault?.displayFormat || '(category default)'
+
+    return `
     <div class="override-item">
       <div class="override-header">
         <span class="path-name">${pattern.pattern}</span>
@@ -489,15 +680,15 @@ function renderPatterns() {
         </div>
         <div class="input-group">
           <label>Base Unit</label>
-          <input type="text" value="${pattern.baseUnit}" readonly style="background: #f8f9fa;">
+          <input type="text" value="${baseUnit}" readonly style="background: #f8f9fa;" title="${pattern.baseUnit ? 'From pattern' : 'Derived from category'}">
         </div>
         <div class="input-group">
           <label>Target Unit</label>
-          <input type="text" value="${pattern.targetUnit}" readonly style="background: #f8f9fa;">
+          <input type="text" value="${targetUnit}" readonly style="background: #f8f9fa;">
         </div>
         <div class="input-group">
           <label>Display Format</label>
-          <input type="text" value="${pattern.displayFormat}" readonly style="background: #f8f9fa;">
+          <input type="text" value="${displayFormat}" readonly style="background: #f8f9fa;">
         </div>
         <div class="input-group">
           <label>Priority</label>
@@ -505,7 +696,7 @@ function renderPatterns() {
         </div>
       </div>
     </div>
-  `).join('')
+  `}).join('')
 }
 
 // Add new pattern
@@ -518,31 +709,48 @@ async function addPattern() {
     ? document.getElementById('newPatternCategoryCustom').value.trim()
     : categorySelect.value.trim()
 
-  // Get base unit (from dropdown or custom input)
+  // Get base unit (optional for known categories, required for custom)
   const baseSelect = document.getElementById('newPatternBase')
-  const baseUnit = baseSelect.value === 'custom'
-    ? document.getElementById('newPatternBaseCustom').value.trim()
-    : baseSelect.value.trim()
+  let baseUnit = ''
+  if (categorySelect.value === 'custom') {
+    baseUnit = baseSelect.value === 'custom'
+      ? document.getElementById('newPatternBaseCustom').value.trim()
+      : baseSelect.value.trim()
+  }
 
-  // Get target unit (from dropdown or custom input)
+  // Get target unit (optional for known categories, required for custom)
   const targetSelect = document.getElementById('newPatternTarget')
   const targetUnit = targetSelect.value === 'custom'
     ? document.getElementById('newPatternTargetCustom').value.trim()
     : targetSelect.value.trim()
 
+  // Get display format (optional)
   const displayFormat = document.getElementById('newPatternFormat').value.trim()
+
   const priority = parseInt(document.getElementById('newPatternPriority').value) || 100
 
-  if (!pattern || !category || !baseUnit || !targetUnit || !displayFormat) {
-    showStatus('Please fill in all fields', 'error')
+  // Validation
+  if (!pattern || !category) {
+    showStatus('Please fill in pattern and category', 'error')
+    return
+  }
+
+  if (categorySelect.value === 'custom' && (!baseUnit || !targetUnit)) {
+    showStatus('Base unit and target unit are required for custom categories', 'error')
     return
   }
 
   try {
+    // Build request body - only include optional fields if they have values
+    const body = { pattern, category, priority }
+    if (baseUnit) body.baseUnit = baseUnit
+    if (targetUnit) body.targetUnit = targetUnit
+    if (displayFormat) body.displayFormat = displayFormat
+
     const res = await fetch(`${API_BASE}/patterns`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pattern, category, baseUnit, targetUnit, displayFormat, priority })
+      body: JSON.stringify(body)
     })
 
     if (!res.ok) throw new Error('Failed to add pattern')
@@ -555,11 +763,19 @@ async function addPattern() {
     document.getElementById('newPatternBase').value = ''
     document.getElementById('newPatternBaseCustom').value = ''
     document.getElementById('newPatternBaseCustom').style.display = 'none'
+    document.getElementById('newPatternBaseGroup').style.display = 'none'
     document.getElementById('newPatternTarget').value = ''
     document.getElementById('newPatternTargetCustom').value = ''
     document.getElementById('newPatternTargetCustom').style.display = 'none'
-    document.getElementById('newPatternFormat').value = '0.0'
+    document.getElementById('newPatternFormat').value = ''
     document.getElementById('newPatternPriority').value = '100'
+
+    // Reset target dropdown to disabled
+    document.getElementById('newPatternTargetContainer').innerHTML = `
+      <select id="newPatternTarget" disabled>
+        <option value="">Select category first</option>
+      </select>
+    `
 
     // Reload data
     await loadData()

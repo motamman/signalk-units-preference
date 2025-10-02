@@ -36,6 +36,8 @@ export interface CategoryPreference {
   targetUnit: string
   /** Display format (e.g., "0.0", "0.00", "0") */
   displayFormat: string
+  /** Base unit for custom categories (optional, only for user-created categories) */
+  baseUnit?: string
 }
 
 /**
@@ -54,12 +56,12 @@ export interface PathPatternRule {
   pattern: string
   /** Category to assign to matching paths */
   category: string
-  /** Base unit for matching paths */
-  baseUnit: string
-  /** Target unit preference */
-  targetUnit: string
-  /** Display format */
-  displayFormat: string
+  /** Base unit (optional, required only for custom categories not in schema) */
+  baseUnit?: string
+  /** Target unit preference (optional, uses category default if not specified) */
+  targetUnit?: string
+  /** Display format (optional, uses category default if not specified) */
+  displayFormat?: string
   /** Priority (higher = checked first) */
   priority?: number
 }

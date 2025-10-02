@@ -322,6 +322,34 @@
 
         <div id="categories" class="tab-content active">
             <div class="section">
+                <h2>Add Custom Category</h2>
+                <p style="color: #7f8c8d; margin-bottom: 20px;">
+                    Create a custom category with its own base unit and default target unit.
+                </p>
+                <div class="add-override" style="grid-template-columns: 1fr 1fr 1fr 1fr auto;">
+                    <div class="input-group">
+                        <label>Category Name</label>
+                        <input type="text" id="newCategoryName" placeholder="e.g., fuelConsumption">
+                    </div>
+                    <div class="input-group">
+                        <label>Base Unit</label>
+                        <div id="newCategoryBaseContainer"></div>
+                        <input type="text" id="newCategoryBaseCustom" placeholder="Enter custom base unit" style="display: none; margin-top: 5px;">
+                    </div>
+                    <div class="input-group">
+                        <label>Target Unit</label>
+                        <div id="newCategoryTargetContainer"></div>
+                        <input type="text" id="newCategoryTargetCustom" placeholder="Enter custom target unit" style="display: none; margin-top: 5px;">
+                    </div>
+                    <div class="input-group">
+                        <label>Display Format</label>
+                        <input type="text" id="newCategoryFormat" placeholder="e.g., 0.0" value="0.0">
+                    </div>
+                    <button class="btn-success" onclick="addCustomCategory()">Add Category</button>
+                </div>
+            </div>
+
+            <div class="section">
                 <h2>Category Preferences</h2>
                 <p style="color: #7f8c8d; margin-bottom: 20px;">
                     Set default units for each category. These apply to all paths unless overridden.
@@ -334,7 +362,7 @@
             <div class="section">
                 <h2>Add Path Pattern</h2>
                 <p style="color: #7f8c8d; margin-bottom: 20px;">
-                    Define patterns to automatically categorize paths. Use * for wildcards (e.g., *.temperature, environment.**)
+                    Define patterns to automatically categorize paths. Use ** for wildcards (e.g., **.temperature, environment.**)
                 </p>
                 <div class="add-override">
                     <div class="input-group">
@@ -344,21 +372,23 @@
                     <div class="input-group">
                         <label>Category</label>
                         <div id="newPatternCategoryContainer"></div>
-                        <input type="text" id="newPatternCategoryCustom" placeholder="Enter custom category" style="display: none; margin-top: 5px;">
+                        <input type="text" id="newPatternCategoryCustom" placeholder="Enter custom category name" style="display: none; margin-top: 5px;">
                     </div>
-                    <div class="input-group">
-                        <label>Base Unit</label>
+                    <div class="input-group" id="newPatternBaseGroup" style="display: none;">
+                        <label>Base Unit (required for custom category)</label>
                         <div id="newPatternBaseContainer"></div>
                         <input type="text" id="newPatternBaseCustom" placeholder="Enter custom base unit" style="display: none; margin-top: 5px;">
                     </div>
                     <div class="input-group">
-                        <label>Target Unit</label>
+                        <label>Target Unit <span id="targetUnitLabel">(optional)</span></label>
                         <div id="newPatternTargetContainer"></div>
                         <input type="text" id="newPatternTargetCustom" placeholder="Enter custom target unit" style="display: none; margin-top: 5px;">
+                        <small style="color: #7f8c8d; display: block; margin-top: 3px;" id="targetUnitHelp">Leave empty to use category default</small>
                     </div>
                     <div class="input-group">
-                        <label>Display Format</label>
-                        <input type="text" id="newPatternFormat" placeholder="e.g., 0.0" value="0.0">
+                        <label>Display Format (optional)</label>
+                        <input type="text" id="newPatternFormat" placeholder="e.g., 0.0">
+                        <small style="color: #7f8c8d; display: block; margin-top: 3px;">Leave empty to use category default</small>
                     </div>
                     <div class="input-group">
                         <label>Priority</label>

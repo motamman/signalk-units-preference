@@ -267,6 +267,22 @@ module.exports = (app: ServerAPI): Plugin => {
         }
       )
 
+      // DELETE /plugins/signalk-units-preference/categories/:category
+      // Delete custom category preference
+      router.delete(
+        '/categories/:category',
+        async (req: Request, res: Response) => {
+          try {
+            const category = req.params.category
+            await unitsManager.deleteCategoryPreference(category)
+            res.json({ success: true, category })
+          } catch (error) {
+            app.error(`Error deleting category preference: ${error}`)
+            res.status(500).json({ error: 'Internal server error' })
+          }
+        }
+      )
+
       // GET /plugins/signalk-units-preference/overrides
       // Get all path overrides
       router.get('/overrides', (req: Request, res: Response) => {
@@ -412,10 +428,10 @@ module.exports = (app: ServerAPI): Plugin => {
       router.post('/patterns', async (req: Request, res: Response) => {
         try {
           const pattern = req.body
-          if (!pattern.pattern || !pattern.category || !pattern.baseUnit || !pattern.targetUnit || !pattern.displayFormat) {
+          if (!pattern.pattern || !pattern.category) {
             return res.status(400).json({
               error: 'Invalid pattern format',
-              required: ['pattern', 'category', 'baseUnit', 'targetUnit', 'displayFormat']
+              required: ['pattern', 'category']
             })
           }
           await unitsManager.addPathPattern(pattern)
