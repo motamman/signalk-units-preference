@@ -196,6 +196,18 @@ module.exports = (app: ServerAPI): Plugin => {
         }
       })
 
+      // GET /plugins/signalk-units-preference/schema
+      // Get unit schema information (base units, categories, target units)
+      router.get('/schema', (req: Request, res: Response) => {
+        try {
+          const schema = unitsManager.getUnitSchema()
+          res.json(schema)
+        } catch (error) {
+          app.error(`Error getting schema: ${error}`)
+          res.status(500).json({ error: 'Internal server error' })
+        }
+      })
+
       // GET /plugins/signalk-units-preference/categories
       // Get all category preferences
       router.get('/categories', (req: Request, res: Response) => {
@@ -239,7 +251,7 @@ module.exports = (app: ServerAPI): Plugin => {
             const category = req.params.category
             const preference = req.body
 
-            if (!preference.targetUnit || !preference.displayFormat) {
+            if (preference.targetUnit === undefined || preference.displayFormat === undefined) {
               return res.status(400).json({
                 error: 'Invalid preference format',
                 required: ['targetUnit', 'displayFormat']

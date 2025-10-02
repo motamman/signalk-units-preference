@@ -5,12 +5,158 @@ let metadata = null
 let availablePaths = []
 let pathTree = {}
 
+// Unit schema data (loaded from server)
+let unitSchema = {
+  baseUnits: [],
+  categories: [],
+  targetUnitsByBase: {},
+  categoryToBaseUnit: {}
+}
+
+// Create base unit dropdown HTML
+function createBaseUnitDropdown(id, selectedValue = '', includeCustom = true) {
+  const options = unitSchema.baseUnits.map(opt =>
+    `<option value="${opt.value}" ${opt.value === selectedValue ? 'selected' : ''}>${opt.label}</option>`
+  ).join('')
+  const customOption = includeCustom ? `<option value="custom" ${selectedValue === 'custom' ? 'selected' : ''}>✏️ Custom...</option>` : ''
+  return `
+    <select id="${id}">
+      <option value="">-- Select Base Unit --</option>
+      ${options}
+      ${customOption}
+    </select>
+  `
+}
+
+// Create category dropdown HTML
+function createCategoryDropdown(id, selectedValue = '', includeCustom = true) {
+  const options = unitSchema.categories.map(cat =>
+    `<option value="${cat}" ${cat === selectedValue ? 'selected' : ''}>${cat}</option>`
+  ).join('')
+  const customOption = includeCustom ? `<option value="custom" ${selectedValue === 'custom' ? 'selected' : ''}>✏️ Custom...</option>` : ''
+  return `
+    <select id="${id}">
+      <option value="">-- Select Category --</option>
+      ${options}
+      ${customOption}
+    </select>
+  `
+}
+
+// Create target unit dropdown HTML based on base unit
+function createTargetUnitDropdown(id, baseUnit = '', selectedValue = '', includeCustom = true) {
+  const units = unitSchema.targetUnitsByBase[baseUnit] || []
+  const options = units.map(unit =>
+    `<option value="${unit}" ${unit === selectedValue ? 'selected' : ''}>${unit}</option>`
+  ).join('')
+  const customOption = includeCustom ? `<option value="custom" ${selectedValue === 'custom' ? 'selected' : ''}>✏️ Custom...</option>` : ''
+  return `
+    <select id="${id}">
+      <option value="">-- Select Target Unit --</option>
+      ${options}
+      ${customOption}
+    </select>
+  `
+}
+
+// Load unit schema from server
+async function loadSchema() {
+  try {
+    const res = await fetch(`${API_BASE}/schema`)
+    if (!res.ok) throw new Error('Failed to load schema')
+    unitSchema = await res.json()
+  } catch (error) {
+    showStatus('Failed to load unit schema: ' + error.message, 'error')
+  }
+}
+
 // Initialize
 document.addEventListener('DOMContentLoaded', async () => {
   setupTabs()
+  await loadSchema()
   await loadData()
   await loadPaths()
+  initializePatternDropdowns()
 })
+
+// Initialize pattern form dropdowns
+function initializePatternDropdowns() {
+  // Render initial dropdowns
+  document.getElementById('newPatternCategoryContainer').innerHTML = createCategoryDropdown('newPatternCategory')
+  document.getElementById('newPatternBaseContainer').innerHTML = createBaseUnitDropdown('newPatternBase')
+  // Target unit starts disabled until base unit is selected
+  document.getElementById('newPatternTargetContainer').innerHTML = `
+    <select id="newPatternTarget" disabled>
+      <option value="">Select base unit first</option>
+    </select>
+  `
+
+  // Handle category custom input and auto-populate base unit
+  document.getElementById('newPatternCategory').addEventListener('change', function() {
+    const customInput = document.getElementById('newPatternCategoryCustom')
+    const baseSelect = document.getElementById('newPatternBase')
+    const targetContainer = document.getElementById('newPatternTargetContainer')
+
+    if (this.value === 'custom') {
+      customInput.style.display = 'block'
+    } else {
+      customInput.style.display = 'none'
+
+      // Auto-populate base unit if category has a default
+      const defaultBaseUnit = unitSchema.categoryToBaseUnit[this.value]
+      if (defaultBaseUnit && this.value) {
+        baseSelect.value = defaultBaseUnit
+        // Trigger base unit change to populate target units
+        targetContainer.innerHTML = createTargetUnitDropdown('newPatternTarget', defaultBaseUnit)
+        attachTargetUnitHandler()
+      }
+    }
+  })
+
+  // Handle base unit custom input and update target units
+  document.getElementById('newPatternBase').addEventListener('change', function() {
+    const customInput = document.getElementById('newPatternBaseCustom')
+    const targetContainer = document.getElementById('newPatternTargetContainer')
+
+    if (this.value === '' || !this.value) {
+      // No base unit selected, disable target dropdown
+      targetContainer.innerHTML = `
+        <select id="newPatternTarget" disabled>
+          <option value="">Select base unit first</option>
+        </select>
+      `
+    } else if (this.value === 'custom') {
+      customInput.style.display = 'block'
+      // Enable target dropdown with custom option
+      targetContainer.innerHTML = createTargetUnitDropdown('newPatternTarget', '')
+      attachTargetUnitHandler()
+    } else {
+      customInput.style.display = 'none'
+      // Update target units based on selected base unit
+      targetContainer.innerHTML = createTargetUnitDropdown('newPatternTarget', this.value)
+      // Re-attach target unit custom handler
+      attachTargetUnitHandler()
+    }
+  })
+
+  // Attach target unit custom handler initially
+  attachTargetUnitHandler()
+}
+
+// Helper to attach target unit custom input handler
+function attachTargetUnitHandler() {
+  const targetSelect = document.getElementById('newPatternTarget')
+  if (targetSelect) {
+    targetSelect.addEventListener('change', function() {
+      const customInput = document.getElementById('newPatternTargetCustom')
+      if (this.value === 'custom') {
+        customInput.style.display = 'block'
+      } else {
+        customInput.style.display = 'none'
+      }
+    })
+  }
+}
 
 // Tab switching
 function setupTabs() {
@@ -84,25 +230,29 @@ function getAvailableUnitsForCategory(category) {
 function renderCategories() {
   const container = document.getElementById('categoryList')
 
-  if (!preferences || !preferences.categories || Object.keys(preferences.categories).length === 0) {
-    container.innerHTML = '<div class="empty-state">No category preferences configured</div>'
+  if (!unitSchema.categories || unitSchema.categories.length === 0) {
+    container.innerHTML = '<div class="empty-state">Loading categories...</div>'
     return
   }
 
-  container.innerHTML = Object.entries(preferences.categories)
-    .map(([category, pref]) => {
-      const availableUnits = getAvailableUnitsForCategory(category)
+  // Show all categories from schema, use preferences if they exist
+  container.innerHTML = unitSchema.categories
+    .map(category => {
+      const pref = preferences?.categories?.[category] || { targetUnit: '', displayFormat: '0.0' }
+      const baseUnit = unitSchema.categoryToBaseUnit[category]
+      const availableUnits = unitSchema.targetUnitsByBase[baseUnit] || []
 
       return `
       <div class="category-item">
         <div class="category-header">
           <span class="category-name">${category}</span>
-          <span style="color: #7f8c8d; font-size: 13px;">Available: ${availableUnits.join(', ') || 'None'}</span>
+          <span style="color: #7f8c8d; font-size: 13px;">Base: ${baseUnit} | Available: ${availableUnits.join(', ') || 'None'}</span>
         </div>
         <div class="form-group">
           <div class="input-group">
             <label>Target Unit</label>
             <select onchange="updateCategory('${category}', 'targetUnit', this.value)">
+              <option value="">-- Select Unit --</option>
               ${availableUnits.map(unit => `
                 <option value="${unit}" ${unit === pref.targetUnit ? 'selected' : ''}>${unit}</option>
               `).join('')}
@@ -112,7 +262,7 @@ function renderCategories() {
             <label>Display Format</label>
             <input
               type="text"
-              value="${pref.displayFormat}"
+              value="${pref.displayFormat || '0.0'}"
               onchange="updateCategory('${category}', 'displayFormat', this.value)"
               placeholder="e.g., 0.0"
             >
@@ -293,7 +443,7 @@ async function renderMetadata() {
 // Update category preference
 async function updateCategory(category, field, value) {
   try {
-    const currentPref = preferences.categories[category]
+    const currentPref = preferences.categories?.[category] || { targetUnit: '', displayFormat: '0.0' }
     const updatedPref = { ...currentPref, [field]: value }
 
     const res = await fetch(`${API_BASE}/categories/${category}`, {
@@ -304,6 +454,9 @@ async function updateCategory(category, field, value) {
 
     if (!res.ok) throw new Error('Failed to update')
 
+    if (!preferences.categories) {
+      preferences.categories = {}
+    }
     preferences.categories[category] = updatedPref
     showStatus(`Updated ${category} preference`, 'success')
   } catch (error) {
@@ -358,9 +511,25 @@ function renderPatterns() {
 // Add new pattern
 async function addPattern() {
   const pattern = document.getElementById('newPatternPattern').value.trim()
-  const category = document.getElementById('newPatternCategory').value.trim()
-  const baseUnit = document.getElementById('newPatternBase').value.trim()
-  const targetUnit = document.getElementById('newPatternUnit').value.trim()
+
+  // Get category (from dropdown or custom input)
+  const categorySelect = document.getElementById('newPatternCategory')
+  const category = categorySelect.value === 'custom'
+    ? document.getElementById('newPatternCategoryCustom').value.trim()
+    : categorySelect.value.trim()
+
+  // Get base unit (from dropdown or custom input)
+  const baseSelect = document.getElementById('newPatternBase')
+  const baseUnit = baseSelect.value === 'custom'
+    ? document.getElementById('newPatternBaseCustom').value.trim()
+    : baseSelect.value.trim()
+
+  // Get target unit (from dropdown or custom input)
+  const targetSelect = document.getElementById('newPatternTarget')
+  const targetUnit = targetSelect.value === 'custom'
+    ? document.getElementById('newPatternTargetCustom').value.trim()
+    : targetSelect.value.trim()
+
   const displayFormat = document.getElementById('newPatternFormat').value.trim()
   const priority = parseInt(document.getElementById('newPatternPriority').value) || 100
 
@@ -381,9 +550,15 @@ async function addPattern() {
     // Clear inputs
     document.getElementById('newPatternPattern').value = ''
     document.getElementById('newPatternCategory').value = ''
+    document.getElementById('newPatternCategoryCustom').value = ''
+    document.getElementById('newPatternCategoryCustom').style.display = 'none'
     document.getElementById('newPatternBase').value = ''
-    document.getElementById('newPatternUnit').value = ''
-    document.getElementById('newPatternFormat').value = ''
+    document.getElementById('newPatternBaseCustom').value = ''
+    document.getElementById('newPatternBaseCustom').style.display = 'none'
+    document.getElementById('newPatternTarget').value = ''
+    document.getElementById('newPatternTargetCustom').value = ''
+    document.getElementById('newPatternTargetCustom').style.display = 'none'
+    document.getElementById('newPatternFormat').value = '0.0'
     document.getElementById('newPatternPriority').value = '100'
 
     // Reload data

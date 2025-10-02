@@ -495,4 +495,89 @@ export class UnitsManager {
     this.metadata[pathStr].conversions[unitName] = conversion
     await this.saveMetadata()
   }
+
+  /**
+   * Get unit schema (base units, categories, target units mapping)
+   */
+  getUnitSchema(): {
+    baseUnits: Array<{ value: string; label: string }>
+    categories: string[]
+    targetUnitsByBase: Record<string, string[]>
+    categoryToBaseUnit: Record<string, string>
+  } {
+    // Extract unique base units from comprehensive defaults
+    const baseUnitsSet = new Set<string>()
+    const categoriesSet = new Set<string>()
+    const targetUnitsByBase: Record<string, Set<string>> = {}
+    const categoryToBaseUnit: Record<string, string> = {}
+
+    // Scan all metadata (including comprehensive defaults)
+    const allMetadata = { ...comprehensiveDefaultUnits, ...this.metadata }
+
+    for (const [_path, meta] of Object.entries(allMetadata)) {
+      if (!meta.baseUnit) continue
+
+      baseUnitsSet.add(meta.baseUnit)
+
+      if (meta.category) {
+        categoriesSet.add(meta.category)
+        // Map category to its base unit (first one found)
+        if (!categoryToBaseUnit[meta.category]) {
+          categoryToBaseUnit[meta.category] = meta.baseUnit
+        }
+      }
+
+      if (meta.conversions) {
+        if (!targetUnitsByBase[meta.baseUnit]) {
+          targetUnitsByBase[meta.baseUnit] = new Set()
+        }
+        for (const targetUnit of Object.keys(meta.conversions)) {
+          targetUnitsByBase[meta.baseUnit].add(targetUnit)
+        }
+      }
+    }
+
+    // Convert sets to arrays and create labeled base units
+    const baseUnitsArray = Array.from(baseUnitsSet).sort()
+    const baseUnits = baseUnitsArray.map(unit => ({
+      value: unit,
+      label: this.getBaseUnitLabel(unit)
+    }))
+
+    const targetUnitsMap: Record<string, string[]> = {}
+    for (const [baseUnit, units] of Object.entries(targetUnitsByBase)) {
+      targetUnitsMap[baseUnit] = Array.from(units).sort()
+    }
+
+    return {
+      baseUnits,
+      categories: Array.from(categoriesSet).sort(),
+      targetUnitsByBase: targetUnitsMap,
+      categoryToBaseUnit
+    }
+  }
+
+  /**
+   * Get a human-readable label for a base unit
+   */
+  private getBaseUnitLabel(unit: string): string {
+    const labels: Record<string, string> = {
+      'm/s': 'm/s (speed)',
+      'K': 'K (temperature)',
+      'Pa': 'Pa (pressure)',
+      'm': 'm (distance/depth)',
+      'rad': 'rad (angle)',
+      'm3': 'm³ (volume)',
+      'V': 'V (voltage)',
+      'A': 'A (current)',
+      'W': 'W (power)',
+      'Hz': 'Hz (frequency)',
+      'ratio': 'ratio (percentage)',
+      's': 's (time)',
+      'C': 'C (charge)',
+      'deg': 'deg (latitude/longitude)',
+      'm3/s': 'm³/s (volume rate)'
+    }
+    return labels[unit] || unit
+  }
 }

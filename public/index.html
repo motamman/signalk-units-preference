@@ -339,23 +339,26 @@
                 <div class="add-override">
                     <div class="input-group">
                         <label>Pattern</label>
-                        <input type="text" id="newPatternPattern" placeholder="e.g., *.temperature">
+                        <input type="text" id="newPatternPattern" placeholder="e.g., **.temperature">
                     </div>
                     <div class="input-group">
                         <label>Category</label>
-                        <input type="text" id="newPatternCategory" placeholder="e.g., temperature">
+                        <div id="newPatternCategoryContainer"></div>
+                        <input type="text" id="newPatternCategoryCustom" placeholder="Enter custom category" style="display: none; margin-top: 5px;">
                     </div>
                     <div class="input-group">
                         <label>Base Unit</label>
-                        <input type="text" id="newPatternBase" placeholder="e.g., K">
+                        <div id="newPatternBaseContainer"></div>
+                        <input type="text" id="newPatternBaseCustom" placeholder="Enter custom base unit" style="display: none; margin-top: 5px;">
                     </div>
                     <div class="input-group">
                         <label>Target Unit</label>
-                        <input type="text" id="newPatternUnit" placeholder="e.g., celsius">
+                        <div id="newPatternTargetContainer"></div>
+                        <input type="text" id="newPatternTargetCustom" placeholder="Enter custom target unit" style="display: none; margin-top: 5px;">
                     </div>
                     <div class="input-group">
                         <label>Display Format</label>
-                        <input type="text" id="newPatternFormat" placeholder="e.g., 0.0">
+                        <input type="text" id="newPatternFormat" placeholder="e.g., 0.0" value="0.0">
                     </div>
                     <div class="input-group">
                         <label>Priority</label>
