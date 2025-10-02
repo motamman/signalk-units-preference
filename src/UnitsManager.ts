@@ -245,7 +245,7 @@ export class UnitsManager {
   /**
    * Get conversion information for a path
    */
-  getConversion(pathStr: string): ConversionResponse | null {
+  getConversion(pathStr: string): ConversionResponse {
     this.app.debug(`getConversion called for: ${pathStr}`)
 
     // Check if we have metadata for this path
@@ -272,12 +272,14 @@ export class UnitsManager {
           const inferred = this.inferMetadataFromSignalK(pathStr, skMetadata.units)
           if (!inferred) {
             this.app.debug(`Could not infer metadata for path: ${pathStr}`)
-            return null
+            // Return pass-through conversion with SignalK unit
+            return this.getPassThroughConversion(pathStr, skMetadata.units)
           }
           metadata = inferred
         } else {
           this.app.debug(`No metadata found for path: ${pathStr}`)
-          return null
+          // Return pass-through conversion
+          return this.getPassThroughConversion(pathStr)
         }
       }
     }
@@ -288,7 +290,8 @@ export class UnitsManager {
 
     if (!preference) {
       this.app.debug(`No preference found for path: ${pathStr}`)
-      return null
+      // Return pass-through conversion using metadata's baseUnit
+      return this.getPassThroughConversion(pathStr, metadata.baseUnit || undefined)
     }
 
     // Get conversion definition
@@ -298,14 +301,15 @@ export class UnitsManager {
       this.app.debug(
         `No conversion found for ${preference.targetUnit} in path: ${pathStr}`
       )
-      return null
+      // Return pass-through conversion using metadata's baseUnit
+      return this.getPassThroughConversion(pathStr, metadata.baseUnit || undefined)
     }
 
     this.app.debug(`Conversion object: ${JSON.stringify(conversion)}`)
 
     if (!conversion.formula) {
       this.app.error(`Conversion for ${preference.targetUnit} has no formula`)
-      return null
+      return this.getPassThroughConversion(pathStr, metadata.baseUnit || undefined)
     }
 
     return {
@@ -321,14 +325,36 @@ export class UnitsManager {
   }
 
   /**
+   * Get a pass-through conversion (no conversion applied)
+   * If path has SignalK metadata with units, use that as baseUnit/targetUnit
+   */
+  private getPassThroughConversion(pathStr: string, signalKUnit?: string): ConversionResponse {
+    // Check SignalK metadata if not provided
+    let unit = signalKUnit
+    if (!unit) {
+      const skMetadata = this.app.getMetadata(pathStr)
+      if (skMetadata?.units) {
+        unit = skMetadata.units
+      }
+    }
+
+    return {
+      path: pathStr,
+      baseUnit: unit || 'none',
+      targetUnit: unit || 'none',
+      formula: 'value',
+      inverseFormula: 'value',
+      displayFormat: '0.0',
+      symbol: '',
+      category: 'none'
+    }
+  }
+
+  /**
    * Convert a value using the conversion formula
    */
-  convertValue(pathStr: string, value: number): ConvertValueResponse | null {
+  convertValue(pathStr: string, value: number): ConvertValueResponse {
     const conversionInfo = this.getConversion(pathStr)
-
-    if (!conversionInfo) {
-      return null
-    }
 
     try {
       const convertedValue = evaluateFormula(conversionInfo.formula, value)
@@ -343,7 +369,14 @@ export class UnitsManager {
       }
     } catch (error) {
       this.app.error(`Error converting value: ${error}`)
-      return null
+      // Return pass-through on error
+      return {
+        originalValue: value,
+        convertedValue: value,
+        symbol: '',
+        formatted: `${value}`,
+        displayFormat: '0.0'
+      }
     }
   }
 

@@ -4,6 +4,7 @@ let preferences = null
 let metadata = null
 let availablePaths = []
 let pathTree = {}
+let signalKValues = {}
 
 // Unit schema data (loaded from server)
 let unitSchema = {
@@ -11,6 +12,11 @@ let unitSchema = {
   categories: [],
   targetUnitsByBase: {},
   categoryToBaseUnit: {}
+}
+
+// Get current value for a path from SignalK
+function getCurrentValue(pathStr) {
+  return signalKValues[pathStr]
 }
 
 // Create base unit dropdown HTML
@@ -485,15 +491,25 @@ async function renderMetadata() {
           </tr>
         </thead>
         <tbody>
-          ${pathInfo.map(info => `
+          ${pathInfo.map(info => {
+            const conversionUrl = `${API_BASE}/conversion/${info.path}`
+            const currentValue = getCurrentValue(info.path) || 0
+            const convertUrl = `${API_BASE}/convert/${info.path}/${currentValue}`
+
+            return `
             <tr style="border-bottom: 1px solid #e9ecef; background: ${info.color};">
-              <td style="padding: 12px; font-family: monospace; font-size: 13px;">${info.path}</td>
+              <td style="padding: 12px; font-family: monospace; font-size: 13px;">
+                ${info.path}
+                <a href="${conversionUrl}" target="_blank" title="View conversion info" style="color: #3498db; margin-left: 8px; text-decoration: none;">🔧</a>
+                <a href="${convertUrl}" target="_blank" title="Test conversion with current value (${currentValue})" style="color: #2ecc71; margin-left: 4px; text-decoration: none;">▶️</a>
+              </td>
               <td style="padding: 12px; font-size: 12px;">${info.status}</td>
               <td style="padding: 12px;">${info.baseUnit}</td>
               <td style="padding: 12px;">${info.category}</td>
               <td style="padding: 12px; font-size: 13px;">${info.conversions}</td>
             </tr>
-          `).join('')}
+            `
+          }).join('')}
         </tbody>
       </table>
     </div>
@@ -1390,10 +1406,18 @@ function renderPathOverrides() {
   }
 
   container.innerHTML = overrides.map(override => {
+    const conversionUrl = `${API_BASE}/conversion/${override.path}`
+    const currentValue = getCurrentValue(override.path) || 0
+    const convertUrl = `${API_BASE}/convert/${override.path}/${currentValue}`
+
     return `
       <div class="override-item">
         <div class="override-header">
-          <span class="path-name">${override.path}</span>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span class="path-name">${override.path}</span>
+            <a href="${conversionUrl}" target="_blank" title="View conversion info" style="color: #3498db; font-size: 14px; text-decoration: none;">🔧</a>
+            <a href="${convertUrl}" target="_blank" title="Test conversion with current value (${currentValue})" style="color: #2ecc71; font-size: 14px; text-decoration: none;">▶️</a>
+          </div>
           <button class="btn-danger" onclick="deletePathOverride('${override.path}')">Delete</button>
         </div>
         <div class="form-group">

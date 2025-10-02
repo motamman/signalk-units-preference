@@ -93,14 +93,6 @@ module.exports = (app: ServerAPI): Plugin => {
           app.debug(`Getting conversion for path: ${pathStr}`)
 
           const conversion = unitsManager.getConversion(pathStr)
-
-          if (!conversion) {
-            return res.status(404).json({
-              error: 'No conversion found for path',
-              path: pathStr
-            })
-          }
-
           res.json(conversion)
         } catch (error) {
           app.error(`Error getting conversion: ${error}`)
@@ -125,14 +117,6 @@ module.exports = (app: ServerAPI): Plugin => {
           app.debug(`Converting value ${value} for path: ${pathStr}`)
 
           const result = unitsManager.convertValue(pathStr, value)
-
-          if (!result) {
-            return res.status(404).json({
-              error: 'No conversion found for path',
-              path: pathStr
-            })
-          }
-
           res.json(result)
         } catch (error) {
           app.error(`Error converting value: ${error}`)

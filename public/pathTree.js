@@ -1,8 +1,9 @@
 // Path tree utility functions
 
-// Extract paths from SignalK API response
+// Extract paths and values from SignalK API response
 function extractPathsFromSignalK(obj) {
   const paths = []
+  const values = {}
 
   function extractRecursive(obj, prefix = '') {
     if (!obj || typeof obj !== 'object') return
@@ -15,6 +16,7 @@ function extractPathsFromSignalK(obj) {
       if (obj[key] && typeof obj[key] === 'object') {
         if (obj[key].value !== undefined) {
           paths.push(currentPath)
+          values[currentPath] = obj[key].value
         }
         extractRecursive(obj[key], currentPath)
       }
@@ -31,7 +33,7 @@ function extractPathsFromSignalK(obj) {
     extractRecursive(obj.vessels[actualSelfId], '')
   }
 
-  return paths.sort()
+  return { paths: paths.sort(), values }
 }
 
 // Load available paths from SignalK API
@@ -41,7 +43,10 @@ async function loadPaths() {
     if (!res.ok) throw new Error('Failed to load SignalK data')
 
     const data = await res.json()
-    availablePaths = extractPathsFromSignalK(data)
+    const extracted = extractPathsFromSignalK(data)
+
+    availablePaths = extracted.paths
+    signalKValues = extracted.values
 
     // Build tree structure
     pathTree = buildPathTree(availablePaths)
