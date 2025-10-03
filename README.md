@@ -101,8 +101,29 @@ Access the web interface at: `http://localhost.com:3000/signalk-units-preference
 
 ### Tab Overview
 
+#### **Category Preferences**
+Set default units for categories like speed, temperature, pressure.
+
+**Add Custom Category** (Collapsible - Default: Closed):
+- Create custom categories with their own base unit and target unit
+- Category Name: Unique identifier (e.g., "fuelConsumption")
+- Base Unit: Select or create base unit
+- Target Unit: Select target unit for conversions
+- Display Format: Decimal precision (e.g., "0.0")
+
+**Category List** (Collapsible Items):
+- Each category is collapsible - click to expand/collapse details
+- View/edit target unit and display format
+- **CUSTOM badge**: User-created categories (editable and deletable)
+- **CORE badge**: Built-in SignalK categories (editable only)
+- Edit button: Modify custom category settings
+- Delete button: Remove custom categories
+
 #### **Unit Definitions**
 Create and manage base units and conversion formulas.
+
+**Add Unit Definitions** (Collapsible - Default: Closed):
+- Combined section for adding base units and conversions
 
 **Add Base Unit:**
 - Symbol: Base unit symbol (e.g., "m/s", "K")
@@ -115,16 +136,18 @@ Create and manage base units and conversion formulas.
 - Inverse Formula: Conversion back to base unit
 - Symbol: Display symbol (e.g., "kn", "mph")
 
-#### **Category Preferences**
-Set default units for categories like speed, temperature, pressure.
-
-- Select category from dropdown
-- Choose target unit (filtered by category's base unit)
-- Set display format (e.g., "0.0" for one decimal place)
+**All Unit Definitions** (Collapsible Items):
+- Each unit is collapsible - click to expand/collapse conversions
+- **CUSTOM badge**: User-created units (fully editable and deletable)
+- **CORE badge**: Built-in units from SignalK (editable, creates override)
+- Edit button: Modify base unit description
+- Edit conversions: Modify formulas, inverse formulas, and symbols inline
+- Delete warning: Shows impact (number of conversions, affected categories)
 
 #### **Path Patterns**
 Create wildcard patterns to apply conversions to multiple paths.
 
+**Add Path Pattern** (Collapsible - Default: Closed):
 - **Pattern**: Wildcard expression (e.g., `**.temperature`)
 - **Category**: Assign to a category
 - **Priority**: Higher numbers take precedence (default: 100)
@@ -139,6 +162,13 @@ Create wildcard patterns to apply conversions to multiple paths.
 propulsion.*.rpm      → All engine RPM paths
 electrical.**.voltage → All voltage paths under electrical
 ```
+
+**Path Patterns List** (Accordion - Default: All Closed):
+- Each pattern is collapsible - click to expand/collapse details
+- **Accordion behavior**: Opening one pattern closes all others
+- Shows pattern, category, and priority in header
+- Edit button: Modify all pattern settings with dropdowns
+- Delete button: Remove pattern with confirmation
 
 #### **Path Overrides**
 Assign specific units to individual paths.
@@ -157,6 +187,33 @@ Browse all SignalK paths with their conversion settings.
   - 🔧 View conversion details
   - ▶️ Test conversion with current value
 - **Color Coding**: Green (override), Yellow (pattern), Blue (SignalK), Gray (none)
+
+### UI Features
+
+#### **Collapsible Sections**
+Most sections are collapsible to keep the interface clean:
+- Click section headers to expand/collapse
+- Arrow icons (▼) indicate current state
+- "Add" sections default to closed
+- List sections default to open
+
+#### **Edit Mode**
+Custom items (categories, units, patterns) can be edited:
+- Edit button opens a yellow-highlighted form
+- All fields are editable with smart dropdowns
+- Save/Cancel buttons for confirmation
+- Auto-expands collapsed items when editing
+
+#### **Core vs Custom Labels**
+- **CORE**: Built-in items from SignalK (editable, not deletable)
+- **CUSTOM**: User-created items (fully editable and deletable)
+- Editing a core unit creates a custom override
+
+#### **Delete Warnings**
+Enhanced warnings when deleting critical items:
+- Shows impact (affected conversions, categories, etc.)
+- "Cannot be undone" warning
+- Confirmation required
 
 ## REST API Reference
 

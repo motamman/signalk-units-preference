@@ -957,31 +957,45 @@ function renderPatterns() {
     const displayFormat = pattern.displayFormat || categoryDefault?.displayFormat || '(category default)'
 
     return `
-    <div class="override-item">
-      <div class="override-header">
-        <span class="path-name">${pattern.pattern}</span>
-        <button class="btn-danger" onclick="deletePattern(${index})">Delete</button>
+    <div class="pattern-item" style="margin-bottom: 15px;">
+      <div class="collapsible-header" onclick="togglePatternItem(${index})">
+        <div>
+          <h3 class="path-name" style="display: inline; margin: 0; font-size: 1rem;">${pattern.pattern}</h3>
+          <div style="color: #7f8c8d; font-size: 13px; margin-top: 5px;">Category: ${pattern.category} | Priority: ${pattern.priority || 0}</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <button class="btn-primary" onclick="event.stopPropagation(); editPattern(${index})" style="padding: 4px 12px; font-size: 12px;">Edit</button>
+          <button class="btn-danger" onclick="event.stopPropagation(); deletePattern(${index})" style="padding: 4px 12px; font-size: 12px;">Delete</button>
+          <span class="collapse-icon collapsed" id="pattern-icon-${index}">▼</span>
+        </div>
       </div>
-      <div class="form-group">
-        <div class="input-group">
-          <label>Category</label>
-          <input type="text" value="${pattern.category}" readonly style="background: #f8f9fa;">
+      <div class="collapsible-content collapsed" id="pattern-content-${index}">
+        <div id="pattern-view-${index}">
+          <div class="form-group">
+            <div class="input-group">
+              <label>Category</label>
+              <input type="text" value="${pattern.category}" readonly style="background: #f8f9fa;">
+            </div>
+            <div class="input-group">
+              <label>Base Unit</label>
+              <input type="text" value="${baseUnit}" readonly style="background: #f8f9fa;" title="${pattern.baseUnit ? 'From pattern' : 'Derived from category'}">
+            </div>
+            <div class="input-group">
+              <label>Target Unit</label>
+              <input type="text" value="${targetUnit}" readonly style="background: #f8f9fa;">
+            </div>
+            <div class="input-group">
+              <label>Display Format</label>
+              <input type="text" value="${displayFormat}" readonly style="background: #f8f9fa;">
+            </div>
+            <div class="input-group">
+              <label>Priority</label>
+              <input type="text" value="${pattern.priority || 0}" readonly style="background: #f8f9fa;">
+            </div>
+          </div>
         </div>
-        <div class="input-group">
-          <label>Base Unit</label>
-          <input type="text" value="${baseUnit}" readonly style="background: #f8f9fa;" title="${pattern.baseUnit ? 'From pattern' : 'Derived from category'}">
-        </div>
-        <div class="input-group">
-          <label>Target Unit</label>
-          <input type="text" value="${targetUnit}" readonly style="background: #f8f9fa;">
-        </div>
-        <div class="input-group">
-          <label>Display Format</label>
-          <input type="text" value="${displayFormat}" readonly style="background: #f8f9fa;">
-        </div>
-        <div class="input-group">
-          <label>Priority</label>
-          <input type="text" value="${pattern.priority || 0}" readonly style="background: #f8f9fa;">
+        <div id="pattern-edit-${index}" style="display: none;">
+          <!-- Edit form will be inserted here -->
         </div>
       </div>
     </div>
@@ -1075,6 +1089,151 @@ async function addPattern() {
 }
 
 // Delete pattern
+// Edit pattern
+function editPattern(index) {
+  const pattern = preferences.pathPatterns[index]
+  const viewDiv = document.getElementById(`pattern-view-${index}`)
+  const editDiv = document.getElementById(`pattern-edit-${index}`)
+
+  // Determine base unit to use for target units
+  const baseUnitForTargets = pattern.baseUnit || unitSchema.categoryToBaseUnit[pattern.category] || ''
+
+  // Build edit form
+  editDiv.innerHTML = `
+    <div style="background: #fff3cd; padding: 15px; border-radius: 4px; border: 1px dashed #ffc107;">
+      <h4 style="margin: 0 0 15px 0; color: #856404; font-size: 14px;">Edit Pattern</h4>
+      <div class="form-group" style="margin-bottom: 15px;">
+        <div class="input-group">
+          <label>Pattern</label>
+          <input type="text" id="edit-pattern-pattern-${index}" value="${pattern.pattern}" placeholder="e.g., **.temperature">
+        </div>
+        <div class="input-group">
+          <label>Category</label>
+          <input type="text" id="edit-pattern-category-${index}" value="${pattern.category}" placeholder="Category name">
+        </div>
+        <div class="input-group">
+          <label>Base Unit (optional)</label>
+          <div id="edit-pattern-base-container-${index}"></div>
+        </div>
+        <div class="input-group">
+          <label>Target Unit (optional)</label>
+          <div id="edit-pattern-target-container-${index}"></div>
+        </div>
+        <div class="input-group">
+          <label>Display Format (optional)</label>
+          <input type="text" id="edit-pattern-format-${index}" value="${pattern.displayFormat || ''}" placeholder="e.g., 0.0">
+        </div>
+        <div class="input-group">
+          <label>Priority</label>
+          <input type="number" id="edit-pattern-priority-${index}" value="${pattern.priority || 100}" placeholder="100">
+        </div>
+      </div>
+      <div style="display: flex; gap: 10px;">
+        <button class="btn-success" onclick="saveEditPattern(${index})" style="padding: 8px 16px;">Save Changes</button>
+        <button class="btn-secondary" onclick="cancelEditPattern(${index})" style="padding: 8px 16px;">Cancel</button>
+      </div>
+    </div>
+  `
+
+  // Populate base unit dropdown
+  const baseOptions = unitSchema.baseUnits.map(opt =>
+    `<option value="${opt.value}" ${opt.value === pattern.baseUnit ? 'selected' : ''}>${opt.label}</option>`
+  ).join('')
+  document.getElementById(`edit-pattern-base-container-${index}`).innerHTML = `
+    <select id="edit-pattern-base-${index}">
+      <option value="">-- Use Category Default --</option>
+      ${baseOptions}
+    </select>
+  `
+
+  // Populate target unit dropdown
+  const targetUnits = unitSchema.targetUnitsByBase[baseUnitForTargets] || []
+  const targetOptions = targetUnits.map(unit =>
+    `<option value="${unit}" ${unit === pattern.targetUnit ? 'selected' : ''}>${unit}</option>`
+  ).join('')
+  document.getElementById(`edit-pattern-target-container-${index}`).innerHTML = `
+    <select id="edit-pattern-target-${index}">
+      <option value="">-- Use Category Default --</option>
+      ${targetOptions}
+    </select>
+  `
+
+  // Handle base unit change to update target units
+  document.getElementById(`edit-pattern-base-${index}`).addEventListener('change', (e) => {
+    const selectedBase = e.target.value
+    const baseForTargets = selectedBase || unitSchema.categoryToBaseUnit[pattern.category] || ''
+    const units = unitSchema.targetUnitsByBase[baseForTargets] || []
+    const options = units.map(unit => `<option value="${unit}">${unit}</option>`).join('')
+    document.getElementById(`edit-pattern-target-container-${index}`).innerHTML = `
+      <select id="edit-pattern-target-${index}">
+        <option value="">-- Use Category Default --</option>
+        ${options}
+      </select>
+    `
+  })
+
+  // Show edit form, hide view
+  viewDiv.style.display = 'none'
+  editDiv.style.display = 'block'
+
+  // Ensure the content is expanded
+  const content = document.getElementById(`pattern-content-${index}`)
+  if (content.classList.contains('collapsed')) {
+    togglePatternItem(index)
+  }
+}
+
+// Save edited pattern
+async function saveEditPattern(index) {
+  const patternStr = document.getElementById(`edit-pattern-pattern-${index}`).value.trim()
+  const category = document.getElementById(`edit-pattern-category-${index}`).value.trim()
+  const baseUnit = document.getElementById(`edit-pattern-base-${index}`).value
+  const targetUnit = document.getElementById(`edit-pattern-target-${index}`).value
+  const displayFormat = document.getElementById(`edit-pattern-format-${index}`).value.trim()
+  const priority = parseInt(document.getElementById(`edit-pattern-priority-${index}`).value) || 100
+
+  if (!patternStr || !category) {
+    showStatus('Pattern and Category are required', 'error')
+    return
+  }
+
+  try {
+    const updatedPattern = {
+      pattern: patternStr,
+      category,
+      baseUnit: baseUnit || undefined,
+      targetUnit: targetUnit || undefined,
+      displayFormat: displayFormat || undefined,
+      priority
+    }
+
+    const res = await fetch(`${API_BASE}/patterns/${index}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updatedPattern)
+    })
+
+    if (!res.ok) throw new Error('Failed to update pattern')
+
+    showStatus(`Updated pattern: ${patternStr}`, 'success')
+
+    // Reload data and re-render
+    await loadData()
+    renderPatterns()
+  } catch (error) {
+    showStatus('Failed to update pattern: ' + error.message, 'error')
+  }
+}
+
+// Cancel editing pattern
+function cancelEditPattern(index) {
+  const viewDiv = document.getElementById(`pattern-view-${index}`)
+  const editDiv = document.getElementById(`pattern-edit-${index}`)
+
+  viewDiv.style.display = 'block'
+  editDiv.style.display = 'none'
+}
+
 async function deletePattern(index) {
   const pattern = preferences.pathPatterns[index]
   if (!confirm(`Delete pattern ${pattern.pattern}?`)) return
