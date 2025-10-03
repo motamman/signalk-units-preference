@@ -432,35 +432,32 @@ async function renderMetadata() {
     const skMeta = signalKMetadata[path]
     const hasSignalKMetadata = skMeta && skMeta.units
     const matchingPattern = findMatchingPattern(path)
+    const pathOverride = preferences?.pathOverrides?.[path]
 
     let color, status, baseUnit, category, displayUnit
 
-    // Get display unit from preferences
-    const pathOverride = preferences?.pathOverrides?.[path]
-    let targetUnit = pathOverride?.targetUnit
-
-    if (!targetUnit && matchingPattern) {
-      targetUnit = matchingPattern.targetUnit
-    }
-
-    if (!targetUnit && matchingPattern?.category && preferences?.categories?.[matchingPattern.category]) {
-      targetUnit = preferences.categories[matchingPattern.category].targetUnit
-    }
-
-    if (matchingPattern) {
+    if (pathOverride) {
+      // Green: Has explicit path override
+      color = '#d4edda'
+      status = 'Path Override'
+      baseUnit = pathOverride.baseUnit || (matchingPattern?.baseUnit) || (skMeta?.units) || '-'
+      category = pathOverride.category || (matchingPattern?.category) || '-'
+      displayUnit = pathOverride.targetUnit
+    } else if (matchingPattern) {
       // Yellow: Matches a pattern rule
       color = '#fff3cd'
       status = `Pattern: ${matchingPattern.pattern}`
       baseUnit = matchingPattern.baseUnit || (unitSchema?.categoryToBaseUnit?.[matchingPattern.category]) || '-'
       category = matchingPattern.category
-      displayUnit = targetUnit || baseUnit || '-'
+      const categoryTarget = preferences?.categories?.[matchingPattern.category]?.targetUnit
+      displayUnit = matchingPattern.targetUnit || categoryTarget || baseUnit || '-'
     } else if (hasSignalKMetadata) {
       // Blue: Has only SignalK metadata
       color = '#cfe2ff'
       status = 'SignalK Only'
       baseUnit = skMeta.units
       category = '-'
-      displayUnit = targetUnit || baseUnit
+      displayUnit = baseUnit
     } else {
       // Gray: Has neither
       color = '#f8f9fa'
@@ -473,50 +470,178 @@ async function renderMetadata() {
     pathInfo.push({ path, color, status, baseUnit, category, displayUnit })
   }
 
-  // Render table
-  container.innerHTML = `
-    <div style="margin-bottom: 15px;">
-      <div style="display: flex; gap: 20px; font-size: 13px;">
-        <div><span style="display: inline-block; width: 15px; height: 15px; background: #fff3cd; border: 1px solid #ffc107; margin-right: 5px;"></span> Pattern Match (${pathInfo.filter(p => p.status.startsWith('Pattern:')).length})</div>
-        <div><span style="display: inline-block; width: 15px; height: 15px; background: #cfe2ff; border: 1px solid #9ec5fe; margin-right: 5px;"></span> SignalK Only (${pathInfo.filter(p => p.status === 'SignalK Only').length})</div>
-        <div><span style="display: inline-block; width: 15px; height: 15px; background: #f8f9fa; border: 1px solid #dee2e6; margin-right: 5px;"></span> No Metadata (${pathInfo.filter(p => p.status === 'None').length})</div>
-      </div>
-    </div>
-    <div style="overflow-x: auto;">
-      <table style="width: 100%; border-collapse: collapse;">
-        <thead>
-          <tr style="background: #f8f9fa; border-bottom: 2px solid #dee2e6;">
-            <th style="padding: 12px; text-align: left;">Path</th>
-            <th style="padding: 12px; text-align: left;">Status</th>
-            <th style="padding: 12px; text-align: left;">Base Unit</th>
-            <th style="padding: 12px; text-align: left;">Category</th>
-            <th style="padding: 12px; text-align: left;">Display Unit</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${pathInfo.map(info => {
-            const conversionUrl = `${API_BASE}/conversion/${info.path}`
-            const currentValue = getCurrentValue(info.path) || 0
-            const convertUrl = `${API_BASE}/convert/${info.path}/${currentValue}`
+  // Store for filtering/sorting
+  window.metadataPathInfo = pathInfo
+  window.metadataSortColumn = 'path'
+  window.metadataSortDirection = 'asc'
 
-            return `
-            <tr style="border-bottom: 1px solid #e9ecef; background: ${info.color};">
-              <td style="padding: 12px; font-family: monospace; font-size: 13px;">
-                ${info.path}
-                <a href="${conversionUrl}" target="_blank" title="View conversion info" style="color: #3498db; margin-left: 8px; text-decoration: none;">🔧</a>
-                <a href="${convertUrl}" target="_blank" title="Test conversion with current value (${currentValue})" style="color: #2ecc71; margin-left: 4px; text-decoration: none;">▶️</a>
-              </td>
-              <td style="padding: 12px; font-size: 12px;">${info.status}</td>
-              <td style="padding: 12px;">${info.baseUnit}</td>
-              <td style="padding: 12px;">${info.category}</td>
-              <td style="padding: 12px; font-size: 13px;">${info.displayUnit}</td>
+  // Check if this is initial render
+  const isInitialRender = !document.getElementById('metadataTableBody')
+
+  // Render controls and table
+  renderMetadataTable(pathInfo)
+
+  // Setup event listeners only on initial render
+  if (isInitialRender) {
+    document.getElementById('metadataSearchFilter').addEventListener('input', filterAndSortMetadata)
+
+    // Setup column header click handlers
+    document.querySelectorAll('.metadata-sortable-header').forEach(header => {
+      header.addEventListener('click', () => {
+        const column = header.dataset.column
+        if (window.metadataSortColumn === column) {
+          window.metadataSortDirection = window.metadataSortDirection === 'asc' ? 'desc' : 'asc'
+        } else {
+          window.metadataSortColumn = column
+          window.metadataSortDirection = 'asc'
+        }
+        filterAndSortMetadata()
+      })
+    })
+  }
+}
+
+function filterAndSortMetadata() {
+  const searchTerm = document.getElementById('metadataSearchFilter').value.toLowerCase()
+
+  let filtered = window.metadataPathInfo.filter(info => {
+    // Search across all columns
+    if (searchTerm) {
+      const searchableText = [
+        info.path,
+        info.status,
+        info.baseUnit,
+        info.category,
+        info.displayUnit
+      ].join(' ').toLowerCase()
+
+      if (!searchableText.includes(searchTerm)) {
+        return false
+      }
+    }
+
+    return true
+  })
+
+  // Sort
+  filtered.sort((a, b) => {
+    let aVal, bVal
+    switch (window.metadataSortColumn) {
+      case 'path':
+        aVal = a.path
+        bVal = b.path
+        break
+      case 'status':
+        aVal = a.status
+        bVal = b.status
+        break
+      case 'base':
+        aVal = a.baseUnit
+        bVal = b.baseUnit
+        break
+      case 'category':
+        aVal = a.category
+        bVal = b.category
+        break
+      case 'display':
+        aVal = a.displayUnit
+        bVal = b.displayUnit
+        break
+      default:
+        return 0
+    }
+
+    const comparison = aVal.localeCompare(bVal)
+    return window.metadataSortDirection === 'asc' ? comparison : -comparison
+  })
+
+  renderMetadataTable(filtered)
+
+  // Update counts
+  document.getElementById('overrideCount').textContent = filtered.filter(p => p.status === 'Path Override').length
+  document.getElementById('patternCount').textContent = filtered.filter(p => p.status.startsWith('Pattern:')).length
+  document.getElementById('signalkCount').textContent = filtered.filter(p => p.status === 'SignalK Only').length
+  document.getElementById('noneCount').textContent = filtered.filter(p => p.status === 'None').length
+
+  // Update result count
+  const totalPaths = window.metadataPathInfo.length
+  const resultCountEl = document.getElementById('metadataResultCount')
+  if (filtered.length === totalPaths) {
+    resultCountEl.textContent = `Showing ${totalPaths} paths`
+  } else {
+    resultCountEl.textContent = `Showing ${filtered.length} of ${totalPaths} paths`
+  }
+
+  // Update sort indicators
+  document.querySelectorAll('.metadata-sortable-header').forEach(header => {
+    const arrow = header.querySelector('.sort-arrow')
+    if (header.dataset.column === window.metadataSortColumn) {
+      arrow.textContent = window.metadataSortDirection === 'asc' ? ' ▲' : ' ▼'
+    } else {
+      arrow.textContent = ''
+    }
+  })
+}
+
+function renderMetadataTable(pathInfo) {
+  const container = document.getElementById('metadataList')
+
+  // Check if we're doing initial render or update
+  const isInitialRender = !document.getElementById('metadataTableBody')
+
+  if (isInitialRender) {
+    const totalPaths = window.metadataPathInfo.length
+    container.innerHTML = `
+      <div style="margin-bottom: 15px;">
+        <div style="display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; align-items: center;">
+          <input type="text" id="metadataSearchFilter" placeholder="Search all columns..." style="padding: 6px 10px; flex: 1; min-width: 200px; border: 1px solid #dee2e6; border-radius: 4px;">
+          <span id="metadataResultCount" style="padding: 6px 10px; font-size: 13px; color: #6c757d;">Showing ${totalPaths} paths</span>
+        </div>
+        <div style="display: flex; gap: 20px; font-size: 13px; flex-wrap: wrap;">
+          <div><span style="display: inline-block; width: 15px; height: 15px; background: #d4edda; border: 1px solid #c3e6cb; margin-right: 5px;"></span> Path Override (<span id="overrideCount">${window.metadataPathInfo.filter(p => p.status === 'Path Override').length}</span>)</div>
+          <div><span style="display: inline-block; width: 15px; height: 15px; background: #fff3cd; border: 1px solid #ffc107; margin-right: 5px;"></span> Pattern Match (<span id="patternCount">${window.metadataPathInfo.filter(p => p.status.startsWith('Pattern:')).length}</span>)</div>
+          <div><span style="display: inline-block; width: 15px; height: 15px; background: #cfe2ff; border: 1px solid #9ec5fe; margin-right: 5px;"></span> SignalK Only (<span id="signalkCount">${window.metadataPathInfo.filter(p => p.status === 'SignalK Only').length}</span>)</div>
+          <div><span style="display: inline-block; width: 15px; height: 15px; background: #f8f9fa; border: 1px solid #dee2e6; margin-right: 5px;"></span> No Metadata (<span id="noneCount">${window.metadataPathInfo.filter(p => p.status === 'None').length}</span>)</div>
+        </div>
+      </div>
+      <div style="overflow-x: auto;">
+        <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+          <thead>
+            <tr style="background: #f8f9fa; border-bottom: 2px solid #dee2e6;">
+              <th class="metadata-sortable-header" data-column="path" style="padding: 8px; text-align: left; min-width: 200px; cursor: pointer; user-select: none;">Path<span class="sort-arrow"> ▲</span></th>
+              <th class="metadata-sortable-header" data-column="status" style="padding: 8px; text-align: left; width: 150px; cursor: pointer; user-select: none;">Status<span class="sort-arrow"></span></th>
+              <th class="metadata-sortable-header" data-column="base" style="padding: 8px; text-align: left; width: 80px; cursor: pointer; user-select: none;">Base<span class="sort-arrow"></span></th>
+              <th class="metadata-sortable-header" data-column="category" style="padding: 8px; text-align: left; width: 100px; cursor: pointer; user-select: none;">Category<span class="sort-arrow"></span></th>
+              <th class="metadata-sortable-header" data-column="display" style="padding: 8px; text-align: left; width: 80px; cursor: pointer; user-select: none;">Display<span class="sort-arrow"></span></th>
             </tr>
-            `
-          }).join('')}
-        </tbody>
-      </table>
-    </div>
-  `
+          </thead>
+          <tbody id="metadataTableBody"></tbody>
+        </table>
+      </div>
+    `
+  }
+
+  // Update table body
+  const tbody = document.getElementById('metadataTableBody')
+  tbody.innerHTML = pathInfo.map(info => {
+    const conversionUrl = `${API_BASE}/conversion/${info.path}`
+    const currentValue = getCurrentValue(info.path) || 0
+    const convertUrl = `${API_BASE}/convert/${info.path}/${currentValue}`
+
+    return `
+      <tr style="border-bottom: 1px solid #e9ecef; background: ${info.color};">
+        <td style="padding: 8px; font-family: monospace; font-size: 11px; word-break: break-all;">
+          ${info.path}
+          <a href="${conversionUrl}" target="_blank" title="View conversion info" style="color: #3498db; margin-left: 6px; text-decoration: none; font-size: 14px;">🔧</a>
+          <a href="${convertUrl}" target="_blank" title="Test conversion with current value (${currentValue})" style="color: #2ecc71; margin-left: 4px; text-decoration: none; font-size: 14px;">▶️</a>
+        </td>
+        <td style="padding: 8px; font-size: 11px;">${info.status}</td>
+        <td style="padding: 8px;">${info.baseUnit}</td>
+        <td style="padding: 8px;">${info.category}</td>
+        <td style="padding: 8px; font-weight: bold;">${info.displayUnit}</td>
+      </tr>
+    `
+  }).join('')
 }
 
 // Update category preference
