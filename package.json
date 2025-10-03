@@ -1,6 +1,6 @@
 {
   "name": "signalk-units-preference",
-  "version": "1.0.0",
+  "version": "0.5.0-beta.1",
   "description": "SignalK plugin for managing unit conversions and display preferences",
   "main": "dist/index.js",
   "scripts": {
