@@ -15,6 +15,10 @@ let unitSchema = {
   categoryToBaseUnit: {}
 }
 
+// Preset dirty state tracking
+let originalPresetState = null
+let isPresetDirty = false
+
 // Get current value for a path from SignalK
 function getCurrentValue(pathStr) {
   return signalKValues[pathStr]
@@ -244,6 +248,11 @@ function setupTabs() {
       if (tabName === 'metadata') {
         await renderMetadata()
       }
+
+      // Load custom presets when settings tab is clicked
+      if (tabName === 'settings') {
+        await loadCustomPresets()
+      }
     })
   })
 }
@@ -273,12 +282,57 @@ async function loadData() {
     }
     metadata = await metaRes.json()
 
+    // Save original preset state BEFORE rendering (so dirty check works correctly)
+    saveOriginalPresetState()
+
     renderCategories()
     renderPatterns()
     // renderMetadata() is now called on tab click to ensure paths are loaded
   } catch (error) {
     showStatus('Failed to load data: ' + error.message, 'error')
   }
+}
+
+// Save original preset state for dirty tracking
+function saveOriginalPresetState() {
+  if (preferences?.currentPreset && preferences?.categories) {
+    originalPresetState = JSON.parse(JSON.stringify(preferences.categories))
+    isPresetDirty = false
+  } else {
+    originalPresetState = null
+    isPresetDirty = false
+  }
+}
+
+// Check if current categories differ from original preset
+function checkPresetDirty() {
+  console.log('checkPresetDirty called')
+  console.log('originalPresetState:', originalPresetState)
+  console.log('preferences?.categories:', preferences?.categories)
+  console.log('preferences?.currentPreset:', preferences?.currentPreset)
+
+  if (!originalPresetState || !preferences?.categories) {
+    console.log('No original state or categories, not dirty')
+    isPresetDirty = false
+    return false
+  }
+
+  // Compare current categories with original state
+  for (const [category, current] of Object.entries(preferences.categories)) {
+    const original = originalPresetState[category]
+    if (!original) continue
+
+    if (current.targetUnit !== original.targetUnit ||
+        current.displayFormat !== original.displayFormat) {
+      console.log(`Category ${category} is dirty:`, { original, current })
+      isPresetDirty = true
+      return true
+    }
+  }
+
+  console.log('No changes detected, not dirty')
+  isPresetDirty = false
+  return false
 }
 
 // Get available units for a category from metadata
@@ -319,12 +373,15 @@ function renderCurrentPreset() {
 
   const preset = preferences.currentPreset
   const date = new Date(preset.appliedDate).toLocaleDateString()
+  const isDirty = checkPresetDirty()
 
-  container.innerHTML = `
-    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 16px 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);">
+  console.log('renderCurrentPreset - isDirty:', isDirty)
+
+  let html = `
+    <div style="background: linear-gradient(135deg, ${isDirty ? '#f39c12 0%, #e67e22' : '#667eea 0%, #764ba2'} 100%); color: white; padding: 16px 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);">
       <div style="display: flex; align-items: center; justify-content: space-between;">
         <div>
-          <div style="font-size: 13px; opacity: 0.9; margin-bottom: 4px;">Current Unit System</div>
+          <div style="font-size: 13px; opacity: 0.9; margin-bottom: 4px;">Current Unit System ${isDirty ? '(Modified)' : ''}</div>
           <div style="font-size: 18px; font-weight: 600;">${preset.name}</div>
         </div>
         <div style="text-align: right; font-size: 12px; opacity: 0.85;">
@@ -334,6 +391,30 @@ function renderCurrentPreset() {
       </div>
     </div>
   `
+
+  // Show backup UI if preset is dirty
+  if (isDirty) {
+    html += `
+      <div style="background: #fff3cd; padding: 16px 20px; border-radius: 8px; margin-top: 15px; border: 2px dashed #ffc107;">
+        <div style="margin-bottom: 12px;">
+          <h3 style="color: #856404; margin: 0 0 8px 0; font-size: 16px;">Save Modified Preset</h3>
+          <p style="color: #856404; margin: 0; font-size: 13px;">You've modified the "${preset.name}" preset. Save your changes as a custom preset.</p>
+        </div>
+        <div style="display: flex; gap: 10px; align-items: flex-end;">
+          <div style="flex: 1;">
+            <label style="display: block; font-size: 13px; color: #856404; margin-bottom: 5px; font-weight: 500;">Preset Name</label>
+            <input type="text" id="backupPresetName" placeholder="e.g., my-custom-preset" style="width: 100%; padding: 10px; border: 2px solid #ffc107; border-radius: 5px; font-size: 14px;">
+            <small style="display: block; margin-top: 4px; color: #856404; font-size: 12px;">Only letters, numbers, dashes, and underscores allowed</small>
+          </div>
+          <button class="btn-success" onclick="saveCustomPreset()" style="padding: 10px 24px; white-space: nowrap;">
+            Backup Preset
+          </button>
+        </div>
+      </div>
+    `
+  }
+
+  container.innerHTML = html
 }
 
 function renderCategories() {
@@ -821,6 +902,11 @@ async function updateCategory(category, field, value) {
       preferences.categories = {}
     }
     preferences.categories[category] = updatedPref
+
+    // Check if preset is now dirty and update UI
+    checkPresetDirty()
+    renderCurrentPreset()
+
     showStatus(`Updated ${category} preference`, 'success')
   } catch (error) {
     showStatus('Failed to update: ' + error.message, 'error')
@@ -910,6 +996,154 @@ async function deleteCategory(category) {
   }
 }
 
+// Save current categories as a custom preset
+async function saveCustomPreset() {
+  const nameInput = document.getElementById('backupPresetName')
+  const presetName = nameInput?.value.trim()
+
+  // Validation
+  if (!presetName) {
+    showStatus('Please enter a preset name', 'error')
+    return
+  }
+
+  // Validate name format (alphanumeric, dashes, underscores only)
+  if (!/^[a-zA-Z0-9_-]+$/.test(presetName)) {
+    showStatus('Preset name can only contain letters, numbers, dashes, and underscores', 'error')
+    return
+  }
+
+  // Prevent overwriting built-in presets
+  const builtInPresets = ['metric', 'imperial-us', 'imperial-uk']
+  if (builtInPresets.includes(presetName.toLowerCase())) {
+    showStatus('Cannot overwrite built-in presets. Please choose a different name.', 'error')
+    return
+  }
+
+  try {
+    // Create preset data
+    const presetData = {
+      name: presetName,
+      categories: preferences.categories
+    }
+
+    const res = await fetch(`${API_BASE}/presets/custom/${presetName}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(presetData)
+    })
+
+    if (!res.ok) {
+      const error = await res.json()
+      throw new Error(error.error || 'Failed to save preset')
+    }
+
+    showStatus(`Custom preset "${presetName}" saved successfully!`, 'success')
+
+    // Clear the input (but keep dirty state - user hasn't applied the new preset yet)
+    if (nameInput) nameInput.value = ''
+
+    // Reload custom presets in settings tab
+    await loadCustomPresets()
+  } catch (error) {
+    showStatus('Failed to save preset: ' + error.message, 'error')
+  }
+}
+
+// Load custom presets
+async function loadCustomPresets() {
+  try {
+    const res = await fetch(`${API_BASE}/presets/custom`)
+    if (!res.ok) throw new Error('Failed to load custom presets')
+
+    const customPresets = await res.json()
+    renderCustomPresets(customPresets)
+  } catch (error) {
+    showStatus('Failed to load custom presets: ' + error.message, 'error')
+  }
+}
+
+// Apply a custom preset
+async function applyCustomPreset(presetId, presetName) {
+  if (!confirm(`Apply custom preset "${presetName}" to all category preferences?`)) {
+    return
+  }
+
+  try {
+    const res = await fetch(`${API_BASE}/presets/custom/${presetId}/apply`, {
+      method: 'POST'
+    })
+
+    if (!res.ok) throw new Error('Failed to apply custom preset')
+
+    const result = await res.json()
+    showStatus(`Applied custom preset "${presetName}" to ${result.categoriesUpdated} categories`, 'success')
+
+    // Reload data to show updated preferences and reset dirty state
+    await loadData()
+    saveOriginalPresetState() // Reset the original state after applying preset
+  } catch (error) {
+    showStatus('Failed to apply custom preset: ' + error.message, 'error')
+  }
+}
+
+// Delete a custom preset
+async function deleteCustomPreset(presetId, presetName) {
+  if (!confirm(`Are you sure you want to delete the custom preset "${presetName}"?`)) {
+    return
+  }
+
+  try {
+    const res = await fetch(`${API_BASE}/presets/custom/${presetId}`, {
+      method: 'DELETE'
+    })
+
+    if (!res.ok) throw new Error('Failed to delete custom preset')
+
+    showStatus(`Deleted custom preset "${presetName}"`, 'success')
+
+    // Reload custom presets list
+    await loadCustomPresets()
+  } catch (error) {
+    showStatus('Failed to delete custom preset: ' + error.message, 'error')
+  }
+}
+
+// Render custom presets in Settings tab
+function renderCustomPresets(customPresets) {
+  const container = document.getElementById('customPresetsList')
+
+  if (!container) return
+
+  if (customPresets.length === 0) {
+    container.innerHTML = '<div class="empty-state">No custom presets yet. Modify a preset and save it from the Categories tab.</div>'
+    return
+  }
+
+  container.innerHTML = customPresets.map(preset => `
+    <div style="background: #f8f9fa; padding: 16px; border-radius: 6px; border: 1px solid #e9ecef;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+        <div>
+          <h3 style="margin: 0 0 4px 0; font-size: 16px; color: #2c3e50;">${preset.name}</h3>
+          <p style="margin: 0; font-size: 13px; color: #7f8c8d;">${preset.description || 'Custom preset'}</p>
+        </div>
+        <div style="text-align: right;">
+          <div style="font-size: 12px; color: #7f8c8d;">Version ${preset.version}</div>
+          <div style="font-size: 12px; color: #7f8c8d;">${preset.categoriesCount} categories</div>
+        </div>
+      </div>
+      <div style="display: flex; gap: 8px;">
+        <button class="btn-primary" onclick="applyCustomPreset('${preset.id}', '${preset.name}')" style="flex: 1; padding: 8px 16px;">
+          Apply Preset
+        </button>
+        <button class="btn-danger" onclick="deleteCustomPreset('${preset.id}', '${preset.name}')" style="padding: 8px 16px;">
+          Delete
+        </button>
+      </div>
+    </div>
+  `).join('')
+}
+
 // Apply unit system preset
 async function applyUnitPreset(presetType) {
   const presetNames = {
@@ -932,8 +1166,9 @@ async function applyUnitPreset(presetType) {
     const result = await res.json()
     showStatus(`Applied ${presetNames[presetType]} preset to ${result.categoriesUpdated} categories`, 'success')
 
-    // Reload data to show updated preferences
+    // Reload data to show updated preferences and reset dirty state
     await loadData()
+    saveOriginalPresetState() // Reset the original state after applying preset
   } catch (error) {
     showStatus('Failed to apply preset: ' + error.message, 'error')
   }
@@ -1043,15 +1278,25 @@ async function saveEditCategory(category) {
 
     if (!res.ok) throw new Error('Failed to update category')
 
+    // Update local preferences
+    if (!preferences.categories) {
+      preferences.categories = {}
+    }
+    preferences.categories[category] = categoryPref
+
     showStatus(`Updated category: ${category}`, 'success')
 
-    // Reload schema and data
-    await loadSchema()
-    await loadData()
+    // Check if preset is now dirty and re-render
+    checkPresetDirty()
+    renderCurrentPreset()
+    renderCategories()
 
-    // Reinitialize dropdowns
-    initializePatternDropdowns()
-    initializeCustomCategoryDropdowns()
+    // Only reload schema if this is a custom category (in case baseUnit changed)
+    if (isCustom) {
+      await loadSchema()
+      initializePatternDropdowns()
+      initializeCustomCategoryDropdowns()
+    }
   } catch (error) {
     showStatus('Failed to update category: ' + error.message, 'error')
   }
@@ -2237,6 +2482,17 @@ async function addPathOverride() {
 
     if (!res.ok) throw new Error('Failed to add override')
 
+    // Update local preferences
+    if (!preferences.pathOverrides) {
+      preferences.pathOverrides = {}
+    }
+    preferences.pathOverrides[path] = {
+      path,
+      baseUnit,
+      targetUnit,
+      displayFormat: format
+    }
+
     showStatus(`Added path override: ${path}`, 'success')
 
     // Clear form
@@ -2244,8 +2500,7 @@ async function addPathOverride() {
     document.getElementById('overridePathSearch').value = ''
     document.getElementById('overrideFormat').value = '0.0'
 
-    // Reload
-    await loadData()
+    // Re-render without reloading (to preserve dirty state)
     renderPathOverrides()
   } catch (error) {
     showStatus('Failed to add override: ' + error.message, 'error')
@@ -2394,10 +2649,15 @@ async function saveEditPathOverride(path) {
 
     if (!res.ok) throw new Error('Failed to update path override')
 
+    // Update local preferences
+    if (!preferences.pathOverrides) {
+      preferences.pathOverrides = {}
+    }
+    preferences.pathOverrides[path] = overridePref
+
     showStatus(`Updated path override: ${path}`, 'success')
 
-    // Reload data
-    await loadData()
+    // Re-render without reloading (to preserve dirty state)
     renderPathOverrides()
   } catch (error) {
     showStatus('Failed to update path override: ' + error.message, 'error')
@@ -2426,8 +2686,14 @@ async function deletePathOverride(path) {
 
     if (!res.ok) throw new Error('Failed to delete')
 
+    // Update local preferences
+    if (preferences.pathOverrides && preferences.pathOverrides[path]) {
+      delete preferences.pathOverrides[path]
+    }
+
     showStatus(`Deleted path override: ${path}`, 'success')
-    await loadData()
+
+    // Re-render without reloading (to preserve dirty state)
     renderPathOverrides()
   } catch (error) {
     showStatus('Failed to delete: ' + error.message, 'error')

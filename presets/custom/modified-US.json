@@ -1,0 +1,73 @@
+{
+  "version": "1.0.0",
+  "date": "2025-10-03",
+  "name": "modified-US",
+  "description": "Custom user preset",
+  "categories": {
+    "speed": {
+      "targetUnit": "kn",
+      "displayFormat": "0.0"
+    },
+    "temperature": {
+      "targetUnit": "F",
+      "displayFormat": "0.0"
+    },
+    "pressure": {
+      "targetUnit": "mbar",
+      "displayFormat": "0.0"
+    },
+    "distance": {
+      "targetUnit": "nm",
+      "displayFormat": "0.0"
+    },
+    "depth": {
+      "targetUnit": "ft",
+      "displayFormat": "0.0"
+    },
+    "angle": {
+      "targetUnit": "deg",
+      "displayFormat": "0.0"
+    },
+    "percentage": {
+      "targetUnit": "percent",
+      "displayFormat": "0"
+    },
+    "charge": {
+      "targetUnit": "Ah",
+      "displayFormat": "0.0"
+    },
+    "current": {
+      "targetUnit": "A",
+      "displayFormat": "0.00"
+    },
+    "frequency": {
+      "targetUnit": "rpm",
+      "displayFormat": "0.0"
+    },
+    "power": {
+      "targetUnit": "W",
+      "displayFormat": "0.00"
+    },
+    "time": {
+      "targetUnit": "s",
+      "displayFormat": "0.0"
+    },
+    "voltage": {
+      "targetUnit": "V",
+      "displayFormat": "0.00"
+    },
+    "volume": {
+      "targetUnit": "gal",
+      "displayFormat": "0.0"
+    },
+    "volumeRate": {
+      "targetUnit": "gal/h",
+      "displayFormat": "0.0"
+    },
+    "ab test": {
+      "baseUnit": "A",
+      "targetUnit": "mA",
+      "displayFormat": "0.0"
+    }
+  }
+}

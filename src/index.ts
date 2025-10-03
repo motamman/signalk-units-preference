@@ -861,6 +861,165 @@ module.exports = (app: ServerAPI): Plugin => {
         }
       })
 
+      // POST /plugins/signalk-units-preference/presets/custom/:name
+      // Save current categories as a custom preset
+      router.post('/presets/custom/:name', async (req: Request, res: Response) => {
+        try {
+          const presetName = req.params.name
+
+          // Validate name format
+          if (!/^[a-zA-Z0-9_-]+$/.test(presetName)) {
+            return res.status(400).json({
+              error: 'Invalid preset name. Only letters, numbers, dashes, and underscores are allowed.'
+            })
+          }
+
+          // Prevent overwriting built-in presets
+          const builtInPresets = ['metric', 'imperial-us', 'imperial-uk']
+          if (builtInPresets.includes(presetName.toLowerCase())) {
+            return res.status(400).json({
+              error: 'Cannot overwrite built-in presets'
+            })
+          }
+
+          const { name, categories } = req.body
+
+          if (!categories) {
+            return res.status(400).json({ error: 'Missing categories data' })
+          }
+
+          // Create custom presets directory if it doesn't exist
+          const customPresetsDir = path.join(__dirname, '..', 'presets', 'custom')
+          if (!fs.existsSync(customPresetsDir)) {
+            fs.mkdirSync(customPresetsDir, { recursive: true })
+          }
+
+          // Create preset data
+          const presetData = {
+            version: '1.0.0',
+            date: new Date().toISOString().split('T')[0],
+            name: name || presetName,
+            description: 'Custom user preset',
+            categories
+          }
+
+          // Save to file
+          const presetPath = path.join(customPresetsDir, `${presetName}.json`)
+          fs.writeFileSync(presetPath, JSON.stringify(presetData, null, 2), 'utf-8')
+
+          res.json({
+            success: true,
+            presetName,
+            path: presetPath
+          })
+        } catch (error) {
+          app.error(`Error saving custom preset: ${error}`)
+          res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error' })
+        }
+      })
+
+      // GET /plugins/signalk-units-preference/presets/custom
+      // List all custom presets
+      router.get('/presets/custom', async (req: Request, res: Response) => {
+        try {
+          const customPresetsDir = path.join(__dirname, '..', 'presets', 'custom')
+
+          // Create directory if it doesn't exist
+          if (!fs.existsSync(customPresetsDir)) {
+            fs.mkdirSync(customPresetsDir, { recursive: true })
+            return res.json([])
+          }
+
+          // Read all JSON files in custom directory
+          const files = fs.readdirSync(customPresetsDir)
+            .filter(file => file.endsWith('.json'))
+
+          const presets = files.map(file => {
+            const presetPath = path.join(customPresetsDir, file)
+            const presetData = JSON.parse(fs.readFileSync(presetPath, 'utf-8'))
+            return {
+              id: path.basename(file, '.json'),
+              name: presetData.name,
+              version: presetData.version,
+              date: presetData.date,
+              description: presetData.description,
+              categoriesCount: Object.keys(presetData.categories || {}).length
+            }
+          })
+
+          res.json(presets)
+        } catch (error) {
+          app.error(`Error listing custom presets: ${error}`)
+          res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error' })
+        }
+      })
+
+      // POST /plugins/signalk-units-preference/presets/custom/:name/apply
+      // Apply a custom preset
+      router.post('/presets/custom/:name/apply', async (req: Request, res: Response) => {
+        try {
+          const presetName = req.params.name
+          const presetPath = path.join(__dirname, '..', 'presets', 'custom', `${presetName}.json`)
+
+          if (!fs.existsSync(presetPath)) {
+            return res.status(404).json({ error: 'Custom preset not found' })
+          }
+
+          const presetData = JSON.parse(fs.readFileSync(presetPath, 'utf-8'))
+          const preset = presetData.categories
+          const preferences = unitsManager.getPreferences()
+          let updatedCount = 0
+
+          // Update each category that exists in both the preset and current preferences
+          for (const [category, settings] of Object.entries(preset)) {
+            if (preferences.categories[category]) {
+              await unitsManager.updateCategoryPreference(category, {
+                targetUnit: (settings as any).targetUnit,
+                displayFormat: (settings as any).displayFormat
+              })
+              updatedCount++
+            }
+          }
+
+          // Update current preset information
+          await unitsManager.updateCurrentPreset(presetName, presetData.name, presetData.version)
+
+          res.json({
+            success: true,
+            presetName,
+            displayName: presetData.name,
+            version: presetData.version,
+            categoriesUpdated: updatedCount
+          })
+        } catch (error) {
+          app.error(`Error applying custom preset: ${error}`)
+          res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error' })
+        }
+      })
+
+      // DELETE /plugins/signalk-units-preference/presets/custom/:name
+      // Delete a custom preset
+      router.delete('/presets/custom/:name', async (req: Request, res: Response) => {
+        try {
+          const presetName = req.params.name
+          const presetPath = path.join(__dirname, '..', 'presets', 'custom', `${presetName}.json`)
+
+          if (!fs.existsSync(presetPath)) {
+            return res.status(404).json({ error: 'Custom preset not found' })
+          }
+
+          fs.unlinkSync(presetPath)
+
+          res.json({
+            success: true,
+            presetName
+          })
+        } catch (error) {
+          app.error(`Error deleting custom preset: ${error}`)
+          res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error' })
+        }
+      })
+
       app.debug('API routes registered')
     },
 
