@@ -167,16 +167,17 @@ export class UnitsManager {
   /**
    * Get all unit definitions (built-in + custom)
    */
-  getUnitDefinitions(): Record<string, UnitMetadata> {
+  getUnitDefinitions(): Record<string, UnitMetadata & { isCustom?: boolean }> {
     // Extract base unit definitions from comprehensive defaults
-    const baseUnitDefs: Record<string, UnitMetadata> = {}
+    const baseUnitDefs: Record<string, UnitMetadata & { isCustom?: boolean }> = {}
 
     for (const [_path, meta] of Object.entries(comprehensiveDefaultUnits)) {
       if (meta.baseUnit && !baseUnitDefs[meta.baseUnit]) {
         baseUnitDefs[meta.baseUnit] = {
           baseUnit: meta.baseUnit,
           category: meta.category || meta.baseUnit,
-          conversions: meta.conversions || {}
+          conversions: meta.conversions || {},
+          isCustom: false
         }
       } else if (meta.baseUnit && meta.conversions) {
         // Merge conversions if we've seen this base unit before
@@ -187,8 +188,17 @@ export class UnitsManager {
       }
     }
 
+    // Add custom units with isCustom flag
+    const customUnitsWithFlag: Record<string, UnitMetadata & { isCustom?: boolean }> = {}
+    for (const [baseUnit, def] of Object.entries(this.unitDefinitions)) {
+      customUnitsWithFlag[baseUnit] = {
+        ...def,
+        isCustom: true
+      }
+    }
+
     // Merge built-in units with custom units (custom units override built-in)
-    return { ...baseUnitDefs, ...this.unitDefinitions }
+    return { ...baseUnitDefs, ...customUnitsWithFlag }
   }
 
   /**

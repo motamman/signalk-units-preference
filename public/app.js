@@ -1488,12 +1488,16 @@ function renderUnitDefinitions() {
   container.innerHTML = defs.map(([baseUnit, def]) => {
     console.log(`Rendering baseUnit: ${baseUnit}, category: ${def.category}`)
     const conversions = Object.entries(def.conversions || {})
+    const isCustom = def.isCustom === true
+    const badge = isCustom
+      ? '<span style="background: #667eea; color: white; padding: 2px 8px; border-radius: 3px; font-size: 11px; margin-left: 8px;">CUSTOM</span>'
+      : '<span style="background: #6c757d; color: white; padding: 2px 8px; border-radius: 3px; font-size: 11px; margin-left: 8px;">CORE</span>'
 
     return `
       <div class="unit-definition-item" style="margin-bottom: 15px;">
         <div class="collapsible-header" onclick="toggleUnitItem('${baseUnit}')">
           <div>
-            <h3 style="margin: 0; font-family: monospace;">${baseUnit}</h3>
+            <h3 style="margin: 0; font-family: monospace;">${baseUnit}${badge}</h3>
             <p style="margin: 5px 0 0 0; color: #7f8c8d; font-size: 14px;">${def.category || baseUnit}</p>
           </div>
           <div style="display: flex; align-items: center; gap: 10px;">
@@ -1546,7 +1550,21 @@ function renderUnitDefinitions() {
 
 // Delete a base unit
 async function deleteBaseUnit(baseUnit) {
-  if (!confirm(`Delete base unit "${baseUnit}" and all its conversions?`)) return
+  const def = unitDefinitions[baseUnit]
+  const conversionCount = def?.conversions ? Object.keys(def.conversions).length : 0
+
+  const warningMessage = `⚠️ WARNING: Delete base unit "${baseUnit}"?
+
+This will:
+• Remove all ${conversionCount} conversion formula(s)
+• Affect any categories using this base unit
+• Remove it from all dropdowns
+
+This action cannot be undone.
+
+Are you sure you want to continue?`
+
+  if (!confirm(warningMessage)) return
 
   try {
     const res = await fetch(`${API_BASE}/unit-definitions/${baseUnit}`, {
