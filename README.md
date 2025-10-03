@@ -240,12 +240,17 @@ Returns conversion metadata for a path.
 }
 ```
 
-#### Convert a Value
+#### Convert a Value (GET - Numbers Only)
 ```http
 GET /plugins/signalk-units-preference/convert/:path/:value
 ```
 
-Converts a specific value for a path.
+Converts a numeric value for a path. Value must be a number in the URL.
+
+**Example Request:**
+```http
+GET /plugins/signalk-units-preference/convert/navigation.speedOverGround/5.14
+```
 
 **Example Response:**
 ```json
@@ -255,6 +260,56 @@ Converts a specific value for a path.
   "symbol": "kn",
   "formatted": "10.0 kn",
   "displayFormat": "0.0"
+}
+```
+
+#### Convert a Value (POST - All Types)
+```http
+POST /plugins/signalk-units-preference/convert
+```
+
+Converts any value type (number, boolean, string, date). Accepts both JSON and form data.
+
+**Request Body (JSON):**
+```json
+{
+  "path": "commands.captureAnchor",
+  "value": true
+}
+```
+
+**Example Responses:**
+
+*For number:*
+```json
+{
+  "originalValue": 292.35,
+  "convertedValue": 19.2,
+  "symbol": "°C",
+  "formatted": "19.2 °C",
+  "displayFormat": "0.0"
+}
+```
+
+*For boolean:*
+```json
+{
+  "originalValue": true,
+  "convertedValue": true,
+  "symbol": "",
+  "formatted": "true",
+  "displayFormat": "boolean"
+}
+```
+
+*For date:*
+```json
+{
+  "originalValue": "2025-10-03T12:25:14.000Z",
+  "convertedValue": "2025-10-03T12:25:14.000Z",
+  "symbol": "",
+  "formatted": "2025-10-03T12:25:14.000Z",
+  "displayFormat": "ISO-8601"
 }
 ```
 
@@ -485,23 +540,21 @@ ws.onmessage = async (event) => {
       // Get conversion for this path
       const conversion = await getConversion(path)
 
-      // For numbers: convert the value
-      if (conversion.valueType === 'number' && typeof rawValue === 'number') {
-        const response = await fetch(`/plugins/signalk-units-preference/convert/${path}/${rawValue}`)
-        const result = await response.json()
+      // Convert the value using POST endpoint (supports all types)
+      const response = await fetch('/plugins/signalk-units-preference/convert', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path, value: rawValue })
+      })
+      const result = await response.json()
+      displayValue(path, result.formatted)
 
-        displayValue(path, result.formatted) // e.g., "10.0 kn"
-      }
-      // For booleans, dates, strings: display as-is
-      else if (conversion.valueType === 'boolean') {
-        displayValue(path, rawValue ? 'true' : 'false')
-      }
-      else if (conversion.valueType === 'date') {
-        displayValue(path, new Date(rawValue).toISOString())
-      }
-      else {
-        displayValue(path, rawValue)
-      }
+      // Alternative: Use GET endpoint for numbers only
+      // if (conversion.valueType === 'number' && typeof rawValue === 'number') {
+      //   const response = await fetch(`/plugins/signalk-units-preference/convert/${path}/${rawValue}`)
+      //   const result = await response.json()
+      //   displayValue(path, result.formatted)
+      // }
     }
   }
 }
@@ -689,11 +742,17 @@ class SignalKValueWidget {
   async updateValue(rawValue) {
     this.value = rawValue
 
-    if (this.conversion.valueType === 'number' && typeof rawValue === 'number') {
-      const response = await fetch(`/plugins/signalk-units-preference/convert/${this.path}/${rawValue}`)
+    // Use POST endpoint for all types
+    try {
+      const response = await fetch('/plugins/signalk-units-preference/convert', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: this.path, value: rawValue })
+      })
       const result = await response.json()
       this.render(result.formatted)
-    } else {
+    } catch (e) {
+      console.error('Conversion failed:', e)
       this.render(String(rawValue))
     }
   }
@@ -883,7 +942,18 @@ const display = `${formatted} ${conversion.symbol}`
 #### Approach 2: REST API per Value
 ```javascript
 // Slower - REST call per value
+
+// For numbers (GET endpoint):
 const response = await fetch(`/plugins/signalk-units-preference/convert/${path}/${rawValue}`)
+const result = await response.json()
+const display = result.formatted
+
+// For all types (POST endpoint):
+const response = await fetch('/plugins/signalk-units-preference/convert', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ path, value: rawValue })
+})
 const result = await response.json()
 const display = result.formatted
 ```
@@ -891,6 +961,7 @@ const display = result.formatted
 **Pros:**
 - Simple implementation
 - Server handles all formatting
+- POST endpoint supports all types (number, boolean, date, string)
 
 **Cons:**
 - Network latency (100-200ms per call)
