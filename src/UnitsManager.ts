@@ -283,6 +283,8 @@ export class UnitsManager {
   getConversion(pathStr: string): ConversionResponse {
     this.app.debug(`getConversion called for: ${pathStr}`)
 
+    const pathOverridePref = this.preferences.pathOverrides?.[pathStr]
+
     // Check if we have metadata for this path
     let metadata = this.metadata[pathStr]
     this.app.debug(`Metadata found: ${metadata ? 'yes' : 'no'}`)
@@ -300,7 +302,7 @@ export class UnitsManager {
         }
       }
 
-      // If still no metadata, try to infer from SignalK metadata
+      // If still no metadata, try to infer from SignalK metadata or path override
       if (!metadata) {
         const skMetadata = this.app.getMetadata(pathStr)
         this.app.debug(`SignalK metadata for ${pathStr}: ${JSON.stringify(skMetadata)}`)
@@ -316,8 +318,22 @@ export class UnitsManager {
           this.app.debug(`Inferred metadata: ${JSON.stringify(metadata)}`)
         } else {
           this.app.debug(`No SignalK metadata units found for path: ${pathStr}`)
-          // Return pass-through conversion
-          return this.getPassThroughConversion(pathStr)
+          // Try to synthesize metadata from path override base unit
+          if (pathOverridePref?.baseUnit) {
+            const baseUnit = pathOverridePref.baseUnit
+            const unitDef = this.unitDefinitions[baseUnit] || Object.values(comprehensiveDefaultUnits).find(meta => meta.baseUnit === baseUnit)
+            if (unitDef) {
+              metadata = {
+                baseUnit,
+                category: unitDef.category,
+                conversions: unitDef.conversions || {}
+              }
+            }
+          }
+
+          if (!metadata) {
+            return this.getPassThroughConversion(pathStr)
+          }
         }
       }
     }
@@ -333,7 +349,28 @@ export class UnitsManager {
     }
 
     // Get conversion definition
-    const conversion = metadata.conversions[preference.targetUnit]
+    let conversion = metadata.conversions?.[preference.targetUnit]
+
+    if (!conversion) {
+      const baseUnit = metadata.baseUnit || preference.baseUnit
+
+      // Try unit definitions for the base unit
+      const unitDef = baseUnit ? this.unitDefinitions[baseUnit] : undefined
+      if (unitDef?.conversions?.[preference.targetUnit]) {
+        this.app.debug(`Using unit definition conversion for ${preference.targetUnit}`)
+        conversion = unitDef.conversions[preference.targetUnit]
+      }
+
+      if (!conversion && baseUnit) {
+        const fallback = Object.values(comprehensiveDefaultUnits).find(
+          (meta) => meta.baseUnit === baseUnit && meta.conversions?.[preference.targetUnit]
+        )
+        if (fallback) {
+          this.app.debug(`Using comprehensive default conversion for ${preference.targetUnit}`)
+          conversion = fallback.conversions[preference.targetUnit]
+        }
+      }
+    }
 
     if (!conversion) {
       this.app.debug(

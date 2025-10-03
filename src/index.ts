@@ -353,21 +353,20 @@ module.exports = (app: ServerAPI): Plugin => {
 
           const conversion = unitsManager.getConversion(pathStr)
 
+          const targetUnit = conversion.targetUnit || conversion.baseUnit || 'none'
+
           const response = {
-            path: conversion.path,
-            baseUnit: conversion.baseUnit,
-            category: conversion.category,
-            conversions: {
-              [conversion.targetUnit]: {
-                formula: conversion.formula,
-                inverseFormula: conversion.inverseFormula,
-                symbol: conversion.symbol
+            [pathStr]: {
+              baseUnit: conversion.baseUnit,
+              category: conversion.category,
+              conversions: {
+                [targetUnit]: {
+                  formula: conversion.formula,
+                  inverseFormula: conversion.inverseFormula,
+                  symbol: conversion.symbol || ''
+                }
               }
-            },
-            valueType: conversion.valueType,
-            displayFormat: conversion.displayFormat,
-            signalk_timestamp: conversion.signalkTimestamp,
-            $source: conversion.signalkSource
+            }
           }
 
           res.json(response)
