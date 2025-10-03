@@ -5,6 +5,7 @@ let metadata = null
 let availablePaths = []
 let pathTree = {}
 let signalKValues = {}
+let signalKValueDetails = {}
 
 // Unit schema data (loaded from server)
 let unitSchema = {
@@ -17,6 +18,10 @@ let unitSchema = {
 // Get current value for a path from SignalK
 function getCurrentValue(pathStr) {
   return signalKValues[pathStr]
+}
+
+function getCurrentValueDetails(pathStr) {
+  return signalKValueDetails[pathStr]
 }
 
 // Create base unit dropdown HTML
@@ -391,12 +396,14 @@ async function getAllSignalKMetadata() {
 
         if (obj[key] && typeof obj[key] === 'object') {
           // Check if this object has meta (capture all metadata, not just those with units)
-          if (obj[key].meta) {
-            metadataMap[currentPath] = {
-              ...obj[key].meta,
-              value: obj[key].value // Also capture the current value for type detection
-            }
+        if (obj[key].meta) {
+          metadataMap[currentPath] = {
+            ...obj[key].meta,
+            value: obj[key].value,
+            $source: obj[key].$source || obj[key].source,
+            timestamp: obj[key].timestamp
           }
+        }
           extractMeta(obj[key], currentPath)
         }
       }
@@ -406,6 +413,22 @@ async function getAllSignalKMetadata() {
     if (data.vessels && selfId && data.vessels[selfId]) {
       extractMeta(data.vessels[selfId])
     }
+
+    signalKValueDetails = {}
+    signalKValues = {}
+
+    // Flatten metadataMap into signalKValueDetails with context path keys
+    Object.entries(metadataMap).forEach(([path, meta]) => {
+      signalKValueDetails[path] = {
+        value: meta.value,
+        source: meta.$source || meta.source,
+        timestamp: meta.timestamp
+      }
+
+      if (meta.value !== undefined) {
+        signalKValues[path] = meta.value
+      }
+    })
 
     // Send metadata to backend for type detection and supportsPut tracking
     if (Object.keys(metadataMap).length > 0) {
@@ -480,6 +503,7 @@ async function renderMetadata() {
 
   for (const path of availablePaths) {
     const skMeta = signalKMetadata[path]
+    const valueDetails = getCurrentValueDetails(path)
     const hasSignalKMetadata = skMeta && skMeta.units
     const matchingPattern = findMatchingPattern(path)
     const pathOverride = preferences?.pathOverrides?.[path]
@@ -518,11 +542,34 @@ async function renderMetadata() {
     }
 
     // Add type and supportsPut from SignalK metadata
-    const valueType = skMeta?.units === 'RFC 3339 (UTC)' || skMeta?.units === 'ISO-8601 (UTC)' ? 'date' :
-                      (skMeta?.units ? 'number' : 'unknown')
-    const supportsPut = skMeta?.supportsPut || false
+    const valueType = skMeta?.units === 'RFC 3339 (UTC)' || skMeta?.units === 'ISO-8601 (UTC)'
+      ? 'date'
+      : skMeta?.units
+      ? 'number'
+      : typeof valueDetails?.value === 'boolean'
+      ? 'boolean'
+      : typeof valueDetails?.value === 'string'
+      ? 'string'
+      : typeof valueDetails?.value === 'object' && valueDetails?.value !== null
+      ? 'object'
+      : 'unknown'
 
-    pathInfo.push({ path, color, status, baseUnit, category, displayUnit, valueType, supportsPut })
+    const supportsPut = skMeta?.supportsPut || false
+    const signalkSource = valueDetails?.source || skMeta?.$source || skMeta?.source || null
+    const signalkTimestamp = valueDetails?.timestamp || skMeta?.timestamp || null
+
+    pathInfo.push({
+      path,
+      color,
+      status,
+      baseUnit,
+      category,
+      displayUnit,
+      valueType,
+      supportsPut,
+      signalkSource,
+      signalkTimestamp
+    })
   }
 
   // Store for filtering/sorting
@@ -694,28 +741,55 @@ function renderMetadataTable(pathInfo) {
   const tbody = document.getElementById('metadataTableBody')
   tbody.innerHTML = pathInfo.map(info => {
     const conversionUrl = `${API_BASE}/conversion/${info.path}`
-    const currentValue = getCurrentValue(info.path)
+  const details = getCurrentValueDetails(info.path)
+  const currentValue = details?.value
 
-    // For numbers: use GET link. For others: use POST form with target="_blank"
-    let testLink = ''
-    if (currentValue !== undefined && currentValue !== null) {
-      if (info.valueType === 'number') {
-        const convertUrl = `${API_BASE}/convert/${info.path}/${currentValue}`
-        testLink = `<a href="${convertUrl}" target="_blank" title="Test conversion with current value (${currentValue})" style="color: #2ecc71; margin-left: 4px; text-decoration: none; font-size: 14px;">▶️</a>`
-      } else {
-        // For non-numeric types, use a form that POSTs and opens in new window
-        const formId = `convert-form-${info.path.replace(/\./g, '-')}`
-        testLink = `<form id="${formId}" method="POST" action="${API_BASE}/convert" target="_blank" style="display: inline; margin: 0;">
-          <input type="hidden" name="path" value="${info.path}">
-          <input type="hidden" name="value" value="${JSON.stringify(currentValue).replace(/"/g, '&quot;')}">
-          <button type="submit" title="Test conversion with current value" style="color: #2ecc71; margin-left: 4px; background: none; border: none; cursor: pointer; font-size: 14px; padding: 0;">▶️</button>
-        </form>`
-      }
+  // For numbers: use GET link. For others: use POST form with target="_blank"
+  let testLink = ''
+  if (currentValue !== undefined && currentValue !== null) {
+    if (info.valueType === 'number') {
+      const convertUrl = `${API_BASE}/convert/${info.path}/${currentValue}`
+      testLink = `<a href="${convertUrl}" target="_blank" title="Test conversion with current value (${currentValue})" style="color: #2ecc71; margin-left: 4px; text-decoration: none; font-size: 14px;">▶️</a>`
+    } else {
+      const formId = `convert-form-${info.path.replace(/\./g, '-')}`
+      const serializedValue =
+        typeof currentValue === 'object'
+          ? JSON.stringify(currentValue)
+          : typeof currentValue === 'string'
+          ? currentValue
+          : JSON.stringify(currentValue)
+
+      testLink = `<form id="${formId}" method="POST" action="${API_BASE}/convert" target="_blank" style="display: inline; margin: 0;">
+        <input type="hidden" name="path" value="${info.path}">
+        <input type="hidden" name="value" value="${serializedValue.replace(/"/g, '&quot;')}">
+        <input type="hidden" name="type" value="${info.valueType}">
+        <button type="submit" title="Test conversion with current value" style="color: #2ecc71; margin-left: 4px; background: none; border: none; cursor: pointer; font-size: 14px; padding: 0;">▶️</button>
+      </form>`
     }
+  }
+
+    const sourceLine = details?.source || info.signalkSource
+    const timestampLine = details?.timestamp || info.signalkTimestamp
+    const metadataLine = sourceLine || timestampLine
+      ? `<div style="margin-top: 4px; font-size: 10px; color: #6c757d;">
+          ${sourceLine ? `<span style="margin-right: 8px;">$source: ${sourceLine}</span>` : ''}
+          ${timestampLine ? `<span>timestamp: ${new Date(timestampLine).toLocaleString()}</span>` : ''}
+        </div>`
+      : ''
 
     return `
-      <tr style="border-bottom: 1px solid #e9ecef; background: ${info.color};">
-        <td style="padding: 8px; font-family: monospace; font-size: 11px; word-break: break-all; text-align: left;">${info.path}<a href="${conversionUrl}" target="_blank" title="View conversion info" style="color: #3498db; margin-left: 6px; text-decoration: none; font-size: 14px;">🔧</a>${testLink}</td>
+      <tr style="border-bottom: 1px solid ${metadataLine ? '#dee2e6' : '#f1f3f5'}; background: ${info.color};">
+        <td style="padding: 8px; font-family: monospace; font-size: 11px; word-break: break-all; text-align: left;">
+          ${info.path}
+          <a href="${conversionUrl}" target="_blank" title="View conversion info" style="color: #3498db; margin-left: 6px; text-decoration: none; font-size: 14px;">🔧</a>
+          ${currentValue !== undefined && currentValue !== null ? `<a href="${API_BASE}/convert/${info.path}?value=${encodeURIComponent(
+            typeof currentValue === 'object'
+              ? JSON.stringify(currentValue)
+              : String(currentValue)
+          )}${info.valueType ? `&type=${encodeURIComponent(info.valueType)}` : ''}" target="_blank" title="Open GET conversion endpoint" style="color: #e67e22; margin-left: 4px; text-decoration: none; font-size: 14px;">🔗</a>` : ''}
+          ${testLink}
+          ${metadataLine}
+        </td>
         <td style="padding: 8px; text-align: center; font-size: 11px;">${info.status}</td>
         <td style="padding: 8px; text-align: center; font-size: 11px;">${info.valueType}</td>
         <td style="padding: 8px; text-align: center;">
