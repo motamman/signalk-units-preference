@@ -130,6 +130,10 @@ export interface ConversionResponse {
   valueType: PathValueType
   /** Whether this path supports PUT operations */
   supportsPut?: boolean
+  /** Latest SignalK timestamp, if available */
+  signalkTimestamp?: string
+  /** Latest SignalK source, if available */
+  signalkSource?: string
 }
 
 /**
@@ -146,6 +150,52 @@ export interface ConvertValueResponse {
   formatted: string
   /** Display format used */
   displayFormat: string
+  /** Latest SignalK timestamp, if available */
+  signalkTimestamp?: string
+  /** Latest SignalK source, if available */
+  signalkSource?: string
+}
+
+export interface ConversionDeltaValue {
+  path: string
+  baseUnit: string | null
+  targetUnit: string | null
+  formula: string
+  inverseFormula: string
+  displayFormat: string
+  symbol: string
+  category: string
+  valueType: PathValueType
+  originalValue: any
+  convertedValue: any
+  formatted: string
+  signalk_timestamp?: string
+  $source?: string
+}
+
+/**
+ * SignalK delta value entry
+ */
+export interface DeltaValueEntry {
+  path: string
+  value: ConversionDeltaValue
+}
+
+/**
+ * SignalK delta update block
+ */
+export interface DeltaUpdate {
+  $source?: string
+  timestamp?: string
+  values: DeltaValueEntry[]
+}
+
+/**
+ * SignalK delta envelope
+ */
+export interface DeltaResponse {
+  context?: string
+  updates: DeltaUpdate[]
 }
 
 /**

@@ -1,7 +1,7 @@
 import { Plugin, ServerAPI } from '@signalk/server-api'
 import { IRouter, Request, Response } from 'express'
 import { UnitsManager } from './UnitsManager'
-import { PluginConfig } from './types'
+import { ConversionDeltaValue, DeltaResponse, DeltaValueEntry, PluginConfig } from './types'
 import openApiSpec from './openapi.json'
 
 const PLUGIN_ID = 'signalk-units-preference'
@@ -51,6 +51,242 @@ module.exports = (app: ServerAPI): Plugin => {
     },
 
     registerWithRouter: (router: IRouter) => {
+      type SupportedValueType = 'number' | 'boolean' | 'string' | 'date' | 'object' | 'unknown'
+
+      const toSupportedValueType = (value?: string): SupportedValueType => {
+        switch (value) {
+          case 'number':
+          case 'boolean':
+          case 'string':
+          case 'date':
+          case 'object':
+            return value
+          default:
+            return 'unknown'
+        }
+      }
+
+      const createBadRequestError = (message: string, details?: unknown) => {
+        const error = new Error(message) as Error & {
+          status?: number
+          details?: unknown
+        }
+        error.status = 400
+        if (details !== undefined) {
+          error.details = details
+        }
+        return error
+      }
+
+      const normalizeValueForConversion = (
+        rawValue: unknown,
+        expectedType: string,
+        typeHint?: SupportedValueType
+      ): { value: unknown; usedType: SupportedValueType } => {
+        const targetType = typeHint !== undefined && typeHint !== 'unknown' ? typeHint : toSupportedValueType(expectedType)
+
+        if (targetType === 'number') {
+          if (typeof rawValue === 'number' && Number.isFinite(rawValue)) {
+            return { value: rawValue, usedType: 'number' }
+          }
+          if (typeof rawValue === 'string' && rawValue.trim() !== '') {
+            const parsed = Number(rawValue)
+            if (!Number.isNaN(parsed)) {
+              return { value: parsed, usedType: 'number' }
+            }
+          }
+          throw createBadRequestError('Expected numeric value', { received: rawValue })
+        }
+
+        if (targetType === 'boolean') {
+          if (typeof rawValue === 'boolean') {
+            return { value: rawValue, usedType: 'boolean' }
+          }
+          if (typeof rawValue === 'number') {
+            if (rawValue === 0 || rawValue === 1) {
+              return { value: rawValue === 1, usedType: 'boolean' }
+            }
+          }
+          if (typeof rawValue === 'string' && rawValue.trim() !== '') {
+            const normalized = rawValue.trim().toLowerCase()
+            if (['true', '1', 'yes', 'y', 'on'].includes(normalized)) {
+              return { value: true, usedType: 'boolean' }
+            }
+            if (['false', '0', 'no', 'n', 'off'].includes(normalized)) {
+              return { value: false, usedType: 'boolean' }
+            }
+          }
+          throw createBadRequestError('Expected boolean value', { received: rawValue })
+        }
+
+        if (targetType === 'date') {
+          if (rawValue instanceof Date && !Number.isNaN(rawValue.getTime())) {
+            return { value: rawValue.toISOString(), usedType: 'date' }
+          }
+          if (typeof rawValue === 'string' && rawValue.trim() !== '') {
+            const parsed = new Date(rawValue)
+            if (!Number.isNaN(parsed.getTime())) {
+              return { value: parsed.toISOString(), usedType: 'date' }
+            }
+          }
+          throw createBadRequestError('Expected ISO-8601 date value', { received: rawValue })
+        }
+
+        if (targetType === 'string') {
+          if (typeof rawValue === 'string') {
+            return { value: rawValue, usedType: 'string' }
+          }
+          if (rawValue === null || rawValue === undefined) {
+            return { value: '', usedType: 'string' }
+          }
+          return { value: String(rawValue), usedType: 'string' }
+        }
+
+        if (targetType === 'object') {
+          if (rawValue !== null && typeof rawValue === 'object') {
+            return { value: rawValue, usedType: 'object' }
+          }
+          if (typeof rawValue === 'string' && rawValue.trim() !== '') {
+            try {
+              const parsed = JSON.parse(rawValue)
+              if (parsed !== null && typeof parsed === 'object') {
+                return { value: parsed, usedType: 'object' }
+              }
+              throw createBadRequestError('Expected JSON object or array', { received: rawValue })
+            } catch (err) {
+              if ((err as any).status === 400) {
+                throw err
+              }
+              throw createBadRequestError('Invalid JSON payload', { received: rawValue })
+            }
+          }
+          throw createBadRequestError('Expected JSON object or array', { received: rawValue })
+        }
+
+        return { value: rawValue, usedType: 'unknown' }
+      }
+
+      const buildDeltaResponse = (
+        pathStr: string,
+        rawValue: unknown,
+        options?: { typeHint?: SupportedValueType }
+      ): DeltaResponse => {
+        const conversionInfo = unitsManager.getConversion(pathStr)
+        const { value } = normalizeValueForConversion(rawValue, conversionInfo.valueType, options?.typeHint)
+
+        const baseUpdate = {
+          $source: conversionInfo.signalkSource,
+          timestamp: conversionInfo.signalkTimestamp,
+          values: [] as DeltaValueEntry[]
+        }
+
+        const envelope: DeltaResponse = {
+          context: 'vessels.self',
+          updates: [baseUpdate]
+        }
+
+        const resolvedType = normalized.usedType !== 'unknown'
+          ? normalized.usedType
+          : toSupportedValueType(conversionInfo.valueType)
+
+        let convertedValue = normalized.value
+        let formatted = ''
+        let displayFormat = conversionInfo.displayFormat
+        let symbol = conversionInfo.symbol || ''
+
+        if (resolvedType === 'number') {
+          if (typeof normalized.value !== 'number') {
+            throw createBadRequestError('Expected numeric value for conversion', {
+              received: normalized.value,
+              path: pathStr
+            })
+          }
+          const numericResult = unitsManager.convertValue(pathStr, normalized.value)
+          convertedValue = numericResult.convertedValue
+          formatted = numericResult.formatted
+          displayFormat = numericResult.displayFormat
+          symbol = numericResult.symbol || conversionInfo.symbol || ''
+          baseUpdate.$source = numericResult.signalkSource || conversionInfo.signalkSource
+          baseUpdate.timestamp = numericResult.signalkTimestamp || conversionInfo.signalkTimestamp
+        } else if (resolvedType === 'boolean') {
+          if (typeof normalized.value !== 'boolean') {
+            throw createBadRequestError('Expected boolean value for conversion', {
+              received: normalized.value,
+              path: pathStr
+            })
+          }
+          convertedValue = normalized.value
+          formatted = normalized.value ? 'true' : 'false'
+          displayFormat = 'boolean'
+          symbol = ''
+        } else if (resolvedType === 'date') {
+          if (typeof normalized.value !== 'string') {
+            throw createBadRequestError('Expected date string for conversion', {
+              received: normalized.value,
+              path: pathStr
+            })
+          }
+          convertedValue = normalized.value
+          formatted = normalized.value
+          displayFormat = 'ISO-8601'
+          symbol = ''
+        } else if (resolvedType === 'string') {
+          convertedValue = String(normalized.value)
+          formatted = convertedValue
+          displayFormat = 'string'
+          symbol = symbol || ''
+        } else if (resolvedType === 'object') {
+          if (normalized.value === null || typeof normalized.value !== 'object') {
+            throw createBadRequestError('Expected JSON object or array', {
+              received: normalized.value,
+              path: pathStr
+            })
+          }
+          convertedValue = normalized.value
+          formatted = JSON.stringify(normalized.value)
+          displayFormat = 'json'
+          symbol = ''
+        } else {
+          formatted = String(normalized.value)
+          symbol = symbol || ''
+        }
+
+        if (!baseUpdate.$source && conversionInfo.signalkSource) {
+          baseUpdate.$source = conversionInfo.signalkSource
+        }
+        if (!baseUpdate.timestamp && conversionInfo.signalkTimestamp) {
+          baseUpdate.timestamp = conversionInfo.signalkTimestamp
+        }
+
+        const payload: ConversionDeltaValue = {
+          path: pathStr,
+          baseUnit: conversionInfo.baseUnit,
+          targetUnit: conversionInfo.targetUnit || conversionInfo.baseUnit || 'none',
+          formula: conversionInfo.formula,
+          inverseFormula: conversionInfo.inverseFormula,
+          displayFormat,
+          symbol,
+          category: conversionInfo.category,
+          valueType: resolvedType,
+          originalValue: normalized.value,
+          convertedValue,
+          formatted
+        }
+
+        if (baseUpdate.timestamp) {
+          payload.signalk_timestamp = baseUpdate.timestamp
+        }
+        if (baseUpdate.$source) {
+          payload.$source = baseUpdate.$source
+        }
+
+        baseUpdate.values.push({
+          path: pathStr,
+          value: payload
+        })
+
+        return envelope
+      }
       // GET /plugins/signalk-units-preference/paths
       // Get all available SignalK paths from the data model
       router.get('/paths', (req: Request, res: Response) => {
@@ -114,25 +350,53 @@ module.exports = (app: ServerAPI): Plugin => {
       })
 
       // GET /plugins/signalk-units-preference/convert/:path/:value
-      // Convert a value and return display-ready result (numbers only)
+      // Convert a value supplied via path segment
       router.get('/convert/:path(*)/:value', (req: Request, res: Response) => {
         try {
           const pathStr = req.params.path
-          const value = parseFloat(req.params.value)
+          const rawValue = req.params.value
+          const typeParam = Array.isArray(req.query.type) ? req.query.type[0] : req.query.type
 
-          if (isNaN(value)) {
-            return res.status(400).json({
-              error: 'Invalid value',
-              value: req.params.value
-            })
-          }
+          app.debug(`Converting value ${rawValue} for path: ${pathStr}`)
 
-          app.debug(`Converting value ${value} for path: ${pathStr}`)
-
-          const result = unitsManager.convertValue(pathStr, value)
+          const result = buildDeltaResponse(pathStr, rawValue, {
+            typeHint: typeof typeParam === 'string' ? toSupportedValueType(typeParam) : undefined
+          })
           res.json(result)
         } catch (error) {
+          if ((error as any).status === 400) {
+            return res.status(400).json({
+              error: (error as Error).message,
+              details: (error as any).details
+            })
+          }
           app.error(`Error converting value: ${error}`)
+          res.status(500).json({ error: 'Internal server error' })
+        }
+      })
+
+      router.get('/convert/:path(*)', (req: Request, res: Response) => {
+        try {
+          const pathStr = req.params.path
+          const valueParam = Array.isArray(req.query.value) ? req.query.value[0] : req.query.value
+          const typeParam = Array.isArray(req.query.type) ? req.query.type[0] : req.query.type
+
+          if (valueParam === undefined) {
+            throw createBadRequestError('Missing value query parameter')
+          }
+
+          const result = buildDeltaResponse(pathStr, valueParam, {
+            typeHint: typeof typeParam === 'string' ? toSupportedValueType(typeParam) : undefined
+          })
+          res.json(result)
+        } catch (error) {
+          if ((error as any).status === 400) {
+            return res.status(400).json({
+              error: (error as Error).message,
+              details: (error as any).details
+            })
+          }
+          app.error(`Error converting value via GET: ${error}`)
           res.status(500).json({ error: 'Internal server error' })
         }
       })
@@ -144,6 +408,7 @@ module.exports = (app: ServerAPI): Plugin => {
           // Support both JSON and form data
           let path = req.body.path
           let value = req.body.value
+          const typeHintBody = typeof req.body.type === 'string' ? toSupportedValueType(req.body.type) : undefined
 
           // If value is a string from form data, try to parse it as JSON
           if (typeof value === 'string' && value !== '') {
@@ -163,46 +428,10 @@ module.exports = (app: ServerAPI): Plugin => {
 
           app.debug(`Converting value for path: ${path}, value: ${value}`)
 
-          const conversionInfo = unitsManager.getConversion(path)
-
-          // Handle different value types
-          if (conversionInfo.valueType === 'number' && typeof value === 'number') {
-            const result = unitsManager.convertValue(path, value)
-            return res.json(result)
-          } else if (conversionInfo.valueType === 'boolean') {
-            return res.json({
-              originalValue: value,
-              convertedValue: value,
-              symbol: '',
-              formatted: value ? 'true' : 'false',
-              displayFormat: 'boolean'
-            })
-          } else if (conversionInfo.valueType === 'date') {
-            return res.json({
-              originalValue: value,
-              convertedValue: value,
-              symbol: '',
-              formatted: value,
-              displayFormat: 'ISO-8601'
-            })
-          } else if (conversionInfo.valueType === 'string') {
-            return res.json({
-              originalValue: value,
-              convertedValue: value,
-              symbol: '',
-              formatted: value,
-              displayFormat: 'string'
-            })
-          } else {
-            // Unknown or unsupported type
-            return res.json({
-              originalValue: value,
-              convertedValue: value,
-              symbol: '',
-              formatted: String(value),
-              displayFormat: 'unknown'
-            })
-          }
+          const result = buildDeltaResponse(path, value, {
+            typeHint: typeHintBody
+          })
+          return res.json(result)
         } catch (error) {
           app.error(`Error converting value: ${error}`)
           res.status(500).json({ error: 'Internal server error' })

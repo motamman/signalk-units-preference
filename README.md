@@ -255,11 +255,34 @@ GET /plugins/signalk-units-preference/convert/navigation.speedOverGround/5.14
 **Example Response:**
 ```json
 {
-  "originalValue": 5.14,
-  "convertedValue": 10.0,
-  "symbol": "kn",
-  "formatted": "10.0 kn",
-  "displayFormat": "0.0"
+  "context": "vessels.self",
+  "updates": [
+    {
+      "$source": "navigation",
+      "timestamp": "2025-10-03T13:56:37.000Z",
+      "values": [
+        {
+          "path": "navigation.speedOverGround",
+          "value": {
+            "baseUnit": "m/s",
+            "category": "speed",
+            "valueType": "number",
+            "conversions": {
+              "knots": {
+                "formula": "value * 1.94384",
+                "inverseFormula": "value * 0.514444",
+                "symbol": "kn",
+                "value": 10,
+                "formatted": "10.0 kn",
+                "original": 5.14,
+                "displayFormat": "0.0"
+              }
+            }
+          }
+        }
+      ]
+    }
+  ]
 }
 ```
 
@@ -280,36 +303,37 @@ Converts any value type (number, boolean, string, date). Accepts both JSON and f
 
 **Example Responses:**
 
-*For number:*
+**Example Response:**
 ```json
 {
-  "originalValue": 292.35,
-  "convertedValue": 19.2,
-  "symbol": "°C",
-  "formatted": "19.2 °C",
-  "displayFormat": "0.0"
-}
-```
-
-*For boolean:*
-```json
-{
-  "originalValue": true,
-  "convertedValue": true,
-  "symbol": "",
-  "formatted": "true",
-  "displayFormat": "boolean"
-}
-```
-
-*For date:*
-```json
-{
-  "originalValue": "2025-10-03T12:25:14.000Z",
-  "convertedValue": "2025-10-03T12:25:14.000Z",
-  "symbol": "",
-  "formatted": "2025-10-03T12:25:14.000Z",
-  "displayFormat": "ISO-8601"
+  "context": "vessels.self",
+  "updates": [
+    {
+      "$source": "derived-data",
+      "timestamp": "2025-10-03T16:08:07.985Z",
+      "values": [
+        {
+          "path": "environment.inside.temperature",
+          "value": {
+            "baseUnit": "K",
+            "category": "temperature",
+            "valueType": "number",
+            "conversions": {
+              "celsius": {
+                "formula": "value - 273.15",
+                "inverseFormula": "value + 273.15",
+                "symbol": "°C",
+                "value": 19.2,
+                "formatted": "19.2 °C",
+                "original": 292.35,
+                "displayFormat": "0.0"
+              }
+            }
+          }
+        }
+      ]
+    }
+  ]
 }
 ```
 

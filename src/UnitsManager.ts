@@ -364,7 +364,9 @@ export class UnitsManager {
       symbol: conversion.symbol,
       category: metadata.category,
       valueType: valueType,
-      supportsPut: skMeta?.supportsPut
+      supportsPut: skMeta?.supportsPut,
+      signalkTimestamp: skMeta?.timestamp,
+      signalkSource: skMeta?.$source || skMeta?.source
     }
   }
 
@@ -417,7 +419,9 @@ export class UnitsManager {
       symbol: symbol,
       category: 'none',
       valueType: valueType,
-      supportsPut: skMeta?.supportsPut
+      supportsPut: skMeta?.supportsPut,
+      signalkTimestamp: skMeta?.timestamp,
+      signalkSource: skMeta?.$source || skMeta?.source
     }
   }
 
@@ -426,6 +430,7 @@ export class UnitsManager {
    */
   convertValue(pathStr: string, value: number): ConvertValueResponse {
     const conversionInfo = this.getConversion(pathStr)
+    const skMeta = this.signalKMetadata[pathStr]
 
     try {
       const convertedValue = evaluateFormula(conversionInfo.formula, value)
@@ -436,7 +441,9 @@ export class UnitsManager {
         convertedValue,
         symbol: conversionInfo.symbol,
         formatted: `${formatted} ${conversionInfo.symbol}`,
-        displayFormat: conversionInfo.displayFormat
+        displayFormat: conversionInfo.displayFormat,
+        signalkTimestamp: skMeta?.timestamp,
+        signalkSource: skMeta?.$source || skMeta?.source
       }
     } catch (error) {
       this.app.error(`Error converting value: ${error}`)
@@ -446,7 +453,9 @@ export class UnitsManager {
         convertedValue: value,
         symbol: '',
         formatted: `${value}`,
-        displayFormat: '0.0'
+        displayFormat: '0.0',
+        signalkTimestamp: skMeta?.timestamp,
+        signalkSource: skMeta?.$source || skMeta?.source
       }
     }
   }
