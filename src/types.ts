@@ -86,6 +86,27 @@ export interface UnitsMetadataStore {
 }
 
 /**
+ * Path value type
+ */
+export type PathValueType = 'number' | 'boolean' | 'string' | 'date' | 'object' | 'unknown'
+
+/**
+ * SignalK metadata received from server
+ */
+export interface SignalKPathMetadata {
+  /** Units from SignalK specification */
+  units?: string
+  /** Description */
+  description?: string
+  /** Whether the path supports PUT operations */
+  supportsPut?: boolean
+  /** Current value (for type detection) */
+  value?: any
+  /** Additional metadata fields */
+  [key: string]: any
+}
+
+/**
  * API response for conversion query
  */
 export interface ConversionResponse {
@@ -105,6 +126,10 @@ export interface ConversionResponse {
   symbol: string
   /** Category */
   category: string
+  /** Value type (number, boolean, string, date) */
+  valueType: PathValueType
+  /** Whether this path supports PUT operations */
+  supportsPut?: boolean
 }
 
 /**

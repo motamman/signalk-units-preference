@@ -9,7 +9,9 @@ import {
   CategoryPreference,
   ConversionDefinition,
   PathPatternRule,
-  ConvertValueResponse
+  ConvertValueResponse,
+  PathValueType,
+  SignalKPathMetadata
 } from './types'
 import { defaultUnitsMetadata, categoryToBaseUnit } from './defaultUnits'
 import { comprehensiveDefaultUnits } from './comprehensiveDefaults'
@@ -19,7 +21,7 @@ export class UnitsManager {
   private metadata: UnitsMetadataStore
   private preferences: UnitsPreferences
   private unitDefinitions: Record<string, UnitMetadata>
-  private signalKMetadata: Record<string, string> // path -> units
+  private signalKMetadata: Record<string, SignalKPathMetadata> // path -> full metadata
   private preferencesPath: string
   private definitionsPath: string
 
@@ -50,9 +52,42 @@ export class UnitsManager {
   /**
    * Set SignalK metadata from frontend
    */
-  setSignalKMetadata(metadata: Record<string, string>): void {
+  setSignalKMetadata(metadata: Record<string, SignalKPathMetadata>): void {
     this.signalKMetadata = metadata
     this.app.debug(`Received SignalK metadata for ${Object.keys(metadata).length} paths`)
+  }
+
+  /**
+   * Detect value type from units or value
+   */
+  private detectValueType(units?: string, value?: any): PathValueType {
+    // Date detection from units
+    if (units === 'RFC 3339 (UTC)' || units === 'ISO-8601 (UTC)') {
+      return 'date'
+    }
+
+    // If we have a value, detect from it
+    if (value !== undefined && value !== null) {
+      const valueType = typeof value
+      if (valueType === 'boolean') return 'boolean'
+      if (valueType === 'number') return 'number'
+      if (valueType === 'string') {
+        // Check if string is RFC3339 date
+        const rfc3339 = /^([0-9]+)-(0[1-9]|1[012])-(0[1-9]|[12][0-9]|3[01])[Tt]([01][0-9]|2[0-3]):([0-5][0-9]):([0-5][0-9]|60)(\.[0-9]+)?(([Zz])|([\+|\-]([01][0-9]|2[0-3]):[0-5][0-9]))$/
+        if (rfc3339.test(value)) {
+          return 'date'
+        }
+        return 'string'
+      }
+      if (valueType === 'object') return 'object'
+    }
+
+    // Default: if has units, assume number
+    if (units && units !== '') {
+      return 'number'
+    }
+
+    return 'unknown'
   }
 
   /**
@@ -315,6 +350,10 @@ export class UnitsManager {
       return this.getPassThroughConversion(pathStr, metadata.baseUnit || undefined)
     }
 
+    // Get metadata for type and supportsPut
+    const skMeta = this.signalKMetadata[pathStr]
+    const valueType = this.detectValueType(skMeta?.units, skMeta?.value)
+
     return {
       path: pathStr,
       baseUnit: metadata.baseUnit,
@@ -323,7 +362,9 @@ export class UnitsManager {
       inverseFormula: conversion.inverseFormula,
       displayFormat: preference.displayFormat,
       symbol: conversion.symbol,
-      category: metadata.category
+      category: metadata.category,
+      valueType: valueType,
+      supportsPut: skMeta?.supportsPut
     }
   }
 
@@ -332,18 +373,38 @@ export class UnitsManager {
    * If path has SignalK metadata with units, use that as baseUnit/targetUnit
    */
   private getPassThroughConversion(pathStr: string, signalKUnit?: string): ConversionResponse {
-    // Check SignalK metadata if not provided
+    // Get SignalK metadata
+    const skMeta = this.signalKMetadata[pathStr]
     let unit = signalKUnit
+
     if (!unit) {
       // First check the metadata from frontend
-      unit = this.signalKMetadata[pathStr]
+      unit = skMeta?.units
       if (!unit) {
         // Fallback to app.getMetadata
-        const skMetadata = this.app.getMetadata(pathStr)
-        if (skMetadata?.units) {
-          unit = skMetadata.units
+        const appMetadata = this.app.getMetadata(pathStr)
+        if (appMetadata?.units) {
+          unit = appMetadata.units
         }
       }
+    }
+
+    // Detect value type
+    const valueType = this.detectValueType(unit, skMeta?.value)
+
+    // For booleans and dates, use appropriate display format
+    let displayFormat = '0.0'
+    let symbol = ''
+
+    if (valueType === 'boolean') {
+      displayFormat = 'boolean'
+      symbol = ''
+    } else if (valueType === 'date') {
+      displayFormat = 'ISO-8601'
+      symbol = ''
+    } else if (valueType === 'string') {
+      displayFormat = 'string'
+      symbol = ''
     }
 
     return {
@@ -352,9 +413,11 @@ export class UnitsManager {
       targetUnit: unit || 'none',
       formula: 'value',
       inverseFormula: 'value',
-      displayFormat: '0.0',
-      symbol: '',
-      category: 'none'
+      displayFormat: displayFormat,
+      symbol: symbol,
+      category: 'none',
+      valueType: valueType,
+      supportsPut: skMeta?.supportsPut
     }
   }
 
@@ -432,6 +495,7 @@ export class UnitsManager {
   private generateMetadataFromPattern(pattern: PathPatternRule): UnitMetadata | null {
     // Use pattern's baseUnit if provided, otherwise derive from category
     const baseUnit = pattern.baseUnit || this.getBaseUnitForCategory(pattern.category)
+    this.app.debug(`generateMetadataFromPattern - pattern: ${pattern.pattern}, category: ${pattern.category}, baseUnit: ${baseUnit}`)
 
     if (!baseUnit) {
       this.app.debug(`No base unit found for category: ${pattern.category}`)
@@ -440,6 +504,7 @@ export class UnitsManager {
 
     // Check unit definitions first
     if (this.unitDefinitions[baseUnit]) {
+      this.app.debug(`Found in unitDefinitions: ${baseUnit}`)
       return {
         baseUnit: baseUnit,
         category: pattern.category,
@@ -456,6 +521,8 @@ export class UnitsManager {
       this.app.debug(`No default conversions found for base unit: ${baseUnit}`)
       return null
     }
+
+    this.app.debug(`Found in comprehensiveDefaultUnits, conversions: ${Object.keys(defaultsForBaseUnit.conversions).join(', ')}`)
 
     return {
       baseUnit: baseUnit,

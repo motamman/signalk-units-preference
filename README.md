@@ -413,6 +413,533 @@ POST /plugins/signalk-units-preference/unit-definitions/:baseUnit/conversions
 DELETE /plugins/signalk-units-preference/unit-definitions/:baseUnit/conversions/:targetUnit
 ```
 
+## Integration Guide for App Developers
+
+This plugin provides a centralized unit conversion service that other SignalK applications can use to display data in user-preferred units. Instead of each app implementing its own conversion logic, apps can query this plugin's REST API.
+
+### Why Use This Plugin?
+
+**Benefits for App Developers:**
+- **User Preference Respect**: Automatically use the units the user has configured globally
+- **No Conversion Logic**: No need to write or maintain conversion formulas
+- **Centralized Configuration**: Users configure units once, all apps honor those preferences
+- **Flexible Patterns**: Automatically handles new paths via wildcard patterns
+- **Type Detection**: Get value type information (number, boolean, string, date) for proper display
+- **PUT Support**: Discover which paths are writable
+
+### Integration Approaches
+
+#### 1. Simple Conversion Display
+
+**Use Case**: Display a single SignalK value in user's preferred units
+
+```javascript
+// Get conversion info for a path
+const response = await fetch('/plugins/signalk-units-preference/conversion/navigation.speedOverGround')
+const conversion = await response.json()
+
+// conversion contains:
+// {
+//   "path": "navigation.speedOverGround",
+//   "baseUnit": "m/s",
+//   "targetUnit": "knots",
+//   "formula": "value * 1.94384",
+//   "inverseFormula": "value * 0.514444",
+//   "displayFormat": "0.0",
+//   "symbol": "kn",
+//   "category": "speed",
+//   "valueType": "number",
+//   "supportsPut": false
+// }
+
+// Display to user
+console.log(`Speed: ${conversion.formatted}`)
+// Output: "Speed: 10.0 kn"
+```
+
+#### 2. Real-Time Value Conversion
+
+**Use Case**: Subscribe to SignalK delta stream and convert values on-the-fly
+
+```javascript
+// Cache conversion info for paths you're monitoring
+const conversionCache = {}
+
+async function getConversion(path) {
+  if (!conversionCache[path]) {
+    const response = await fetch(`/plugins/signalk-units-preference/conversion/${path}`)
+    conversionCache[path] = await response.json()
+  }
+  return conversionCache[path]
+}
+
+// When receiving SignalK delta
+ws.onmessage = async (event) => {
+  const delta = JSON.parse(event.data)
+
+  for (const update of delta.updates) {
+    for (const value of update.values) {
+      const path = value.path
+      const rawValue = value.value
+
+      // Get conversion for this path
+      const conversion = await getConversion(path)
+
+      // For numbers: convert the value
+      if (conversion.valueType === 'number' && typeof rawValue === 'number') {
+        const response = await fetch(`/plugins/signalk-units-preference/convert/${path}/${rawValue}`)
+        const result = await response.json()
+
+        displayValue(path, result.formatted) // e.g., "10.0 kn"
+      }
+      // For booleans, dates, strings: display as-is
+      else if (conversion.valueType === 'boolean') {
+        displayValue(path, rawValue ? 'true' : 'false')
+      }
+      else if (conversion.valueType === 'date') {
+        displayValue(path, new Date(rawValue).toISOString())
+      }
+      else {
+        displayValue(path, rawValue)
+      }
+    }
+  }
+}
+```
+
+#### 3. Bulk Path Analysis
+
+**Use Case**: Analyze multiple paths at startup to determine types and units
+
+```javascript
+// Get all available paths from SignalK
+const apiResponse = await fetch('/signalk/v1/api/')
+const data = await apiResponse.json()
+
+// Extract paths
+const paths = extractPaths(data.vessels[data.self])
+
+// Get conversion info for all paths
+const conversions = {}
+for (const path of paths) {
+  try {
+    const response = await fetch(`/plugins/signalk-units-preference/conversion/${path}`)
+    conversions[path] = await response.json()
+  } catch (e) {
+    console.warn(`No conversion for ${path}`)
+  }
+}
+
+// Now you have:
+// - conversions[path].valueType → for input validation
+// - conversions[path].supportsPut → for showing edit controls
+// - conversions[path].symbol → for display labels
+// - conversions[path].displayFormat → for formatting
+```
+
+#### 4. User Input Conversion (Reverse Conversion)
+
+**Use Case**: User enters a value in their preferred units, convert back to SI for PUT
+
+```javascript
+// User enters "20" knots for navigation.speedOverGround
+const userInput = 20
+const path = 'navigation.speedOverGround'
+
+// Get conversion info
+const response = await fetch(`/plugins/signalk-units-preference/conversion/${path}`)
+const conversion = await response.json()
+
+// conversion.inverseFormula = "value * 0.514444"
+// Use eval or a safer evaluator
+const baseValue = eval(conversion.inverseFormula.replace('value', userInput))
+// baseValue = 10.288 m/s
+
+// Send PUT request with SI value
+await fetch(`/signalk/v1/api/vessels/self/${path.replace(/\./g, '/')}`, {
+  method: 'PUT',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ value: baseValue })
+})
+```
+
+#### 5. Dynamic Form Generation
+
+**Use Case**: Build a settings form that adapts to value types
+
+```javascript
+async function createInputForPath(path) {
+  const response = await fetch(`/plugins/signalk-units-preference/conversion/${path}`)
+  const conversion = await response.json()
+
+  let input
+
+  if (conversion.valueType === 'number') {
+    input = document.createElement('input')
+    input.type = 'number'
+    input.step = conversion.displayFormat === '0' ? '1' : '0.1'
+
+    // Add unit label
+    const label = document.createElement('span')
+    label.textContent = conversion.symbol
+
+    return { input, label }
+  }
+  else if (conversion.valueType === 'boolean') {
+    input = document.createElement('input')
+    input.type = 'checkbox'
+    return { input }
+  }
+  else if (conversion.valueType === 'date') {
+    input = document.createElement('input')
+    input.type = 'datetime-local'
+    return { input }
+  }
+  else {
+    input = document.createElement('input')
+    input.type = 'text'
+    return { input }
+  }
+}
+```
+
+### API Response Types
+
+#### Conversion Response
+```typescript
+{
+  path: string              // SignalK path
+  baseUnit: string          // SI or base unit (e.g., "m/s", "K")
+  targetUnit: string        // User's preferred unit (e.g., "knots", "celsius")
+  formula: string           // Conversion formula (e.g., "value * 1.94384")
+  inverseFormula: string    // Reverse formula (e.g., "value * 0.514444")
+  displayFormat: string     // Number format (e.g., "0.0", "0.00") or "boolean", "ISO-8601", "string"
+  symbol: string            // Display symbol (e.g., "kn", "°C")
+  category: string          // Category name (e.g., "speed", "temperature")
+  valueType: string         // "number" | "boolean" | "string" | "date" | "object" | "unknown"
+  supportsPut?: boolean     // Whether path supports PUT operations
+}
+```
+
+#### Convert Value Response
+```typescript
+{
+  originalValue: number     // Input value in base units
+  convertedValue: number    // Output value in target units
+  symbol: string            // Display symbol
+  formatted: string         // Ready-to-display string (e.g., "10.0 kn")
+  displayFormat: string     // Format used
+}
+```
+
+### Best Practices
+
+1. **Cache Conversion Info**: Conversion metadata rarely changes, cache it per session
+2. **Handle Pass-Through**: Paths without conversions return `formula: "value"` - handle gracefully
+3. **Type Checking**: Always check `valueType` before attempting numeric conversion
+4. **Error Handling**: Some paths may not have conversion info - provide fallbacks
+5. **Respect displayFormat**: Use the provided format for consistent UX across apps
+6. **Batch Requests**: If possible, cache conversions for all paths at startup
+7. **Listen for Changes**: Consider polling `/categories` or `/patterns` if you want to detect user preference changes
+
+### Example: Complete Widget Implementation
+
+```javascript
+class SignalKValueWidget {
+  constructor(path) {
+    this.path = path
+    this.conversion = null
+    this.value = null
+    this.init()
+  }
+
+  async init() {
+    // Get conversion info
+    const response = await fetch(`/plugins/signalk-units-preference/conversion/${this.path}`)
+    this.conversion = await response.json()
+
+    // Subscribe to SignalK updates
+    this.subscribe()
+  }
+
+  subscribe() {
+    const ws = new WebSocket('ws://localhost:3000/signalk/v1/stream?subscribe=self')
+
+    ws.onopen = () => {
+      ws.send(JSON.stringify({
+        context: 'vessels.self',
+        subscribe: [{ path: this.path }]
+      }))
+    }
+
+    ws.onmessage = (event) => {
+      const delta = JSON.parse(event.data)
+      if (delta.updates) {
+        for (const update of delta.updates) {
+          for (const val of update.values) {
+            if (val.path === this.path) {
+              this.updateValue(val.value)
+            }
+          }
+        }
+      }
+    }
+  }
+
+  async updateValue(rawValue) {
+    this.value = rawValue
+
+    if (this.conversion.valueType === 'number' && typeof rawValue === 'number') {
+      const response = await fetch(`/plugins/signalk-units-preference/convert/${this.path}/${rawValue}`)
+      const result = await response.json()
+      this.render(result.formatted)
+    } else {
+      this.render(String(rawValue))
+    }
+  }
+
+  render(displayValue) {
+    // Update your UI with the converted value
+    document.getElementById(`widget-${this.path}`).textContent = displayValue
+  }
+}
+
+// Usage
+const speedWidget = new SignalKValueWidget('navigation.speedOverGround')
+const tempWidget = new SignalKValueWidget('electrical.batteries.0.temperature')
+```
+
+### WebSocket Integration (Real-Time Updates)
+
+The plugin provides REST endpoints, but you can integrate them with SignalK's WebSocket stream for real-time conversions:
+
+```javascript
+class SignalKConverter {
+  constructor() {
+    this.conversions = {}  // Cache conversion info
+    this.ws = null
+  }
+
+  // Initialize: fetch conversions for paths you're interested in
+  async init(paths) {
+    // Pre-fetch conversion info for all paths
+    for (const path of paths) {
+      const response = await fetch(`/plugins/signalk-units-preference/conversion/${path}`)
+      this.conversions[path] = await response.json()
+    }
+
+    this.connectWebSocket()
+  }
+
+  connectWebSocket() {
+    // Connect to SignalK WebSocket
+    this.ws = new WebSocket('ws://localhost:3000/signalk/v1/stream?subscribe=none')
+
+    this.ws.onopen = () => {
+      console.log('WebSocket connected')
+
+      // Subscribe to specific paths
+      const subscriptions = Object.keys(this.conversions).map(path => ({
+        path: path,
+        period: 1000,  // Update every 1 second
+        format: 'delta',
+        policy: 'instant'
+      }))
+
+      this.ws.send(JSON.stringify({
+        context: 'vessels.self',
+        subscribe: subscriptions
+      }))
+    }
+
+    this.ws.onmessage = (event) => {
+      this.handleDelta(JSON.parse(event.data))
+    }
+
+    this.ws.onerror = (error) => {
+      console.error('WebSocket error:', error)
+    }
+
+    this.ws.onclose = () => {
+      console.log('WebSocket closed, reconnecting...')
+      setTimeout(() => this.connectWebSocket(), 5000)
+    }
+  }
+
+  async handleDelta(delta) {
+    if (!delta.updates) return
+
+    for (const update of delta.updates) {
+      for (const value of update.values) {
+        const path = value.path
+        const rawValue = value.value
+
+        // Get cached conversion info
+        const conversion = this.conversions[path]
+        if (!conversion) continue
+
+        // Convert based on type
+        let displayValue
+
+        if (conversion.valueType === 'number' && typeof rawValue === 'number') {
+          // Option 1: Use the formula locally (faster, no network call)
+          displayValue = this.evaluateFormula(conversion.formula, rawValue)
+          const formatted = this.formatNumber(displayValue, conversion.displayFormat)
+          this.onValueUpdate(path, `${formatted} ${conversion.symbol}`)
+
+          // Option 2: Use REST API (simpler, slower)
+          // const response = await fetch(`/plugins/signalk-units-preference/convert/${path}/${rawValue}`)
+          // const result = await response.json()
+          // this.onValueUpdate(path, result.formatted)
+        }
+        else if (conversion.valueType === 'boolean') {
+          displayValue = rawValue ? 'true' : 'false'
+          this.onValueUpdate(path, displayValue)
+        }
+        else if (conversion.valueType === 'date') {
+          displayValue = new Date(rawValue).toISOString()
+          this.onValueUpdate(path, displayValue)
+        }
+        else {
+          displayValue = String(rawValue)
+          this.onValueUpdate(path, displayValue)
+        }
+      }
+    }
+  }
+
+  // Local formula evaluation (faster than REST call)
+  evaluateFormula(formula, value) {
+    // Simple safe evaluator - replace with a proper parser for production
+    try {
+      return eval(formula.replace('value', value))
+    } catch (e) {
+      console.error('Formula evaluation error:', e)
+      return value
+    }
+  }
+
+  // Format number according to displayFormat
+  formatNumber(value, format) {
+    if (format === '0') {
+      return Math.round(value).toString()
+    }
+    const decimals = (format.match(/\./g) || []).length > 0
+      ? format.split('.')[1].length
+      : 0
+    return value.toFixed(decimals)
+  }
+
+  // Override this to handle updates
+  onValueUpdate(path, formattedValue) {
+    console.log(`${path}: ${formattedValue}`)
+    // Update your UI here
+  }
+
+  // Clean up
+  close() {
+    if (this.ws) {
+      this.ws.close()
+    }
+  }
+}
+
+// Usage
+const converter = new SignalKConverter()
+await converter.init([
+  'navigation.speedOverGround',
+  'navigation.courseOverGroundTrue',
+  'environment.wind.speedApparent',
+  'electrical.batteries.0.temperature'
+])
+
+// Override to update your UI
+converter.onValueUpdate = (path, formattedValue) => {
+  document.getElementById(`value-${path}`).textContent = formattedValue
+}
+```
+
+### WebSocket + Conversion: Performance Considerations
+
+**Two approaches for real-time conversion:**
+
+#### Approach 1: Local Formula Evaluation (Recommended)
+```javascript
+// Fast - no network call per value
+const convertedValue = eval(conversion.formula.replace('value', rawValue))
+const formatted = formatNumber(convertedValue, conversion.displayFormat)
+const display = `${formatted} ${conversion.symbol}`
+```
+
+**Pros:**
+- Fast (no REST call per update)
+- Works offline
+- Lower server load
+
+**Cons:**
+- Need to implement formula evaluator
+- Need to implement number formatter
+
+#### Approach 2: REST API per Value
+```javascript
+// Slower - REST call per value
+const response = await fetch(`/plugins/signalk-units-preference/convert/${path}/${rawValue}`)
+const result = await response.json()
+const display = result.formatted
+```
+
+**Pros:**
+- Simple implementation
+- Server handles all formatting
+
+**Cons:**
+- Network latency (100-200ms per call)
+- Higher server load
+- Doesn't work offline
+
+**Recommendation:** Use Approach 1 for high-frequency paths (10+ updates/sec), Approach 2 for low-frequency or initial loads.
+
+### Common Patterns
+
+#### Getting User's Speed Preference
+```javascript
+const response = await fetch('/plugins/signalk-units-preference/categories/speed')
+const speedPref = await response.json()
+// { targetUnit: "knots", displayFormat: "0.0" }
+```
+
+#### Checking All Temperature Paths
+```javascript
+const patterns = await fetch('/plugins/signalk-units-preference/patterns').then(r => r.json())
+const tempPattern = patterns.find(p => p.category === 'temperature')
+// { pattern: "**.temperature", category: "temperature", targetUnit: "celsius", ... }
+```
+
+#### Discovering Writable Paths
+```javascript
+const conversion = await fetch('/plugins/signalk-units-preference/conversion/some.path').then(r => r.json())
+if (conversion.supportsPut) {
+  // Show edit controls
+}
+```
+
+#### Subscribe to All Paths Matching a Pattern
+```javascript
+// Get all paths from SignalK
+const apiResponse = await fetch('/signalk/v1/api/')
+const data = await apiResponse.json()
+const allPaths = extractAllPaths(data.vessels[data.self])
+
+// Filter paths matching your interest (e.g., all temperatures)
+const tempPaths = allPaths.filter(path => path.includes('temperature'))
+
+// Subscribe via WebSocket
+ws.send(JSON.stringify({
+  context: 'vessels.self',
+  subscribe: tempPaths.map(path => ({ path, period: 1000 }))
+}))
+```
+
 ## Usage Examples
 
 ### Example 1: Set All Speeds to Knots

@@ -114,7 +114,7 @@ module.exports = (app: ServerAPI): Plugin => {
       })
 
       // GET /plugins/signalk-units-preference/convert/:path/:value
-      // Convert a value and return display-ready result
+      // Convert a value and return display-ready result (numbers only)
       router.get('/convert/:path(*)/:value', (req: Request, res: Response) => {
         try {
           const pathStr = req.params.path
@@ -131,6 +131,78 @@ module.exports = (app: ServerAPI): Plugin => {
 
           const result = unitsManager.convertValue(pathStr, value)
           res.json(result)
+        } catch (error) {
+          app.error(`Error converting value: ${error}`)
+          res.status(500).json({ error: 'Internal server error' })
+        }
+      })
+
+      // POST /plugins/signalk-units-preference/convert
+      // Convert any value type (number, boolean, string, date)
+      router.post('/convert', (req: Request, res: Response) => {
+        try {
+          // Support both JSON and form data
+          let path = req.body.path
+          let value = req.body.value
+
+          // If value is a string from form data, try to parse it as JSON
+          if (typeof value === 'string' && value !== '') {
+            try {
+              value = JSON.parse(value)
+            } catch (e) {
+              // If parsing fails, keep it as string
+            }
+          }
+
+          if (!path || value === undefined || value === null) {
+            return res.status(400).json({
+              error: 'Missing path or value',
+              received: req.body
+            })
+          }
+
+          app.debug(`Converting value for path: ${path}, value: ${value}`)
+
+          const conversionInfo = unitsManager.getConversion(path)
+
+          // Handle different value types
+          if (conversionInfo.valueType === 'number' && typeof value === 'number') {
+            const result = unitsManager.convertValue(path, value)
+            return res.json(result)
+          } else if (conversionInfo.valueType === 'boolean') {
+            return res.json({
+              originalValue: value,
+              convertedValue: value,
+              symbol: '',
+              formatted: value ? 'true' : 'false',
+              displayFormat: 'boolean'
+            })
+          } else if (conversionInfo.valueType === 'date') {
+            return res.json({
+              originalValue: value,
+              convertedValue: value,
+              symbol: '',
+              formatted: value,
+              displayFormat: 'ISO-8601'
+            })
+          } else if (conversionInfo.valueType === 'string') {
+            return res.json({
+              originalValue: value,
+              convertedValue: value,
+              symbol: '',
+              formatted: value,
+              displayFormat: 'string'
+            })
+          } else {
+            // Unknown or unsupported type
+            return res.json({
+              originalValue: value,
+              convertedValue: value,
+              symbol: '',
+              formatted: String(value),
+              displayFormat: 'unknown'
+            })
+          }
         } catch (error) {
           app.error(`Error converting value: ${error}`)
           res.status(500).json({ error: 'Internal server error' })

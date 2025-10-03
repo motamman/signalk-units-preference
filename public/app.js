@@ -302,53 +302,30 @@ function renderCategories() {
     .map(category => {
       const pref = preferences?.categories?.[category] || { targetUnit: '', displayFormat: '0.0' }
       const baseUnit = unitSchema.categoryToBaseUnit[category]
-      const availableUnits = unitSchema.targetUnitsByBase[baseUnit] || []
+      const targetUnit = pref.targetUnit || 'none'
+      const displayFormat = pref.displayFormat || '0.0'
       const isCustom = pref.baseUnit !== undefined
+      const badge = isCustom
+        ? '<span style="background: #667eea; color: white; padding: 2px 8px; border-radius: 3px; font-size: 11px; margin-left: 8px;">CUSTOM</span>'
+        : '<span style="background: #6c757d; color: white; padding: 2px 8px; border-radius: 3px; font-size: 11px; margin-left: 8px;">CORE</span>'
 
       return `
-      <div class="category-item">
-        <div class="collapsible-header" onclick="toggleCategoryItem('${category}')">
-          <div>
-            <h3 class="category-name" style="display: inline;">${category}${isCustom ? ' <span style="color: #667eea; font-size: 12px;">(custom)</span>' : ''}</h3>
-            <div style="color: #7f8c8d; font-size: 13px; margin-top: 5px;">Base: ${baseUnit} | Available: ${availableUnits.join(', ') || 'None'}</div>
-          </div>
-          <div style="display: flex; align-items: center; gap: 10px;">
-            ${isCustom ? `
-              <button class="btn-primary" onclick="event.stopPropagation(); editCategory('${category}')" style="padding: 4px 12px; font-size: 12px;">Edit</button>
-              <button class="btn-danger" onclick="event.stopPropagation(); deleteCategory('${category}')" style="padding: 4px 12px; font-size: 12px;">Delete</button>
-            ` : ''}
-            <span class="collapse-icon" id="category-icon-${category}">▼</span>
-          </div>
-        </div>
-        <div class="collapsible-content" id="category-content-${category}">
-          <div id="category-view-${category}">
-            <div class="form-group">
-              <div class="input-group">
-                <label>Target Unit</label>
-                <select onchange="updateCategory('${category}', 'targetUnit', this.value)">
-                  <option value="">-- Select Unit --</option>
-                  ${availableUnits.map(unit => `
-                    <option value="${unit}" ${unit === pref.targetUnit ? 'selected' : ''}>${unit}</option>
-                  `).join('')}
-                </select>
-              </div>
-              <div class="input-group">
-                <label>Display Format</label>
-                <input
-                  type="text"
-                  value="${pref.displayFormat || '0.0'}"
-                  onchange="updateCategory('${category}', 'displayFormat', this.value)"
-                  placeholder="e.g., 0.0"
-                >
-              </div>
+        <div class="category-item" style="padding: 12px 16px; background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 6px; margin-bottom: 8px;">
+          <div id="category-view-${category}" style="display: flex; align-items: center; justify-content: space-between; gap: 16px;">
+            <div style="display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0;">
+              <span style="font-weight: 500; flex-shrink: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${category}${badge}</span>
+              <span style="color: #7f8c8d; font-size: 13px; white-space: nowrap;">→</span>
+              <span style="color: #667eea; font-weight: 500; font-size: 13px; white-space: nowrap;">${baseUnit} → ${targetUnit}</span>
+              <span style="color: #95a5a6; font-size: 13px; white-space: nowrap;">(${displayFormat})</span>
+            </div>
+            <div style="display: flex; gap: 8px;">
+              <button class="btn-primary btn-edit" onclick="editCategory('${category}')">Edit</button>
+              ${isCustom ? `<button class="btn-danger btn-delete" onclick="deleteCategory('${category}')">Delete</button>` : ''}
             </div>
           </div>
-          <div id="category-edit-${category}" style="display: none;">
-            <!-- Edit form will be inserted here -->
-          </div>
+          <div id="category-edit-${category}" style="display: none;"></div>
         </div>
-      </div>
-    `
+      `
     }).join('')
 }
 
@@ -370,9 +347,12 @@ async function getAllSignalKMetadata() {
         const currentPath = prefix ? `${prefix}.${key}` : key
 
         if (obj[key] && typeof obj[key] === 'object') {
-          // Check if this object has meta
-          if (obj[key].meta && obj[key].meta.units) {
-            metadataMap[currentPath] = obj[key].meta
+          // Check if this object has meta (capture all metadata, not just those with units)
+          if (obj[key].meta) {
+            metadataMap[currentPath] = {
+              ...obj[key].meta,
+              value: obj[key].value // Also capture the current value for type detection
+            }
           }
           extractMeta(obj[key], currentPath)
         }
@@ -382,6 +362,20 @@ async function getAllSignalKMetadata() {
     const selfId = data.self?.replace('vessels.', '')
     if (data.vessels && selfId && data.vessels[selfId]) {
       extractMeta(data.vessels[selfId])
+    }
+
+    // Send metadata to backend for type detection and supportsPut tracking
+    if (Object.keys(metadataMap).length > 0) {
+      try {
+        await fetch(`${API_BASE}/signalk-metadata`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(metadataMap)
+        })
+        console.log(`Sent ${Object.keys(metadataMap).length} metadata entries to backend`)
+      } catch (err) {
+        console.error('Failed to send metadata to backend:', err)
+      }
     }
 
     return metadataMap
@@ -480,7 +474,12 @@ async function renderMetadata() {
       displayUnit = '-'
     }
 
-    pathInfo.push({ path, color, status, baseUnit, category, displayUnit })
+    // Add type and supportsPut from SignalK metadata
+    const valueType = skMeta?.units === 'RFC 3339 (UTC)' || skMeta?.units === 'ISO-8601 (UTC)' ? 'date' :
+                      (skMeta?.units ? 'number' : 'unknown')
+    const supportsPut = skMeta?.supportsPut || false
+
+    pathInfo.push({ path, color, status, baseUnit, category, displayUnit, valueType, supportsPut })
   }
 
   // Store for filtering/sorting
@@ -523,6 +522,8 @@ function filterAndSortMetadata() {
       const searchableText = [
         info.path,
         info.status,
+        info.valueType,
+        info.supportsPut ? 'yes' : 'no',
         info.baseUnit,
         info.category,
         info.displayUnit
@@ -548,6 +549,16 @@ function filterAndSortMetadata() {
         aVal = a.status
         bVal = b.status
         break
+      case 'valueType':
+        aVal = a.valueType
+        bVal = b.valueType
+        break
+      case 'supportsPut':
+        // Boolean comparison: true > false
+        aVal = a.supportsPut ? 1 : 0
+        bVal = b.supportsPut ? 1 : 0
+        const boolComparison = aVal - bVal
+        return window.metadataSortDirection === 'asc' ? boolComparison : -boolComparison
       case 'base':
         aVal = a.baseUnit
         bVal = b.baseUnit
@@ -622,7 +633,9 @@ function renderMetadataTable(pathInfo) {
           <thead>
             <tr style="background: #f8f9fa; border-bottom: 2px solid #dee2e6;">
               <th class="metadata-sortable-header" data-column="path" style="padding: 8px; text-align: left; min-width: 200px; cursor: pointer; user-select: none;">Path<span class="sort-arrow"> ▲</span></th>
-              <th class="metadata-sortable-header" data-column="status" style="padding: 8px; text-align: left; width: 150px; cursor: pointer; user-select: none;">Status<span class="sort-arrow"></span></th>
+              <th class="metadata-sortable-header" data-column="status" style="padding: 8px; text-align: center; width: 150px; cursor: pointer; user-select: none;">Status<span class="sort-arrow"></span></th>
+              <th class="metadata-sortable-header" data-column="valueType" style="padding: 8px; text-align: center; width: 70px; cursor: pointer; user-select: none;">Type<span class="sort-arrow"></span></th>
+              <th class="metadata-sortable-header" data-column="supportsPut" style="padding: 8px; text-align: center; width: 60px; cursor: pointer; user-select: none;">PUT<span class="sort-arrow"></span></th>
               <th class="metadata-sortable-header" data-column="base" style="padding: 8px; text-align: left; width: 80px; cursor: pointer; user-select: none;">Base<span class="sort-arrow"></span></th>
               <th class="metadata-sortable-header" data-column="category" style="padding: 8px; text-align: left; width: 100px; cursor: pointer; user-select: none;">Category<span class="sort-arrow"></span></th>
               <th class="metadata-sortable-header" data-column="display" style="padding: 8px; text-align: left; width: 80px; cursor: pointer; user-select: none;">Display<span class="sort-arrow"></span></th>
@@ -638,17 +651,33 @@ function renderMetadataTable(pathInfo) {
   const tbody = document.getElementById('metadataTableBody')
   tbody.innerHTML = pathInfo.map(info => {
     const conversionUrl = `${API_BASE}/conversion/${info.path}`
-    const currentValue = getCurrentValue(info.path) || 0
-    const convertUrl = `${API_BASE}/convert/${info.path}/${currentValue}`
+    const currentValue = getCurrentValue(info.path)
+
+    // For numbers: use GET link. For others: use POST form with target="_blank"
+    let testLink = ''
+    if (currentValue !== undefined && currentValue !== null) {
+      if (info.valueType === 'number') {
+        const convertUrl = `${API_BASE}/convert/${info.path}/${currentValue}`
+        testLink = `<a href="${convertUrl}" target="_blank" title="Test conversion with current value (${currentValue})" style="color: #2ecc71; margin-left: 4px; text-decoration: none; font-size: 14px;">▶️</a>`
+      } else {
+        // For non-numeric types, use a form that POSTs and opens in new window
+        const formId = `convert-form-${info.path.replace(/\./g, '-')}`
+        testLink = `<form id="${formId}" method="POST" action="${API_BASE}/convert" target="_blank" style="display: inline; margin: 0;">
+          <input type="hidden" name="path" value="${info.path}">
+          <input type="hidden" name="value" value="${JSON.stringify(currentValue).replace(/"/g, '&quot;')}">
+          <button type="submit" title="Test conversion with current value" style="color: #2ecc71; margin-left: 4px; background: none; border: none; cursor: pointer; font-size: 14px; padding: 0;">▶️</button>
+        </form>`
+      }
+    }
 
     return `
       <tr style="border-bottom: 1px solid #e9ecef; background: ${info.color};">
-        <td style="padding: 8px; font-family: monospace; font-size: 11px; word-break: break-all;">
-          ${info.path}
-          <a href="${conversionUrl}" target="_blank" title="View conversion info" style="color: #3498db; margin-left: 6px; text-decoration: none; font-size: 14px;">🔧</a>
-          <a href="${convertUrl}" target="_blank" title="Test conversion with current value (${currentValue})" style="color: #2ecc71; margin-left: 4px; text-decoration: none; font-size: 14px;">▶️</a>
+        <td style="padding: 8px; font-family: monospace; font-size: 11px; word-break: break-all; text-align: left;">${info.path}<a href="${conversionUrl}" target="_blank" title="View conversion info" style="color: #3498db; margin-left: 6px; text-decoration: none; font-size: 14px;">🔧</a>${testLink}</td>
+        <td style="padding: 8px; text-align: center; font-size: 11px;">${info.status}</td>
+        <td style="padding: 8px; text-align: center; font-size: 11px;">${info.valueType}</td>
+        <td style="padding: 8px; text-align: center;">
+          ${info.supportsPut ? '<span style="color: #2ecc71;">✓</span>' : '<span style="color: #6c757d;">—</span>'}
         </td>
-        <td style="padding: 8px; font-size: 11px;">${info.status}</td>
         <td style="padding: 8px;">${info.baseUnit}</td>
         <td style="padding: 8px;">${info.category}</td>
         <td style="padding: 8px; font-weight: bold;">${info.displayUnit}</td>
@@ -817,14 +846,6 @@ function editCategory(category) {
   // Show edit form, hide view
   viewDiv.style.display = 'none'
   editDiv.style.display = 'block'
-
-  // Ensure the content is expanded
-  const content = document.getElementById(`category-content-${category}`)
-  const icon = document.getElementById(`category-icon-${category}`)
-  if (content.classList.contains('collapsed')) {
-    content.classList.remove('collapsed')
-    icon.classList.remove('collapsed')
-  }
 }
 
 // Save edited category
@@ -877,7 +898,7 @@ function cancelEditCategory(category) {
   const editDiv = document.getElementById(`category-edit-${category}`)
 
   // Show view, hide edit form
-  viewDiv.style.display = 'block'
+  viewDiv.style.display = 'flex'
   editDiv.style.display = 'none'
 }
 
@@ -957,47 +978,21 @@ function renderPatterns() {
     const displayFormat = pattern.displayFormat || categoryDefault?.displayFormat || '(category default)'
 
     return `
-    <div class="pattern-item" style="margin-bottom: 15px;">
-      <div class="collapsible-header" onclick="togglePatternItem(${index})">
-        <div>
-          <h3 class="path-name" style="display: inline; margin: 0; font-size: 1rem;">${pattern.pattern}</h3>
-          <div style="color: #7f8c8d; font-size: 13px; margin-top: 5px;">Category: ${pattern.category} | Priority: ${pattern.priority || 0}</div>
+    <div class="pattern-item" style="padding: 12px 16px; background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 6px; margin-bottom: 8px;">
+      <div id="pattern-view-${index}" style="display: flex; align-items: center; justify-content: space-between; gap: 16px;">
+        <div style="display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0;">
+          <span style="font-weight: 500; flex-shrink: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${pattern.pattern}</span>
+          <span style="color: #7f8c8d; font-size: 13px; white-space: nowrap;">→</span>
+          <span style="color: #667eea; font-weight: 500; font-size: 13px; white-space: nowrap;">${baseUnit} → ${targetUnit}</span>
+          <span style="color: #95a5a6; font-size: 13px; white-space: nowrap;">(${displayFormat})</span>
+          <span style="color: #7f8c8d; font-size: 12px; white-space: nowrap;">Priority: ${pattern.priority || 0}</span>
         </div>
-        <div style="display: flex; align-items: center; gap: 10px;">
-          <button class="btn-primary" onclick="event.stopPropagation(); editPattern(${index})" style="padding: 4px 12px; font-size: 12px;">Edit</button>
-          <button class="btn-danger" onclick="event.stopPropagation(); deletePattern(${index})" style="padding: 4px 12px; font-size: 12px;">Delete</button>
-          <span class="collapse-icon collapsed" id="pattern-icon-${index}">▼</span>
-        </div>
-      </div>
-      <div class="collapsible-content collapsed" id="pattern-content-${index}">
-        <div id="pattern-view-${index}">
-          <div class="form-group">
-            <div class="input-group">
-              <label>Category</label>
-              <input type="text" value="${pattern.category}" readonly style="background: #f8f9fa;">
-            </div>
-            <div class="input-group">
-              <label>Base Unit</label>
-              <input type="text" value="${baseUnit}" readonly style="background: #f8f9fa;" title="${pattern.baseUnit ? 'From pattern' : 'Derived from category'}">
-            </div>
-            <div class="input-group">
-              <label>Target Unit</label>
-              <input type="text" value="${targetUnit}" readonly style="background: #f8f9fa;">
-            </div>
-            <div class="input-group">
-              <label>Display Format</label>
-              <input type="text" value="${displayFormat}" readonly style="background: #f8f9fa;">
-            </div>
-            <div class="input-group">
-              <label>Priority</label>
-              <input type="text" value="${pattern.priority || 0}" readonly style="background: #f8f9fa;">
-            </div>
-          </div>
-        </div>
-        <div id="pattern-edit-${index}" style="display: none;">
-          <!-- Edit form will be inserted here -->
+        <div style="display: flex; gap: 8px;">
+          <button class="btn-primary btn-edit" onclick="editPattern(${index})">Edit</button>
+          <button class="btn-danger btn-delete" onclick="deletePattern(${index})">Delete</button>
         </div>
       </div>
+      <div id="pattern-edit-${index}" style="display: none;"></div>
     </div>
   `}).join('')
 }
@@ -1175,12 +1170,6 @@ function editPattern(index) {
   // Show edit form, hide view
   viewDiv.style.display = 'none'
   editDiv.style.display = 'block'
-
-  // Ensure the content is expanded
-  const content = document.getElementById(`pattern-content-${index}`)
-  if (content.classList.contains('collapsed')) {
-    togglePatternItem(index)
-  }
 }
 
 // Save edited pattern
@@ -1230,7 +1219,7 @@ function cancelEditPattern(index) {
   const viewDiv = document.getElementById(`pattern-view-${index}`)
   const editDiv = document.getElementById(`pattern-edit-${index}`)
 
-  viewDiv.style.display = 'block'
+  viewDiv.style.display = 'flex'
   editDiv.style.display = 'none'
 }
 
@@ -1653,19 +1642,20 @@ function renderUnitDefinitions() {
       : '<span style="background: #6c757d; color: white; padding: 2px 8px; border-radius: 3px; font-size: 11px; margin-left: 8px;">CORE</span>'
 
     return `
-      <div class="unit-definition-item" style="margin-bottom: 15px;">
-        <div class="collapsible-header" onclick="toggleUnitItem('${baseUnit}')">
-          <div>
-            <h3 style="margin: 0; font-family: monospace;">${baseUnit}${badge}</h3>
-            <p style="margin: 5px 0 0 0; color: #7f8c8d; font-size: 14px;">${def.category || baseUnit}</p>
+      <div class="unit-definition-item" style="padding: 12px 16px; background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 6px; margin-bottom: 8px;">
+        <div class="collapsible-header" onclick="toggleUnitItem('${baseUnit}')" style="cursor: pointer;">
+          <div style="display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0;">
+            <span style="font-family: monospace; font-weight: 500;">${baseUnit}${badge}</span>
+            <span style="color: #7f8c8d; font-size: 13px;">${def.category || baseUnit}</span>
+            <span style="color: #95a5a6; font-size: 13px;">${conversions.length} conversion${conversions.length !== 1 ? 's' : ''}</span>
           </div>
           <div style="display: flex; align-items: center; gap: 10px;">
-            <button class="btn-primary" onclick="event.stopPropagation(); editBaseUnit('${baseUnit}')" style="padding: 4px 12px; font-size: 12px;">Edit</button>
-            <button class="btn-danger" onclick="event.stopPropagation(); deleteBaseUnit('${baseUnit}')" style="padding: 4px 12px; font-size: 12px;">Delete</button>
-            <span class="collapse-icon" id="unit-icon-${baseUnit}">▼</span>
+            <button class="btn-primary btn-edit" onclick="event.stopPropagation(); editBaseUnit('${baseUnit}')">Edit</button>
+            <button class="btn-danger btn-delete" onclick="event.stopPropagation(); deleteBaseUnit('${baseUnit}')">Delete</button>
+            <span class="collapse-icon collapsed" id="unit-icon-${baseUnit}">▼</span>
           </div>
         </div>
-        <div class="collapsible-content" id="unit-content-${baseUnit}">
+        <div class="collapsible-content collapsed" id="unit-content-${baseUnit}">
           <div id="unit-view-${baseUnit}">
             ${conversions.length > 0 ? `
               <div style="background: white; padding: 15px; border-radius: 4px;">
@@ -1688,8 +1678,8 @@ function renderUnitDefinitions() {
                         <td style="padding: 8px; font-family: monospace; font-size: 12px;">${conv.inverseFormula}</td>
                         <td style="padding: 8px;">${conv.symbol}</td>
                         <td style="padding: 8px;">
-                          <button class="btn-primary" onclick="editConversion('${baseUnit}', '${target}')" style="padding: 4px 12px; font-size: 12px; margin-right: 5px;">Edit</button>
-                          <button class="btn-danger" onclick="deleteConversion('${baseUnit}', '${target}')" style="padding: 4px 12px; font-size: 12px;">Delete</button>
+                          <button class="btn-primary btn-edit" onclick="editConversion('${baseUnit}', '${target}')">Edit</button>
+                          <button class="btn-danger btn-delete" onclick="deleteConversion('${baseUnit}', '${target}')">Delete</button>
                         </td>
                       </tr>
                     `).join('')}
@@ -1782,9 +1772,29 @@ function toggleUnitItem(baseUnit) {
   const content = document.getElementById(`unit-content-${baseUnit}`)
   const icon = document.getElementById(`unit-icon-${baseUnit}`)
 
-  if (content && icon) {
-    content.classList.toggle('collapsed')
-    icon.classList.toggle('collapsed')
+  if (!content || !icon) return
+
+  const isCurrentlyCollapsed = content.classList.contains('collapsed')
+
+  // Close all other units (accordion behavior)
+  document.querySelectorAll('[id^="unit-content-"]').forEach(el => {
+    if (el.id !== `unit-content-${baseUnit}`) {
+      el.classList.add('collapsed')
+    }
+  })
+  document.querySelectorAll('[id^="unit-icon-"]').forEach(el => {
+    if (el.id !== `unit-icon-${baseUnit}`) {
+      el.classList.add('collapsed')
+    }
+  })
+
+  // Toggle current unit
+  if (isCurrentlyCollapsed) {
+    content.classList.remove('collapsed')
+    icon.classList.remove('collapsed')
+  } else {
+    content.classList.add('collapsed')
+    icon.classList.add('collapsed')
   }
 }
 
@@ -2054,6 +2064,7 @@ async function addPathOverride() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         path,
+        baseUnit,
         targetUnit,
         displayFormat: format
       })
@@ -2090,30 +2101,153 @@ function renderPathOverrides() {
     const conversionUrl = `${API_BASE}/conversion/${override.path}`
     const currentValue = getCurrentValue(override.path) || 0
     const convertUrl = `${API_BASE}/convert/${override.path}/${currentValue}`
+    const baseUnit = override.baseUnit || 'auto'
+    const targetUnit = override.targetUnit || 'none'
+    const displayFormat = override.displayFormat || '0.0'
+    const safePath = override.path.replace(/\./g, '-')
 
     return `
-      <div class="override-item">
-        <div class="override-header">
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <span class="path-name">${override.path}</span>
+      <div class="override-item" style="padding: 12px 16px; background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 6px; margin-bottom: 8px;">
+        <div id="override-view-${safePath}" style="display: flex; align-items: center; justify-content: space-between; gap: 16px;">
+          <div style="display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0;">
+            <span class="path-name" style="flex-shrink: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${override.path}</span>
+            <span style="color: #7f8c8d; font-size: 13px; white-space: nowrap;">→</span>
+            <span style="color: #667eea; font-weight: 500; font-size: 13px; white-space: nowrap;">${baseUnit} → ${targetUnit}</span>
+            <span style="color: #95a5a6; font-size: 13px; white-space: nowrap;">(${displayFormat})</span>
             <a href="${conversionUrl}" target="_blank" title="View conversion info" style="color: #3498db; font-size: 14px; text-decoration: none;">🔧</a>
             <a href="${convertUrl}" target="_blank" title="Test conversion with current value (${currentValue})" style="color: #2ecc71; font-size: 14px; text-decoration: none;">▶️</a>
           </div>
-          <button class="btn-danger" onclick="deletePathOverride('${override.path}')">Delete</button>
-        </div>
-        <div class="form-group">
-          <div class="input-group">
-            <label>Target Unit</label>
-            <input type="text" value="${override.targetUnit}" readonly style="background: #f8f9fa;">
-          </div>
-          <div class="input-group">
-            <label>Display Format</label>
-            <input type="text" value="${override.displayFormat}" readonly style="background: #f8f9fa;">
+          <div style="display: flex; gap: 8px;">
+            <button class="btn-primary btn-edit" onclick="editPathOverride('${override.path}')">Edit</button>
+            <button class="btn-danger btn-delete" onclick="deletePathOverride('${override.path}')">Delete</button>
           </div>
         </div>
+        <div id="override-edit-${safePath}" style="display: none;"></div>
       </div>
     `
   }).join('')
+}
+
+// Edit path override
+async function editPathOverride(path) {
+  const override = preferences.pathOverrides[path]
+  if (!override) return
+
+  const safePath = path.replace(/\./g, '-')
+  const viewDiv = document.getElementById(`override-view-${safePath}`)
+  const editDiv = document.getElementById(`override-edit-${safePath}`)
+
+  // Get the actual base unit - if auto, fetch from conversion
+  let baseUnit = override.baseUnit
+  if (!baseUnit || baseUnit === 'auto') {
+    try {
+      const res = await fetch(`${API_BASE}/conversion/${path}`)
+      if (res.ok) {
+        const conversion = await res.json()
+        baseUnit = conversion.baseUnit || 'auto'
+      } else {
+        baseUnit = 'auto'
+      }
+    } catch (error) {
+      baseUnit = 'auto'
+    }
+  }
+
+  const targetUnit = override.targetUnit || 'none'
+  const displayFormat = override.displayFormat || '0.0'
+
+  const baseSelectId = `edit-override-base-${safePath}`
+  const targetSelectId = `edit-override-target-${safePath}`
+  const formatInputId = `edit-override-format-${safePath}`
+
+  editDiv.innerHTML = `
+    <div style="background: #fff3cd; padding: 16px; border-radius: 6px; margin-top: 12px;">
+      <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 12px;">
+        <div>
+          <label style="display: block; font-weight: 500; margin-bottom: 6px; font-size: 13px;">Base Unit</label>
+          <div id="${baseSelectId}-container"></div>
+        </div>
+        <div>
+          <label style="display: block; font-weight: 500; margin-bottom: 6px; font-size: 13px;">Target Unit</label>
+          <div id="${targetSelectId}-container"></div>
+        </div>
+        <div>
+          <label style="display: block; font-weight: 500; margin-bottom: 6px; font-size: 13px;">Display Format</label>
+          <input type="text" id="${formatInputId}" value="${displayFormat}" placeholder="e.g., 0.0" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+        </div>
+      </div>
+      <div style="display: flex; gap: 10px;">
+        <button class="btn-success" onclick="saveEditPathOverride('${path}')" style="padding: 8px 16px;">Save Changes</button>
+        <button class="btn-secondary" onclick="cancelEditPathOverride('${path}')" style="padding: 8px 16px;">Cancel</button>
+      </div>
+    </div>
+  `
+
+  // Populate dropdowns
+  document.getElementById(`${baseSelectId}-container`).innerHTML = createBaseUnitDropdown(baseSelectId, baseUnit, false)
+  document.getElementById(`${targetSelectId}-container`).innerHTML = createTargetUnitDropdown(targetSelectId, baseUnit, targetUnit, false)
+
+  // Handle base unit change to update target units
+  document.getElementById(baseSelectId).addEventListener('change', (e) => {
+    const newBaseUnit = e.target.value
+    document.getElementById(`${targetSelectId}-container`).innerHTML = createTargetUnitDropdown(targetSelectId, newBaseUnit, '', false)
+  })
+
+  // Show edit form, hide view
+  viewDiv.style.display = 'none'
+  editDiv.style.display = 'block'
+}
+
+// Save edited path override
+async function saveEditPathOverride(path) {
+  const safePath = path.replace(/\./g, '-')
+  const baseSelectId = `edit-override-base-${safePath}`
+  const targetSelectId = `edit-override-target-${safePath}`
+  const formatInputId = `edit-override-format-${safePath}`
+
+  const baseUnit = document.getElementById(baseSelectId).value
+  const targetUnit = document.getElementById(targetSelectId).value
+  const displayFormat = document.getElementById(formatInputId).value
+
+  if (!baseUnit || !targetUnit || !displayFormat) {
+    showStatus('Please fill in all fields', 'error')
+    return
+  }
+
+  try {
+    const overridePref = {
+      baseUnit,
+      targetUnit,
+      displayFormat
+    }
+
+    const res = await fetch(`${API_BASE}/overrides/${path}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(overridePref)
+    })
+
+    if (!res.ok) throw new Error('Failed to update path override')
+
+    showStatus(`Updated path override: ${path}`, 'success')
+
+    // Reload data
+    await loadData()
+    renderPathOverrides()
+  } catch (error) {
+    showStatus('Failed to update path override: ' + error.message, 'error')
+  }
+}
+
+// Cancel editing path override
+function cancelEditPathOverride(path) {
+  const safePath = path.replace(/\./g, '-')
+  const viewDiv = document.getElementById(`override-view-${safePath}`)
+  const editDiv = document.getElementById(`override-edit-${safePath}`)
+
+  // Show view, hide edit form
+  viewDiv.style.display = 'flex'
+  editDiv.style.display = 'none'
 }
 
 // Delete path override
