@@ -20,7 +20,6 @@ export class UnitsManager {
   private preferences: UnitsPreferences
   private unitDefinitions: Record<string, UnitMetadata>
   private signalKMetadata: Record<string, string> // path -> units
-  private metadataPath: string
   private preferencesPath: string
   private definitionsPath: string
 
@@ -28,10 +27,9 @@ export class UnitsManager {
     private app: ServerAPI,
     private dataDir: string
   ) {
-    this.metadataPath = path.join(dataDir, 'units-metadata.json')
     this.preferencesPath = path.join(dataDir, 'units-preferences.json')
     this.definitionsPath = path.join(dataDir, 'units-definitions.json')
-    // Merge both default sets, with comprehensive taking precedence
+    // Use only built-in default metadata (no custom file loading)
     this.metadata = { ...defaultUnitsMetadata, ...comprehensiveDefaultUnits }
     this.preferences = {
       categories: {},
@@ -45,7 +43,6 @@ export class UnitsManager {
    * Initialize the manager by loading or creating data files
    */
   async initialize(): Promise<void> {
-    await this.loadMetadata()
     await this.loadPreferences()
     await this.loadUnitDefinitions()
   }
@@ -56,26 +53,6 @@ export class UnitsManager {
   setSignalKMetadata(metadata: Record<string, string>): void {
     this.signalKMetadata = metadata
     this.app.debug(`Received SignalK metadata for ${Object.keys(metadata).length} paths`)
-  }
-
-  /**
-   * Load metadata from file or create default
-   */
-  private async loadMetadata(): Promise<void> {
-    try {
-      if (fs.existsSync(this.metadataPath)) {
-        const data = fs.readFileSync(this.metadataPath, 'utf-8')
-        const loaded = JSON.parse(data)
-        this.metadata = { ...defaultUnitsMetadata, ...loaded }
-        this.app.debug('Loaded units metadata from file')
-      } else {
-        await this.saveMetadata()
-        this.app.debug('Created default units metadata file')
-      }
-    } catch (error) {
-      this.app.error(`Failed to load metadata: ${error}`)
-      throw error
-    }
   }
 
   /**
@@ -129,23 +106,6 @@ export class UnitsManager {
       }
     } catch (error) {
       this.app.error(`Failed to load preferences: ${error}`)
-      throw error
-    }
-  }
-
-  /**
-   * Save metadata to file
-   */
-  async saveMetadata(): Promise<void> {
-    try {
-      fs.writeFileSync(
-        this.metadataPath,
-        JSON.stringify(this.metadata, null, 2),
-        'utf-8'
-      )
-      this.app.debug('Saved units metadata')
-    } catch (error) {
-      this.app.error(`Failed to save metadata: ${error}`)
       throw error
     }
   }
@@ -597,14 +557,6 @@ export class UnitsManager {
   }
 
   /**
-   * Update metadata for a path
-   */
-  async updateMetadata(pathStr: string, metadata: UnitMetadata): Promise<void> {
-    this.metadata[pathStr] = metadata
-    await this.saveMetadata()
-  }
-
-  /**
    * Update category preference
    */
   async updateCategoryPreference(
@@ -678,22 +630,6 @@ export class UnitsManager {
     }
     this.preferences.pathPatterns.splice(index, 1)
     await this.savePreferences()
-  }
-
-  /**
-   * Add custom conversion to existing metadata
-   */
-  async addConversion(
-    pathStr: string,
-    unitName: string,
-    conversion: ConversionDefinition
-  ): Promise<void> {
-    if (!this.metadata[pathStr]) {
-      throw new Error(`No metadata found for path: ${pathStr}`)
-    }
-
-    this.metadata[pathStr].conversions[unitName] = conversion
-    await this.saveMetadata()
   }
 
   /**

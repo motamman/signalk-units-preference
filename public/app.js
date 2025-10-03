@@ -429,51 +429,54 @@ async function renderMetadata() {
   const pathInfo = []
 
   for (const path of availablePaths) {
-    const hasAppMetadata = metadata && metadata[path]
     const skMeta = signalKMetadata[path]
     const hasSignalKMetadata = skMeta && skMeta.units
     const matchingPattern = findMatchingPattern(path)
 
-    let color, status, baseUnit, category, conversions
+    let color, status, baseUnit, category, displayUnit
 
-    if (hasAppMetadata) {
-      // Green: Has extended metadata from our app
-      color = '#d4edda'
-      status = 'Extended'
-      baseUnit = metadata[path].baseUnit
-      category = metadata[path].category
-      conversions = Object.keys(metadata[path].conversions).join(', ')
-    } else if (matchingPattern) {
+    // Get display unit from preferences
+    const pathOverride = preferences?.pathOverrides?.[path]
+    let targetUnit = pathOverride?.targetUnit
+
+    if (!targetUnit && matchingPattern) {
+      targetUnit = matchingPattern.targetUnit
+    }
+
+    if (!targetUnit && matchingPattern?.category && preferences?.categories?.[matchingPattern.category]) {
+      targetUnit = preferences.categories[matchingPattern.category].targetUnit
+    }
+
+    if (matchingPattern) {
       // Yellow: Matches a pattern rule
       color = '#fff3cd'
       status = `Pattern: ${matchingPattern.pattern}`
       baseUnit = matchingPattern.baseUnit || (unitSchema?.categoryToBaseUnit?.[matchingPattern.category]) || '-'
       category = matchingPattern.category
-      conversions = 'Auto from pattern'
+      displayUnit = targetUnit || baseUnit || '-'
     } else if (hasSignalKMetadata) {
       // Blue: Has only SignalK metadata
       color = '#cfe2ff'
       status = 'SignalK Only'
       baseUnit = skMeta.units
       category = '-'
-      conversions = '-'
+      displayUnit = targetUnit || baseUnit
     } else {
       // Gray: Has neither
       color = '#f8f9fa'
       status = 'None'
       baseUnit = '-'
       category = '-'
-      conversions = '-'
+      displayUnit = '-'
     }
 
-    pathInfo.push({ path, color, status, baseUnit, category, conversions })
+    pathInfo.push({ path, color, status, baseUnit, category, displayUnit })
   }
 
   // Render table
   container.innerHTML = `
     <div style="margin-bottom: 15px;">
       <div style="display: flex; gap: 20px; font-size: 13px;">
-        <div><span style="display: inline-block; width: 15px; height: 15px; background: #d4edda; border: 1px solid #c3e6cb; margin-right: 5px;"></span> Extended Metadata (${pathInfo.filter(p => p.status === 'Extended').length})</div>
         <div><span style="display: inline-block; width: 15px; height: 15px; background: #fff3cd; border: 1px solid #ffc107; margin-right: 5px;"></span> Pattern Match (${pathInfo.filter(p => p.status.startsWith('Pattern:')).length})</div>
         <div><span style="display: inline-block; width: 15px; height: 15px; background: #cfe2ff; border: 1px solid #9ec5fe; margin-right: 5px;"></span> SignalK Only (${pathInfo.filter(p => p.status === 'SignalK Only').length})</div>
         <div><span style="display: inline-block; width: 15px; height: 15px; background: #f8f9fa; border: 1px solid #dee2e6; margin-right: 5px;"></span> No Metadata (${pathInfo.filter(p => p.status === 'None').length})</div>
@@ -487,7 +490,7 @@ async function renderMetadata() {
             <th style="padding: 12px; text-align: left;">Status</th>
             <th style="padding: 12px; text-align: left;">Base Unit</th>
             <th style="padding: 12px; text-align: left;">Category</th>
-            <th style="padding: 12px; text-align: left;">Conversions</th>
+            <th style="padding: 12px; text-align: left;">Display Unit</th>
           </tr>
         </thead>
         <tbody>
@@ -506,7 +509,7 @@ async function renderMetadata() {
               <td style="padding: 12px; font-size: 12px;">${info.status}</td>
               <td style="padding: 12px;">${info.baseUnit}</td>
               <td style="padding: 12px;">${info.category}</td>
-              <td style="padding: 12px; font-size: 13px;">${info.conversions}</td>
+              <td style="padding: 12px; font-size: 13px;">${info.displayUnit}</td>
             </tr>
             `
           }).join('')}

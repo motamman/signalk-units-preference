@@ -149,50 +149,6 @@ module.exports = (app: ServerAPI): Plugin => {
         }
       })
 
-      // GET /plugins/signalk-units-preference/metadata/:path
-      // Get metadata for specific path
-      router.get('/metadata/:path(*)', (req: Request, res: Response) => {
-        try {
-          const pathStr = req.params.path
-          const metadata = unitsManager.getMetadata()
-          const pathMetadata = metadata[pathStr]
-
-          if (!pathMetadata) {
-            return res.status(404).json({
-              error: 'No metadata found for path',
-              path: pathStr
-            })
-          }
-
-          res.json(pathMetadata)
-        } catch (error) {
-          app.error(`Error getting metadata: ${error}`)
-          res.status(500).json({ error: 'Internal server error' })
-        }
-      })
-
-      // POST /plugins/signalk-units-preference/metadata/:path
-      // Update or create metadata for a path
-      router.post('/metadata/:path(*)', async (req: Request, res: Response) => {
-        try {
-          const pathStr = req.params.path
-          const metadata = req.body
-
-          if (!metadata.baseUnit || !metadata.category || !metadata.conversions) {
-            return res.status(400).json({
-              error: 'Invalid metadata format',
-              required: ['baseUnit', 'category', 'conversions']
-            })
-          }
-
-          await unitsManager.updateMetadata(pathStr, metadata)
-          res.json({ success: true, path: pathStr })
-        } catch (error) {
-          app.error(`Error updating metadata: ${error}`)
-          res.status(500).json({ error: 'Internal server error' })
-        }
-      })
-
       // GET /plugins/signalk-units-preference/schema
       // Get unit schema information (base units, categories, target units)
       router.get('/schema', (req: Request, res: Response) => {
@@ -432,37 +388,6 @@ module.exports = (app: ServerAPI): Plugin => {
           } catch (error) {
             app.error(`Error deleting path override: ${error}`)
             res.status(500).json({ error: 'Internal server error' })
-          }
-        }
-      )
-
-      // POST /plugins/signalk-units-preference/conversion/:path/:unit
-      // Add custom conversion to a path
-      router.post(
-        '/conversion/:path(*)/:unit',
-        async (req: Request, res: Response) => {
-          try {
-            const pathStr = req.params.path
-            const unitName = req.params.unit
-            const conversion = req.body
-
-            if (!conversion.factor || !conversion.symbol) {
-              return res.status(400).json({
-                error: 'Invalid conversion format',
-                required: ['factor', 'symbol']
-              })
-            }
-
-            // Calculate inverse factor if not provided
-            if (!conversion.inverseFactor) {
-              conversion.inverseFactor = 1 / conversion.factor
-            }
-
-            await unitsManager.addConversion(pathStr, unitName, conversion)
-            res.json({ success: true, path: pathStr, unit: unitName })
-          } catch (error) {
-            app.error(`Error adding conversion: ${error}`)
-            res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error' })
           }
         }
       )
