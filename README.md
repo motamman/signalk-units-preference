@@ -240,7 +240,7 @@ Returns conversion metadata for a path.
 }
 ```
 
-#### Convert a Value (GET - Numbers Only)
+#### Convert a Value (GET)
 ```http
 GET /plugins/signalk-units-preference/convert/:path/:value
 ```
@@ -264,20 +264,11 @@ GET /plugins/signalk-units-preference/convert/navigation.speedOverGround/5.14
         {
           "path": "navigation.speedOverGround",
           "value": {
-            "path": "navigation.speedOverGround",
-            "baseUnit": "m/s",
-            "targetUnit": "knots",
-            "formula": "value * 1.94384",
-            "inverseFormula": "value * 0.514444",
-            "displayFormat": "0.0",
-            "symbol": "kn",
-            "category": "speed",
-            "valueType": "number",
-            "originalValue": 5.14,
-            "convertedValue": 10,
+            "value": 10,
             "formatted": "10.0 kn",
-            "signalk_timestamp": "2025-10-03T13:56:37.000Z",
-            "$source": "navigation"
+            "symbol": "kn",
+            "displayFormat": "0.0",
+            "original": 5.14
           }
         }
       ]
@@ -313,20 +304,11 @@ Converts any value type (number, boolean, string, date). Accepts both JSON and f
         {
           "path": "environment.inside.temperature",
           "value": {
-            "path": "environment.inside.temperature",
-            "baseUnit": "K",
-            "targetUnit": "celsius",
-            "formula": "value - 273.15",
-            "inverseFormula": "value + 273.15",
-            "displayFormat": "0.0",
-            "symbol": "°C",
-            "category": "temperature",
-            "valueType": "number",
-            "originalValue": 292.35,
-            "convertedValue": 19.2,
+            "value": 19.2,
             "formatted": "19.2 °C",
-            "signalk_timestamp": "2025-10-03T16:08:07.985Z",
-            "$source": "derived-data"
+            "symbol": "°C",
+            "displayFormat": "0.0",
+            "original": 292.35
           }
         }
       ]

@@ -76,6 +76,13 @@ export interface UnitsPreferences {
   pathOverrides: Record<string, PathPreference>
   /** Path pattern rules for automatic categorization */
   pathPatterns?: PathPatternRule[]
+  /** Currently applied preset system (metric, imperial-us, imperial-uk, or custom) */
+  currentPreset?: {
+    type: string
+    name: string
+    version: string
+    appliedDate: string
+  }
 }
 
 /**
@@ -157,20 +164,11 @@ export interface ConvertValueResponse {
 }
 
 export interface ConversionDeltaValue {
-  path: string
-  baseUnit: string | null
-  targetUnit: string | null
-  formula: string
-  inverseFormula: string
-  displayFormat: string
-  symbol: string
-  category: string
-  valueType: PathValueType
-  originalValue: any
-  convertedValue: any
+  value: any
   formatted: string
-  signalk_timestamp?: string
-  $source?: string
+  symbol: string
+  displayFormat: string
+  original: any
 }
 
 /**

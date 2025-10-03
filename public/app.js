@@ -246,15 +246,16 @@ function setupTabs() {
 // Load all data
 async function loadData() {
   try {
-    // Load categories, overrides, patterns, and metadata separately
-    const [categoriesRes, overridesRes, patternsRes, metaRes] = await Promise.all([
+    // Load categories, overrides, patterns, metadata, and current preset separately
+    const [categoriesRes, overridesRes, patternsRes, metaRes, presetRes] = await Promise.all([
       fetch(`${API_BASE}/categories`),
       fetch(`${API_BASE}/overrides`),
       fetch(`${API_BASE}/patterns`),
-      fetch(`${API_BASE}/metadata`)
+      fetch(`${API_BASE}/metadata`),
+      fetch(`${API_BASE}/current-preset`)
     ])
 
-    if (!categoriesRes.ok || !overridesRes.ok || !patternsRes.ok || !metaRes.ok) {
+    if (!categoriesRes.ok || !overridesRes.ok || !patternsRes.ok || !metaRes.ok || !presetRes.ok) {
       throw new Error('Failed to load data')
     }
 
@@ -262,7 +263,8 @@ async function loadData() {
     preferences = {
       categories: await categoriesRes.json(),
       pathOverrides: await overridesRes.json(),
-      pathPatterns: await patternsRes.json()
+      pathPatterns: await patternsRes.json(),
+      currentPreset: await presetRes.json()
     }
     metadata = await metaRes.json()
 
@@ -289,7 +291,48 @@ function getAvailableUnitsForCategory(category) {
 }
 
 // Render category preferences
+function renderCurrentPreset() {
+  const container = document.getElementById('currentPreset')
+
+  if (!preferences?.currentPreset) {
+    // Show "Custom" when no preset has been applied
+    container.innerHTML = `
+      <div style="background: linear-gradient(135deg, #95a5a6 0%, #7f8c8d 100%); color: white; padding: 16px 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(149, 165, 166, 0.3);">
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+          <div>
+            <div style="font-size: 13px; opacity: 0.9; margin-bottom: 4px;">Current Unit System</div>
+            <div style="font-size: 18px; font-weight: 600;">Custom Configuration</div>
+          </div>
+          <div style="text-align: right; font-size: 12px; opacity: 0.85;">
+            <div>No preset applied</div>
+          </div>
+        </div>
+      </div>
+    `
+    return
+  }
+
+  const preset = preferences.currentPreset
+  const date = new Date(preset.appliedDate).toLocaleDateString()
+
+  container.innerHTML = `
+    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 16px 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);">
+      <div style="display: flex; align-items: center; justify-content: space-between;">
+        <div>
+          <div style="font-size: 13px; opacity: 0.9; margin-bottom: 4px;">Current Unit System</div>
+          <div style="font-size: 18px; font-weight: 600;">${preset.name}</div>
+        </div>
+        <div style="text-align: right; font-size: 12px; opacity: 0.85;">
+          <div>Version ${preset.version}</div>
+          <div>Applied ${date}</div>
+        </div>
+      </div>
+    </div>
+  `
+}
+
 function renderCategories() {
+  renderCurrentPreset()
   const container = document.getElementById('categoryList')
 
   if (!unitSchema.categories || unitSchema.categories.length === 0) {
@@ -793,12 +836,43 @@ async function deleteCategory(category) {
   }
 }
 
+// Apply unit system preset
+async function applyUnitPreset(presetType) {
+  const presetNames = {
+    'metric': 'Metric',
+    'imperial-us': 'Imperial (US)',
+    'imperial-uk': 'Imperial (UK)'
+  }
+
+  if (!confirm(`Apply ${presetNames[presetType]} preset to all category preferences?`)) {
+    return
+  }
+
+  try {
+    const res = await fetch(`${API_BASE}/presets/${presetType}`, {
+      method: 'POST'
+    })
+
+    if (!res.ok) throw new Error('Failed to apply preset')
+
+    const result = await res.json()
+    showStatus(`Applied ${presetNames[presetType]} preset to ${result.categoriesUpdated} categories`, 'success')
+
+    // Reload data to show updated preferences
+    await loadData()
+  } catch (error) {
+    showStatus('Failed to apply preset: ' + error.message, 'error')
+  }
+}
+
 // Edit custom category
 function editCategory(category) {
   const pref = preferences?.categories?.[category] || {}
-  const baseUnit = pref.baseUnit || ''
+  // For core categories, use schema base unit; for custom, use pref.baseUnit
+  const baseUnit = pref.baseUnit || unitSchema.categoryToBaseUnit[category] || ''
   const targetUnit = pref.targetUnit || ''
   const displayFormat = pref.displayFormat || '0.0'
+  const isCustom = pref.baseUnit !== undefined
 
   const viewDiv = document.getElementById(`category-view-${category}`)
   const editDiv = document.getElementById(`category-edit-${category}`)
@@ -814,7 +888,7 @@ function editCategory(category) {
       <h4 style="margin: 0 0 15px 0; color: #856404; font-size: 14px;">Edit Category: ${category}</h4>
       <div class="form-group" style="margin-bottom: 15px;">
         <div class="input-group">
-          <label>Base Unit</label>
+          <label>Base Unit ${isCustom ? '' : '(read-only for core categories)'}</label>
           <div id="${baseSelectId}-container"></div>
         </div>
         <div class="input-group">
@@ -834,7 +908,16 @@ function editCategory(category) {
   `
 
   // Populate dropdowns
-  document.getElementById(`${baseSelectId}-container`).innerHTML = createBaseUnitDropdown(baseSelectId, baseUnit, false)
+  if (isCustom) {
+    document.getElementById(`${baseSelectId}-container`).innerHTML = createBaseUnitDropdown(baseSelectId, baseUnit, false)
+  } else {
+    // For core categories, show base unit as disabled/readonly
+    document.getElementById(`${baseSelectId}-container`).innerHTML = `
+      <select id="${baseSelectId}" disabled>
+        <option value="${baseUnit}" selected>${baseUnit}</option>
+      </select>
+    `
+  }
   document.getElementById(`${targetSelectId}-container`).innerHTML = createTargetUnitDropdown(targetSelectId, baseUnit, targetUnit, false)
 
   // Handle base unit change to update target units
@@ -858,16 +941,24 @@ async function saveEditCategory(category) {
   const targetUnit = document.getElementById(targetSelectId).value
   const displayFormat = document.getElementById(formatInputId).value
 
-  if (!baseUnit || !targetUnit || !displayFormat) {
+  if (!targetUnit || !displayFormat) {
     showStatus('Please fill in all fields', 'error')
     return
   }
 
   try {
+    // Check if this is a custom category (has baseUnit in preferences)
+    const pref = preferences?.categories?.[category] || {}
+    const isCustom = pref.baseUnit !== undefined
+
     const categoryPref = {
-      baseUnit,
       targetUnit,
       displayFormat
+    }
+
+    // Only include baseUnit for custom categories
+    if (isCustom && baseUnit) {
+      categoryPref.baseUnit = baseUnit
     }
 
     const res = await fetch(`${API_BASE}/categories/${category}`, {

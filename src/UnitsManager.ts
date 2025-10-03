@@ -684,6 +684,19 @@ export class UnitsManager {
   }
 
   /**
+   * Update current preset information
+   */
+  async updateCurrentPreset(type: string, name: string, version: string): Promise<void> {
+    this.preferences.currentPreset = {
+      type,
+      name,
+      version,
+      appliedDate: new Date().toISOString()
+    }
+    await this.savePreferences()
+  }
+
+  /**
    * Update path override
    */
   async updatePathOverride(

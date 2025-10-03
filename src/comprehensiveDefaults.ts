@@ -333,6 +333,7 @@ export const comprehensiveDefaultUnits: UnitsMetadataStore = {
     conversions: {
       'L/h': { formula: 'value * 3600000', inverseFormula: 'value / 3600000', symbol: 'L/h' },
       'gal/h': { formula: 'value * 951019', inverseFormula: 'value / 951019', symbol: 'gal/h' },
+      'gal(UK)/h': { formula: 'value * 791888.4', inverseFormula: 'value / 791888.4', symbol: 'gal(UK)/h' },
       'm3/s': { formula: 'value * 1', inverseFormula: 'value * 1', symbol: 'm³/s' }
     }
   },

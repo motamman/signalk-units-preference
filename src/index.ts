@@ -1,8 +1,15 @@
 import { Plugin, ServerAPI } from '@signalk/server-api'
 import { IRouter, Request, Response } from 'express'
 import { UnitsManager } from './UnitsManager'
-import { ConversionDeltaValue, DeltaResponse, DeltaValueEntry, PluginConfig } from './types'
+import {
+  ConversionDeltaValue,
+  DeltaResponse,
+  DeltaValueEntry,
+  PluginConfig
+} from './types'
 import openApiSpec from './openapi.json'
+import * as fs from 'fs'
+import * as path from 'path'
 
 const PLUGIN_ID = 'signalk-units-preference'
 const PLUGIN_NAME = 'Units Preference Manager'
@@ -178,9 +185,9 @@ module.exports = (app: ServerAPI): Plugin => {
           options?.typeHint
         )
 
-        const baseUpdate = {
-          $source: conversionInfo.signalkSource,
-          timestamp: conversionInfo.signalkTimestamp,
+        const baseUpdate: DeltaResponse['updates'][number] = {
+          $source: conversionInfo.signalkSource || undefined,
+          timestamp: new Date().toISOString(),
           values: [] as DeltaValueEntry[]
         }
 
@@ -193,95 +200,94 @@ module.exports = (app: ServerAPI): Plugin => {
           ? normalized.usedType
           : toSupportedValueType(conversionInfo.valueType)
 
-        let convertedValue: any = normalized.value
+        const normalizedValue = normalized.value
+
+        let convertedValue: any = normalizedValue
         let formatted = ''
         let displayFormat = conversionInfo.displayFormat
         let symbol = conversionInfo.symbol || ''
 
-        if (resolvedType === 'number') {
-          if (typeof normalized.value !== 'number') {
-            throw createBadRequestError('Expected numeric value for conversion', {
-              received: normalized.value,
-              path: pathStr
-            })
+        switch (resolvedType) {
+          case 'number': {
+            if (typeof normalizedValue !== 'number') {
+              throw createBadRequestError('Expected numeric value for conversion', {
+                received: normalizedValue,
+                path: pathStr
+              })
+            }
+            const numericResult = unitsManager.convertValue(pathStr, normalizedValue)
+            convertedValue = numericResult.convertedValue
+            formatted = numericResult.formatted
+            displayFormat = numericResult.displayFormat
+            symbol = numericResult.symbol || conversionInfo.symbol || ''
+            baseUpdate.$source =
+              numericResult.signalkSource || conversionInfo.signalkSource || baseUpdate.$source
+            baseUpdate.timestamp = numericResult.signalkTimestamp || baseUpdate.timestamp
+            break
           }
-          const numericResult = unitsManager.convertValue(pathStr, normalized.value)
-          convertedValue = numericResult.convertedValue
-          formatted = numericResult.formatted
-          displayFormat = numericResult.displayFormat
-          symbol = numericResult.symbol || conversionInfo.symbol || ''
-          baseUpdate.$source = numericResult.signalkSource || conversionInfo.signalkSource
-          baseUpdate.timestamp = numericResult.signalkTimestamp || conversionInfo.signalkTimestamp
-        } else if (resolvedType === 'boolean') {
-          if (typeof normalized.value !== 'boolean') {
-            throw createBadRequestError('Expected boolean value for conversion', {
-              received: normalized.value,
-              path: pathStr
-            })
+          case 'boolean': {
+            if (typeof normalizedValue !== 'boolean') {
+              throw createBadRequestError('Expected boolean value for conversion', {
+                received: normalizedValue,
+                path: pathStr
+              })
+            }
+            convertedValue = normalizedValue
+            formatted = normalizedValue ? 'true' : 'false'
+            displayFormat = 'boolean'
+            symbol = ''
+            break
           }
-          convertedValue = normalized.value
-          formatted = normalized.value ? 'true' : 'false'
-          displayFormat = 'boolean'
-          symbol = ''
-        } else if (resolvedType === 'date') {
-          if (typeof normalized.value !== 'string') {
-            throw createBadRequestError('Expected date string for conversion', {
-              received: normalized.value,
-              path: pathStr
-            })
+          case 'date': {
+            if (typeof normalizedValue !== 'string') {
+              throw createBadRequestError('Expected date value for conversion', {
+                received: normalizedValue,
+                path: pathStr
+              })
+            }
+            convertedValue = normalizedValue
+            formatted = normalizedValue
+            displayFormat = 'ISO-8601'
+            symbol = ''
+            break
           }
-          convertedValue = normalized.value
-          formatted = normalized.value
-          displayFormat = 'ISO-8601'
-          symbol = ''
-        } else if (resolvedType === 'string') {
-          convertedValue = String(normalized.value)
-          formatted = convertedValue
-          displayFormat = 'string'
-          symbol = symbol || ''
-        } else if (resolvedType === 'object') {
-          if (normalized.value === null || typeof normalized.value !== 'object') {
-            throw createBadRequestError('Expected JSON object or array', {
-              received: normalized.value,
-              path: pathStr
-            })
+          case 'string': {
+            convertedValue = String(normalizedValue)
+            formatted = convertedValue
+            displayFormat = 'string'
+            symbol = symbol || ''
+            break
           }
-          convertedValue = normalized.value
-          formatted = JSON.stringify(normalized.value)
-          displayFormat = 'json'
-          symbol = ''
-        } else {
-          formatted = String(normalized.value)
-          symbol = symbol || ''
+          case 'object': {
+            if (normalizedValue === null || typeof normalizedValue !== 'object') {
+              throw createBadRequestError('Expected JSON object or array', {
+                received: normalizedValue,
+                path: pathStr
+              })
+            }
+            convertedValue = normalizedValue
+            formatted = JSON.stringify(normalizedValue)
+            displayFormat = 'json'
+            symbol = ''
+            break
+          }
+          default: {
+            formatted = String(normalizedValue)
+            symbol = symbol || ''
+            break
+          }
         }
 
-        if (!baseUpdate.$source && conversionInfo.signalkSource) {
+        if (!baseUpdate.$source) {
           baseUpdate.$source = conversionInfo.signalkSource
-        }
-        if (!baseUpdate.timestamp && conversionInfo.signalkTimestamp) {
-          baseUpdate.timestamp = conversionInfo.signalkTimestamp
         }
 
         const payload: ConversionDeltaValue = {
-          path: pathStr,
-          baseUnit: conversionInfo.baseUnit,
-          targetUnit: conversionInfo.targetUnit || conversionInfo.baseUnit || 'none',
-          formula: conversionInfo.formula,
-          inverseFormula: conversionInfo.inverseFormula,
-          displayFormat,
+          value: convertedValue,
+          formatted,
           symbol,
-          category: conversionInfo.category,
-          valueType: resolvedType,
-          originalValue: normalized.value,
-          convertedValue,
-          formatted
-        }
-
-        if (baseUpdate.timestamp) {
-          payload.signalk_timestamp = baseUpdate.timestamp
-        }
-        if (baseUpdate.$source) {
-          payload.$source = baseUpdate.$source
+          displayFormat,
+          original: normalizedValue
         }
 
         baseUpdate.values.push({
@@ -565,6 +571,18 @@ module.exports = (app: ServerAPI): Plugin => {
         }
       })
 
+      // GET /plugins/signalk-units-preference/current-preset
+      // Get current preset information
+      router.get('/current-preset', (req: Request, res: Response) => {
+        try {
+          const preferences = unitsManager.getPreferences()
+          res.json(preferences.currentPreset || null)
+        } catch (error) {
+          app.error(`Error getting current preset: ${error}`)
+          res.status(500).json({ error: 'Internal server error' })
+        }
+      })
+
       // GET /plugins/signalk-units-preference/categories
       // Get all category preferences
       router.get('/categories', (req: Request, res: Response) => {
@@ -791,6 +809,55 @@ module.exports = (app: ServerAPI): Plugin => {
           res.json({ success: true, index })
         } catch (error) {
           app.error(`Error deleting pattern: ${error}`)
+          res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error' })
+        }
+      })
+
+      // POST /plugins/signalk-units-preference/presets/:presetType
+      // Apply a unit system preset (metric, imperial-us, imperial-uk)
+      router.post('/presets/:presetType', async (req: Request, res: Response) => {
+        try {
+          const presetType = req.params.presetType
+
+          // Read preset from JSON file
+          const presetPath = path.join(__dirname, '..', 'presets', `${presetType}.json`)
+
+          if (!fs.existsSync(presetPath)) {
+            return res.status(400).json({
+              error: 'Invalid preset type',
+              validPresets: ['metric', 'imperial-us', 'imperial-uk']
+            })
+          }
+
+          const presetData = JSON.parse(fs.readFileSync(presetPath, 'utf-8'))
+          const preset = presetData.categories
+          const preferences = unitsManager.getPreferences()
+          let updatedCount = 0
+
+          // Update each category that exists in both the preset and current preferences
+          for (const [category, settings] of Object.entries(preset)) {
+            if (preferences.categories[category]) {
+              // Only update targetUnit and displayFormat, keep existing baseUnit
+              await unitsManager.updateCategoryPreference(category, {
+                targetUnit: (settings as any).targetUnit,
+                displayFormat: (settings as any).displayFormat
+              })
+              updatedCount++
+            }
+          }
+
+          // Update current preset information
+          await unitsManager.updateCurrentPreset(presetType, presetData.name, presetData.version)
+
+          res.json({
+            success: true,
+            presetType,
+            presetName: presetData.name,
+            version: presetData.version,
+            categoriesUpdated: updatedCount
+          })
+        } catch (error) {
+          app.error(`Error applying preset: ${error}`)
           res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error' })
         }
       })
