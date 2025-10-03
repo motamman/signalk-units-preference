@@ -43,6 +43,7 @@ function extractPathsFromSignalK(obj) {
 
 // Load available paths from SignalK API
 async function loadPaths() {
+  console.log('loadPaths() called')
   try {
     const res = await fetch('/signalk/v1/api/')
     if (!res.ok) throw new Error('Failed to load SignalK data')
@@ -54,6 +55,8 @@ async function loadPaths() {
     signalKValues = extracted.values
     signalKMetadata = extracted.metadata
 
+    console.log('Extracted paths:', availablePaths.length)
+
     // Send metadata to backend
     await fetch(`${API_BASE}/signalk-metadata`, {
       method: 'POST',
@@ -63,6 +66,7 @@ async function loadPaths() {
 
     // Build tree structure
     pathTree = buildPathTree(availablePaths)
+    console.log('Built path tree')
 
     // Render tree
     renderPathTree()
@@ -96,26 +100,93 @@ function buildPathTree(paths) {
 
 // Render path tree
 function renderPathTree() {
+  console.log('renderPathTree() called')
+
+  // Pattern tab
   const container = document.getElementById('pathTreeContainer')
-  if (!container) return
+  if (container) {
+    console.log('pathTreeContainer found')
+    container.innerHTML = renderTreeNode(pathTree, 0)
 
-  container.innerHTML = renderTreeNode(pathTree, 0)
-
-  // Setup search
-  const searchInput = document.getElementById('pathTreeSearch')
-  if (searchInput) {
-    searchInput.addEventListener('input', (e) => filterPathTree(e.target.value, 'pathTreeContainer'))
+    // Setup search
+    const searchInput = document.getElementById('pathTreeSearch')
+    if (searchInput) {
+      searchInput.addEventListener('input', (e) => filterPathTree(e.target.value, 'pathTreeContainer'))
+    }
+  } else {
+    console.log('pathTreeContainer not found')
   }
 
-  // Also render for metadata tab
+  // Metadata tab
   const metadataContainer = document.getElementById('metadataPathTree')
   if (metadataContainer) {
+    console.log('metadataPathTree found')
     metadataContainer.innerHTML = renderTreeNode(pathTree, 0)
 
     const metadataSearchInput = document.getElementById('metadataPathSearch')
     if (metadataSearchInput) {
       metadataSearchInput.addEventListener('input', (e) => filterPathTree(e.target.value, 'metadataPathTree'))
     }
+  }
+
+  // Override tab
+  const overrideContainer = document.getElementById('overridePathTree')
+  if (overrideContainer) {
+    console.log('Setting up override path tree')
+    overrideContainer.innerHTML = renderTreeNode(pathTree, 0)
+
+    const overrideSearchInput = document.getElementById('overridePathSearch')
+    if (overrideSearchInput) {
+      console.log('Override search input found, adding listeners')
+
+      // Show tree on focus or click
+      overrideSearchInput.addEventListener('focus', (e) => {
+        console.log('Override search focused')
+        overrideContainer.style.display = 'block'
+      })
+
+      overrideSearchInput.addEventListener('click', (e) => {
+        console.log('Override search clicked')
+        e.stopPropagation()
+        overrideContainer.style.display = 'block'
+      })
+
+      // Filter tree on input (or show all if empty)
+      overrideSearchInput.addEventListener('input', (e) => {
+        console.log('Override search input:', e.target.value)
+        overrideContainer.style.display = 'block'
+        if (e.target.value) {
+          filterPathTree(e.target.value, 'overridePathTree')
+        } else {
+          // Show all paths when search is cleared
+          overrideContainer.querySelectorAll('.path-tree-node').forEach(el => {
+            el.style.display = ''
+          })
+          overrideContainer.querySelectorAll('.path-tree-children').forEach(el => {
+            el.classList.remove('expanded')
+          })
+          overrideContainer.querySelectorAll('.path-tree-toggle').forEach(el => {
+            if (el.textContent) el.textContent = '▶'
+          })
+        }
+      })
+
+      // Prevent container clicks from closing
+      overrideContainer.addEventListener('click', (e) => {
+        e.stopPropagation()
+      })
+
+      // Close dropdown when clicking outside
+      document.addEventListener('click', (e) => {
+        if (!overrideSearchInput.contains(e.target) && !overrideContainer.contains(e.target)) {
+          overrideContainer.style.display = 'none'
+        }
+      })
+    } else {
+      console.error('Override search input NOT found')
+    }
+  } else {
+    console.error('Override path tree container NOT found')
   }
 }
 
@@ -135,7 +206,13 @@ function renderTreeNode(node, level) {
     }
 
     html += `<div class="path-tree-node" data-level="${level}">`
-    html += `<div class="${classes.join(' ')}" onclick="selectPath('${item._fullPath}')" data-path="${item._fullPath}">`
+
+    // Only make items with values selectable
+    if (item._hasValue) {
+      html += `<div class="${classes.join(' ')}" onclick="selectPath('${item._fullPath}')" data-path="${item._fullPath}" style="cursor: pointer;">`
+    } else {
+      html += `<div class="${classes.join(' ')}" data-path="${item._fullPath}" style="cursor: default; color: #999;">`
+    }
 
     if (hasChildren) {
       html += `<span class="path-tree-toggle" onclick="event.stopPropagation(); toggleTreeNode(this)">▶</span>`
@@ -176,6 +253,7 @@ function selectPath(path) {
   const clickedItem = event.target.closest('.path-tree-item')
   const container = clickedItem.closest('.path-tree-container')
   const isMetadataTree = container.id === 'metadataPathTree'
+  const isOverrideTree = container.id === 'overridePathTree'
 
   // Remove previous selection in this container only
   container.querySelectorAll('.path-tree-item.selected').forEach(el => {
@@ -188,10 +266,21 @@ function selectPath(path) {
   if (isMetadataTree) {
     // Metadata tab
     selectMetadataPath(path)
-  } else {
+  } else if (isOverrideTree) {
     // Override tab
-    document.getElementById('newOverridePath').value = path
-    document.getElementById('selectedPathDisplay').textContent = path
+    document.getElementById('selectedOverridePath').value = path
+    document.getElementById('overridePathSearch').value = path
+    container.style.display = 'none'
+  } else {
+    // Pattern tab (legacy)
+    const newOverridePathEl = document.getElementById('newOverridePath')
+    if (newOverridePathEl) {
+      newOverridePathEl.value = path
+    }
+    const selectedPathDisplayEl = document.getElementById('selectedPathDisplay')
+    if (selectedPathDisplayEl) {
+      selectedPathDisplayEl.textContent = path
+    }
   }
 }
 

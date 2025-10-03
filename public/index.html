@@ -565,28 +565,28 @@
                 <p style="color: #7f8c8d; margin-bottom: 20px;">
                     Assign units to specific paths that don't fit a pattern.
                 </p>
-                <div class="add-override">
-                    <div style="display: grid; grid-template-columns: 2fr 1fr 1fr 1fr auto; gap: 15px; align-items: end;">
-                        <div class="input-group">
-                            <label>Path</label>
-                            <input type="text" id="overridePathSearch" class="path-tree-search" placeholder="🔍 Search paths...">
-                            <div id="overridePathTree" class="path-tree-container" style="display: none;"></div>
+                <div class="add-override" style="background: #f8f9fa; padding: 20px; border-radius: 6px; border: 1px solid #e9ecef;">
+                    <div style="display: grid; grid-template-columns: 2.5fr 1fr 1fr 0.8fr; gap: 12px; margin-bottom: 15px;">
+                        <div class="input-group" style="margin: 0; position: relative;">
+                            <label style="font-weight: 500; margin-bottom: 6px; display: block; font-size: 13px;">Path</label>
+                            <input type="text" id="overridePathSearch" class="path-tree-search" placeholder="🔍 Search paths..." style="width: 100%;">
+                            <div id="overridePathTree" class="path-tree-container" style="display: none; position: absolute; z-index: 1000; background: white; border: 1px solid #dee2e6; border-radius: 4px; max-height: 300px; overflow-y: auto; width: 100%; margin-top: 2px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"></div>
                             <input type="hidden" id="selectedOverridePath">
                         </div>
-                        <div class="input-group">
-                            <label>Base Unit</label>
+                        <div class="input-group" style="margin: 0;">
+                            <label style="font-weight: 500; margin-bottom: 6px; display: block; font-size: 13px;">Base Unit</label>
                             <div id="overrideBaseUnitContainer"></div>
                         </div>
-                        <div class="input-group">
-                            <label>Target Unit</label>
+                        <div class="input-group" style="margin: 0;">
+                            <label style="font-weight: 500; margin-bottom: 6px; display: block; font-size: 13px;">Target Unit</label>
                             <div id="overrideTargetUnitContainer"></div>
                         </div>
-                        <div class="input-group">
-                            <label>Display Format</label>
-                            <input type="text" id="overrideFormat" placeholder="e.g., 0.0" value="0.0">
+                        <div class="input-group" style="margin: 0;">
+                            <label style="font-weight: 500; margin-bottom: 6px; display: block; font-size: 13px;">Display Format</label>
+                            <input type="text" id="overrideFormat" placeholder="e.g., 0.0" value="0.0" style="width: 100%;">
                         </div>
-                        <button class="btn-success" onclick="addPathOverride()" style="padding: 10px 24px;">Add Override</button>
                     </div>
+                    <button class="btn-success" onclick="addPathOverride()" style="padding: 10px 24px; width: 100%;">Add Override</button>
                 </div>
             </div>
 
