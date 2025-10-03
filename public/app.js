@@ -306,13 +306,7 @@ function saveOriginalPresetState() {
 
 // Check if current categories differ from original preset
 function checkPresetDirty() {
-  console.log('checkPresetDirty called')
-  console.log('originalPresetState:', originalPresetState)
-  console.log('preferences?.categories:', preferences?.categories)
-  console.log('preferences?.currentPreset:', preferences?.currentPreset)
-
   if (!originalPresetState || !preferences?.categories) {
-    console.log('No original state or categories, not dirty')
     isPresetDirty = false
     return false
   }
@@ -324,13 +318,11 @@ function checkPresetDirty() {
 
     if (current.targetUnit !== original.targetUnit ||
         current.displayFormat !== original.displayFormat) {
-      console.log(`Category ${category} is dirty:`, { original, current })
       isPresetDirty = true
       return true
     }
   }
 
-  console.log('No changes detected, not dirty')
   isPresetDirty = false
   return false
 }
@@ -374,8 +366,6 @@ function renderCurrentPreset() {
   const preset = preferences.currentPreset
   const date = new Date(preset.appliedDate).toLocaleDateString()
   const isDirty = checkPresetDirty()
-
-  console.log('renderCurrentPreset - isDirty:', isDirty)
 
   let html = `
     <div style="background: linear-gradient(135deg, ${isDirty ? '#f39c12 0%, #e67e22' : '#667eea 0%, #764ba2'} 100%); color: white; padding: 16px 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);">

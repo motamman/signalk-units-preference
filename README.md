@@ -5,6 +5,8 @@ A comprehensive SignalK server plugin for managing unit conversions and display 
 ## Overview
 
 This plugin provides a complete unit conversion system for SignalK, allowing you to:
+- Apply unit system presets (Metric, Imperial US, Imperial UK) with one click
+- Create and save custom preset configurations
 - Define custom units and conversion formulas
 - Set default units for entire categories (speed, temperature, etc.)
 - Use wildcard patterns to apply conversions to multiple paths
@@ -14,7 +16,16 @@ This plugin provides a complete unit conversion system for SignalK, allowing you
 
 ## Key Features
 
-### 1. **Unit Definitions**
+### 1. **Unit System Presets**
+Quick configuration with built-in and custom unit system presets.
+
+- **Three Built-In Presets**: Metric, Imperial (US), Imperial (UK)
+- **One-Click Application**: Apply presets to all categories instantly
+- **Custom Preset Backup**: Save modified configurations as custom presets
+- **Dirty State Tracking**: Visual indicator when preset is modified
+- **Default Configuration**: Imperial (US) applied on fresh install
+
+### 2. **Unit Definitions**
 Define base units and conversion formulas globally. Add new units or extend existing ones with custom conversion formulas.
 
 - **Base Units**: Define the fundamental unit (e.g., "m/s", "K", "Pa")
@@ -22,14 +33,14 @@ Define base units and conversion formulas globally. Add new units or extend exis
 - **Inverse Formulas**: Bidirectional conversion support
 - **Symbols**: Display symbols for each unit (e.g., "kn", "°C", "mph")
 
-### 2. **Category Preferences**
+### 3. **Category Preferences**
 Set default target units for entire categories. All paths in a category will use these defaults unless overridden.
 
 - **Built-in Categories**: speed, temperature, pressure, distance, depth, angle, voltage, current, power, and more
 - **Custom Categories**: Create your own categories with custom base units
 - **Display Formats**: Control decimal precision (e.g., "0.0", "0.00", "0")
 
-### 3. **Path Patterns**
+### 4. **Path Patterns**
 Use wildcard patterns to apply conversions to multiple paths at once.
 
 - **Wildcards**: `*` (single segment), `**` (multiple segments)
@@ -39,14 +50,14 @@ Use wildcard patterns to apply conversions to multiple paths at once.
   - `propulsion.*.temperature` - Engine temperatures only
   - `electrical.batteries.*.voltage` - All battery voltages
 
-### 4. **Path Overrides**
+### 5. **Path Overrides**
 Override specific paths with custom units, taking highest priority over patterns and categories.
 
 - **Full Control**: Set exact base unit, target unit, and display format
 - **Path Search**: Searchable dropdown to find and select paths
 - **Per-Path Customization**: Different units for similar data (e.g., mm for rainfall vs km for distance)
 
-### 5. **Metadata Reference**
+### 6. **Metadata Reference**
 Read-only view of all SignalK paths with comprehensive metadata and conversion information.
 
 - **Filterable & Sortable**: Search across all columns, click headers to sort
@@ -58,7 +69,7 @@ Read-only view of all SignalK paths with comprehensive metadata and conversion i
 - **Quick Testing**: Direct links to test conversions with live data
 - **Live Values**: Shows current SignalK values for each path
 
-### 6. **Formula-Based Conversions**
+### 7. **Formula-Based Conversions**
 Use JavaScript expressions for ultimate flexibility in unit conversions.
 
 - **Complex Formulas**: Support for any mathematical expression
@@ -69,7 +80,7 @@ Use JavaScript expressions for ultimate flexibility in unit conversions.
   - `(value - 273.15) * 9/5 + 32` - Kelvin to Fahrenheit
   - `value / (1024 ** 2)` - bytes to megabytes
 
-### 7. **Pass-Through Conversions**
+### 8. **Pass-Through Conversions**
 Paths without conversions automatically return their original values with SignalK metadata units.
 
 - **Graceful Fallback**: No errors for unconfigured paths
@@ -101,8 +112,34 @@ Access the web interface at: `http://localhost.com:3000/signalk-units-preference
 
 ### Tab Overview
 
+#### **Settings**
+Manage unit system presets for quick configuration of all categories at once.
+
+**Unit System Presets**:
+- **Reset to Metric**: Apply metric units (km/h, celsius, meters, etc.)
+- **Reset to Imperial (US)**: Apply US units (mph, fahrenheit, feet, US gallons, etc.)
+- **Reset to Imperial (UK)**: Apply UK units (mph, celsius, meters, UK gallons, etc.)
+- Applying a preset updates all category preferences
+- Default on fresh install: Imperial (US)
+
+**Custom Presets**:
+- View and manage your saved custom presets
+- Apply any custom preset with one click
+- Delete custom presets you no longer need
+- Each preset shows: name, version, date, and category count
+- Create custom presets from the Categories tab when you modify a preset
+
 #### **Category Preferences**
 Set default units for categories like speed, temperature, pressure.
+
+**Current Unit System** (Top Banner):
+- Shows currently applied preset (Metric, Imperial US, Imperial UK, or custom)
+- Displays preset version and date applied
+- **Orange "Modified" indicator**: Appears when you edit categories after applying a preset
+- **Backup Preset Section** (when modified):
+  - Name field: Enter a name for your custom preset
+  - Backup Preset button: Save current category settings as a custom preset
+  - Saved presets appear in the Settings tab under "Custom Presets"
 
 **Add Custom Category** (Collapsible - Default: Closed):
 - Create custom categories with their own base unit and target unit
@@ -333,6 +370,57 @@ GET /plugins/signalk-units-preference/metadata
 
 Returns all path metadata (built-in defaults only).
 
+#### Get All Paths with Configuration
+```http
+GET /plugins/signalk-units-preference/paths
+```
+
+Returns a JSON object where each SignalK path maps to its unit metadata (base unit, category, and available conversions). Live values are intentionally excluded so other applications can focus purely on conversion rules.
+
+Paths are discovered by crawling the SignalK data model and are merged with any configured path overrides or custom unit definitions. Metadata is resolved from the following sources in priority order:
+1. Path-specific overrides (base unit + conversions)
+2. User-defined path patterns
+3. SignalK metadata / schema information
+4. Comprehensive default unit definitions bundled with the plugin
+
+**Example Response:**
+```json
+{
+  "propulsion.engine.perkins4236.1.frequency": {
+    "baseUnit": "Hz",
+    "category": "frequency",
+    "conversions": {
+      "rpm": {
+        "formula": "value * 60",
+        "inverseFormula": "value / 60",
+        "symbol": "rpm"
+      }
+    }
+  },
+  "navigation.speedOverGround": {
+    "baseUnit": "m/s",
+    "category": "speed",
+    "conversions": {
+      "knots": {
+        "formula": "value * 1.94384",
+        "inverseFormula": "value * 0.514444",
+        "symbol": "kn"
+      },
+      "km/h": {
+        "formula": "value * 3.6",
+        "inverseFormula": "value * 0.277778",
+        "symbol": "km/h"
+      },
+      "mph": {
+        "formula": "value * 2.23694",
+        "inverseFormula": "value * 0.44704",
+        "symbol": "mph"
+      }
+    }
+  }
+}
+```
+
 ### Category Preferences
 
 #### Get All Categories
@@ -424,6 +512,120 @@ PUT /plugins/signalk-units-preference/patterns/:index
 #### Delete Pattern
 ```http
 DELETE /plugins/signalk-units-preference/patterns/:index
+```
+
+### Unit System Presets
+
+#### Apply Built-In Preset
+```http
+POST /plugins/signalk-units-preference/presets/:presetType
+```
+
+Apply a built-in preset: `metric`, `imperial-us`, or `imperial-uk`.
+
+**Example Response:**
+```json
+{
+  "success": true,
+  "presetType": "imperial-us",
+  "presetName": "Imperial (US)",
+  "version": "1.0.0",
+  "categoriesUpdated": 12
+}
+```
+
+#### Get Current Preset
+```http
+GET /plugins/signalk-units-preference/current-preset
+```
+
+Returns the currently applied preset information or `null` if none.
+
+**Example Response:**
+```json
+{
+  "type": "imperial-us",
+  "name": "Imperial (US)",
+  "version": "1.0.0",
+  "appliedDate": "2025-10-03T22:21:55.055Z"
+}
+```
+
+### Custom Presets
+
+#### Save Custom Preset
+```http
+POST /plugins/signalk-units-preference/presets/custom/:name
+```
+
+Save current category preferences as a custom preset.
+
+**Body:**
+```json
+{
+  "name": "My Boat Config",
+  "categories": {
+    "speed": { "targetUnit": "knots", "displayFormat": "0.0" },
+    "temperature": { "targetUnit": "fahrenheit", "displayFormat": "0" }
+  }
+}
+```
+
+**Example Response:**
+```json
+{
+  "success": true,
+  "presetName": "my-boat-config",
+  "path": "/path/to/presets/custom/my-boat-config.json"
+}
+```
+
+#### List Custom Presets
+```http
+GET /plugins/signalk-units-preference/presets/custom
+```
+
+**Example Response:**
+```json
+[
+  {
+    "id": "my-boat-config",
+    "name": "My Boat Config",
+    "version": "1.0.0",
+    "date": "2025-10-03",
+    "description": "Custom user preset",
+    "categoriesCount": 12
+  }
+]
+```
+
+#### Apply Custom Preset
+```http
+POST /plugins/signalk-units-preference/presets/custom/:name/apply
+```
+
+**Example Response:**
+```json
+{
+  "success": true,
+  "presetName": "my-boat-config",
+  "displayName": "My Boat Config",
+  "version": "1.0.0",
+  "categoriesUpdated": 12
+}
+```
+
+#### Delete Custom Preset
+```http
+DELETE /plugins/signalk-units-preference/presets/custom/:name
+```
+
+**Example Response:**
+```json
+{
+  "success": true,
+  "presetName": "my-boat-config"
+}
 ```
 
 ### Unit Definitions
@@ -568,6 +770,34 @@ ws.onmessage = async (event) => {
 
 **Use Case**: Analyze multiple paths at startup to determine types and units
 
+**Option A: Using the `/paths` endpoint (recommended)**
+```javascript
+// Get all paths with their configuration in one call
+const response = await fetch('/plugins/signalk-units-preference/paths')
+const pathsInfo = await response.json()
+
+// Filter and process paths
+const speedPaths = pathsInfo.filter(p => p.category === 'speed')
+const writablePaths = pathsInfo.filter(p => p.supportsPut)
+const overriddenPaths = pathsInfo.filter(p => p.status === 'override')
+
+// Each path has all the info you need:
+pathsInfo.forEach(pathInfo => {
+  console.log(`${pathInfo.path}: ${pathInfo.value} ${pathInfo.displayUnit}`)
+  // path: navigation.speedOverGround: 5.14 knots
+
+  // Access all properties:
+  // - pathInfo.status → "override", "pattern", "signalk", "none"
+  // - pathInfo.baseUnit → "m/s"
+  // - pathInfo.displayUnit → "knots"
+  // - pathInfo.targetUnit → "knots"
+  // - pathInfo.valueType → "number", "boolean", etc.
+  // - pathInfo.supportsPut → true/false
+  // - pathInfo.value → current value
+})
+```
+
+**Option B: Individual conversion queries (slower)**
 ```javascript
 // Get all available paths from SignalK
 const apiResponse = await fetch('/signalk/v1/api/')
@@ -1017,7 +1247,26 @@ ws.send(JSON.stringify({
 
 ## Usage Examples
 
-### Example 1: Set All Speeds to Knots
+### Example 1: Apply Imperial US Preset
+1. Go to **Settings** tab
+2. Click "Reset to Imperial (US)"
+3. Confirm the action
+
+Result: All categories now use US imperial units (mph, fahrenheit, feet, US gallons, etc.)
+
+### Example 2: Create a Custom Preset
+1. Go to **Settings** tab and apply any preset (e.g., Imperial US)
+2. Go to **Categories** tab
+3. Edit some categories (e.g., change speed from mph to knots)
+4. Notice the orange "Modified" banner appears
+5. Enter a name in the "Preset Name" field (e.g., "my-sailing-config")
+6. Click "Backup Preset"
+7. Go to **Settings** tab
+8. Your custom preset now appears under "Custom Presets"
+
+Result: You can now quickly switch between standard presets and your custom configuration.
+
+### Example 3: Set All Speeds to Knots
 1. Go to **Category Preferences** tab
 2. Select "speed" category
 3. Choose "knots" as target unit
@@ -1026,7 +1275,7 @@ ws.send(JSON.stringify({
 
 Result: All speed paths (SOG, STW, wind speed, etc.) display in knots.
 
-### Example 2: Override Wind Speed to m/s
+### Example 4: Override Wind Speed to m/s
 1. Go to **Path Overrides** tab
 2. Search for "environment.wind.speedApparent"
 3. Select "m/s" as target unit
@@ -1034,7 +1283,7 @@ Result: All speed paths (SOG, STW, wind speed, etc.) display in knots.
 
 Result: Wind speed shows in m/s while other speeds remain in knots.
 
-### Example 3: All Engine Temperatures in Fahrenheit
+### Example 5: All Engine Temperatures in Fahrenheit
 1. Go to **Path Patterns** tab
 2. Add pattern: `propulsion.*.temperature`
 3. Select category: "temperature"
@@ -1044,7 +1293,7 @@ Result: Wind speed shows in m/s while other speeds remain in knots.
 
 Result: All engine temperatures display in °F.
 
-### Example 4: Custom Data Rate Conversion
+### Example 6: Custom Data Rate Conversion
 1. Go to **Unit Definitions** tab
 2. Add base unit: "B" (bytes)
 3. Add conversion:
@@ -1092,8 +1341,16 @@ All conversions are extensible - add your own!
 Configuration is stored in:
 ```
 ~/.signalk/plugin-config-data/signalk-units-preference/
-├── units-preferences.json    # Categories, overrides, patterns
+├── units-preferences.json    # Categories, overrides, patterns, current preset
 └── units-definitions.json    # Custom unit definitions
+
+presets/
+├── metric.json               # Built-in Metric preset
+├── imperial-us.json          # Built-in Imperial (US) preset
+├── imperial-uk.json          # Built-in Imperial (UK) preset
+└── custom/                   # User-created custom presets
+    ├── my-boat-config.json
+    └── racing-config.json
 ```
 
 ## Development
@@ -1133,9 +1390,33 @@ Apache-2.0
 
 ## Changelog
 
-### [0.5.0-beta.1] - 2025-01-XX
+### [0.5.0-beta.1] - 2025-10-03
 
 #### Added
+- **All Paths Endpoint**: New `/paths` endpoint returns all SignalK paths with their conversion configuration
+  - Single API call to get complete configuration state
+  - Includes path overrides, pattern matches, and SignalK metadata
+  - Shows current values, status, and conversion settings for each path
+  - Designed for external app integration and diagnostics
+- **Unit System Presets**: Quick configuration with built-in unit system presets
+  - **Settings Tab**: New tab for managing unit system presets
+  - **Three Built-In Presets**: Metric, Imperial (US), and Imperial (UK)
+  - **One-Click Application**: Apply any preset to all categories instantly
+  - **Default Preset**: Imperial (US) applied automatically on virgin install
+  - **Current Preset Display**: Shows active preset on Categories tab with version and date
+- **Custom Preset Backup Feature**:
+  - **Dirty State Tracking**: Detects when categories are modified after applying a preset
+  - **Visual Indicator**: Orange "Modified" banner when preset is edited
+  - **Backup UI**: Name field and "Backup Preset" button appear when preset is dirty
+  - **Custom Presets Storage**: Saved to `presets/custom/` directory
+  - **Custom Presets Management**: View, apply, and delete custom presets in Settings tab
+- **Preset API Endpoints**:
+  - `POST /presets/:presetType` - Apply built-in preset
+  - `GET /current-preset` - Get currently applied preset
+  - `POST /presets/custom/:name` - Save custom preset
+  - `GET /presets/custom` - List all custom presets
+  - `POST /presets/custom/:name/apply` - Apply custom preset
+  - `DELETE /presets/custom/:name` - Delete custom preset
 - **Unit Definitions Tab**: Create custom base units and conversion formulas globally
 - **Path Patterns**: Wildcard pattern matching with priority system
   - Support for `*` (single segment) and `**` (multi-segment) wildcards
@@ -1170,7 +1451,10 @@ Apache-2.0
   - Cleaner Path Override form styling with proper layout
   - Compact metadata table with better column sizing
   - Improved tooltips with wrapping and positioning
+  - Categories tab now shows current preset status
+  - Settings tab moved to first position for easier access
 - **Dropdown Synchronization**: All dropdowns update when base units or conversions are added/deleted
+- **State Management**: Improved dirty state tracking to prevent false positives
 
 #### Fixed
 - Base unit dropdown synchronization across all tabs
@@ -1179,6 +1463,8 @@ Apache-2.0
 - Metadata table displaying "Extended" entries after removal
 - Column header sort indicators
 - Search filtering now works across all columns
+- Dirty state persistence when editing path overrides, patterns, or categories
+- Original preset state reset when applying presets
 
 #### Technical Changes
 - Separated global unit definitions from path-specific assignments
@@ -1186,6 +1472,9 @@ Apache-2.0
 - Improved TypeScript type safety with non-nullable return types
 - Enhanced error handling with meaningful fallbacks
 - Better separation of concerns across tabs
+- Custom presets stored as JSON files in `presets/custom/` directory
+- Preset validation: prevents overwriting built-in presets
+- Name validation: alphanumeric, dashes, and underscores only
 
 ### [0.4.0] - Previous Version
 - Initial category preferences

@@ -11,7 +11,8 @@ import {
   PathPatternRule,
   ConvertValueResponse,
   PathValueType,
-  SignalKPathMetadata
+  SignalKPathMetadata,
+  PathPreference
 } from './types'
 import { defaultUnitsMetadata, categoryToBaseUnit } from './defaultUnits'
 import { comprehensiveDefaultUnits } from './comprehensiveDefaults'
@@ -91,6 +92,251 @@ export class UnitsManager {
   }
 
   /**
+   * Infer a category from a base unit by looking at custom definitions,
+   * built-in metadata, or category defaults.
+   */
+  private getCategoryFromBaseUnit(baseUnit?: string | null): string | null {
+    if (!baseUnit) {
+      return null
+    }
+
+    // Custom unit definitions override everything else
+    if (this.unitDefinitions[baseUnit]?.category) {
+      return this.unitDefinitions[baseUnit].category
+    }
+
+    // Check current metadata store
+    const metadataEntry = Object.values(this.metadata).find(meta => meta.baseUnit === baseUnit)
+    if (metadataEntry?.category) {
+      return metadataEntry.category
+    }
+
+    // Search comprehensive defaults
+    const comprehensiveEntry = Object.values(comprehensiveDefaultUnits).find(meta => meta.baseUnit === baseUnit)
+    if (comprehensiveEntry?.category) {
+      return comprehensiveEntry.category
+    }
+
+    // Fallback to category-to-base mapping (may be many-to-one, choose first)
+    const categoryMatch = Object.entries(categoryToBaseUnit).find(([, unit]) => unit === baseUnit)
+    if (categoryMatch) {
+      return categoryMatch[0]
+    }
+
+    return null
+  }
+
+  /**
+   * Create a defensive copy of UnitMetadata so callers don't mutate shared references.
+   */
+  private cloneMetadata(meta: UnitMetadata): UnitMetadata {
+    return {
+      baseUnit: meta.baseUnit,
+      category: meta.category,
+      conversions: Object.fromEntries(
+        Object.entries(meta.conversions || {}).map(([target, def]) => [
+          target,
+          { ...def }
+        ])
+      )
+    }
+  }
+
+  /**
+   * Resolve metadata for a specific path, taking into account overrides, patterns,
+   * SignalK metadata, and comprehensive defaults.
+   */
+  private resolveMetadataForPath(pathStr: string): UnitMetadata | null {
+    const pathOverridePref = this.preferences.pathOverrides?.[pathStr] as PathPreference | undefined
+
+    let metadata = this.metadata[pathStr]
+    if (metadata) {
+      return this.cloneMetadata(metadata)
+    }
+
+    // Path override takes precedence when specifying a base unit
+    if (pathOverridePref?.baseUnit) {
+      const baseUnit = pathOverridePref.baseUnit
+      const unitDef = this.unitDefinitions[baseUnit]
+        || Object.values(comprehensiveDefaultUnits).find(meta => meta.baseUnit === baseUnit)
+
+      if (unitDef) {
+        metadata = {
+          baseUnit,
+          category: unitDef.category,
+          conversions: unitDef.conversions
+        }
+      } else {
+        metadata = {
+          baseUnit,
+          category: this.getCategoryFromBaseUnit(baseUnit) || 'custom',
+          conversions: {}
+        }
+      }
+    }
+
+    // Attempt to generate from user-defined patterns if still missing
+    if (!metadata) {
+      const matchingPattern = this.findMatchingPattern(pathStr)
+      if (matchingPattern) {
+        const generated = this.generateMetadataFromPattern(matchingPattern)
+        if (generated) {
+          metadata = generated
+        }
+      }
+    }
+
+    // Fall back to SignalK metadata units
+    if (!metadata) {
+      const skMetadata = this.app.getMetadata(pathStr)
+
+      if (skMetadata?.units) {
+        const inferred = this.inferMetadataFromSignalK(pathStr, skMetadata.units)
+        if (inferred) {
+          metadata = inferred
+        } else {
+          const baseUnit = skMetadata.units
+          const unitDef = this.unitDefinitions[baseUnit]
+            || Object.values(comprehensiveDefaultUnits).find(meta => meta.baseUnit === baseUnit)
+
+          metadata = {
+            baseUnit,
+            category: unitDef?.category || this.getCategoryFromBaseUnit(baseUnit) || 'custom',
+            conversions: unitDef?.conversions || {}
+          }
+        }
+      }
+    }
+
+    if (!metadata) {
+      return null
+    }
+
+    const cloned = this.cloneMetadata(metadata)
+    this.metadata[pathStr] = cloned
+    return this.cloneMetadata(cloned)
+  }
+
+  /**
+   * Collect all SignalK paths by walking the server data model.
+   */
+  private async collectSignalKPaths(): Promise<Set<string>> {
+    const pathsSet = new Set<string>()
+
+    try {
+      const apiUrl = `http://localhost:${(this.app as any).config?.settings?.port || 3000}/signalk/v1/api/`
+
+      type FetchFn = (input: string, init?: any) => Promise<{ ok: boolean; statusText: string; json(): Promise<any> }>
+      let fetchFn: FetchFn | null = null
+
+      const globalFetch = (globalThis as any).fetch
+      if (typeof globalFetch === 'function') {
+        fetchFn = globalFetch.bind(globalThis) as FetchFn
+      } else {
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-var-requires
+          const fetchModule = require('node-fetch')
+          fetchFn = (fetchModule.default || fetchModule) as FetchFn
+        } catch (err) {
+          this.app.error('Fetch API not available and "node-fetch" is not installed. Unable to load SignalK metadata.')
+          return pathsSet
+        }
+      }
+
+      this.app.debug(`Fetching from SignalK API: ${apiUrl}`)
+      const response = await fetchFn(apiUrl)
+
+      if (!response.ok) {
+        this.app.error(`Failed to fetch from SignalK API: ${response.statusText}`)
+        return pathsSet
+      }
+
+      const data = await response.json()
+
+      const extractPathsRecursive = (obj: any, prefix = ''): void => {
+        if (!obj || typeof obj !== 'object') return
+
+        for (const key in obj) {
+          if (key === 'meta' || key === 'timestamp' || key === 'source' || key === '$source' || key === 'values' || key === 'sentence') {
+            continue
+          }
+
+          const currentPath = prefix ? `${prefix}.${key}` : key
+
+          if (obj[key] && typeof obj[key] === 'object') {
+            if (obj[key].value !== undefined) {
+              pathsSet.add(currentPath)
+            }
+            extractPathsRecursive(obj[key], currentPath)
+          }
+        }
+      }
+
+      const selfVesselId = data.self
+      const actualSelfId = selfVesselId && selfVesselId.startsWith('vessels.')
+        ? selfVesselId.replace('vessels.', '')
+        : selfVesselId
+
+      if (data.vessels && actualSelfId && data.vessels[actualSelfId]) {
+        this.app.debug(`Extracting paths from vessel: ${actualSelfId}`)
+        extractPathsRecursive(data.vessels[actualSelfId], '')
+        this.app.debug(`Extracted ${pathsSet.size} paths from SignalK API`)
+      }
+    } catch (error) {
+      this.app.error(`Error collecting SignalK paths: ${error}`)
+    }
+
+    return pathsSet
+  }
+
+  /**
+   * Resolve the selected conversion for a path based on current preferences.
+   */
+  private resolveSelectedConversion(
+    pathStr: string,
+    metadata: UnitMetadata
+  ): {
+    preference: CategoryPreference | null
+    targetUnit: string | null
+    conversion: ConversionDefinition | null
+  } {
+    const preference = this.getPreferenceForPath(pathStr, metadata.category)
+
+    if (!preference) {
+      return { preference: null, targetUnit: null, conversion: null }
+    }
+
+    const targetUnit = preference.targetUnit?.trim()
+      ? preference.targetUnit.trim()
+      : null
+
+    if (!targetUnit) {
+      return { preference, targetUnit: null, conversion: null }
+    }
+
+    let conversion = metadata.conversions?.[targetUnit] || null
+    const baseUnit = metadata.baseUnit || preference.baseUnit
+
+    if (!conversion && baseUnit) {
+      const unitDef = this.unitDefinitions[baseUnit]
+      if (unitDef?.conversions?.[targetUnit]) {
+        conversion = unitDef.conversions[targetUnit]
+      }
+    }
+
+    if (!conversion && baseUnit) {
+      const fallback = Object.values(comprehensiveDefaultUnits).find(
+        meta => meta.baseUnit === baseUnit && meta.conversions?.[targetUnit]
+      )
+      if (fallback) {
+        conversion = fallback.conversions[targetUnit]
+      }
+    }
+
+    return { preference, targetUnit, conversion: conversion || null }
+  }
+
+  /**
    * Load preferences from file or create default
    */
   private async loadPreferences(): Promise<void> {
@@ -100,7 +346,7 @@ export class UnitsManager {
         this.preferences = JSON.parse(data)
         this.app.debug('Loaded units preferences from file')
       } else {
-        // Set some sensible defaults
+        // Set some sensible defaults - start with basic structure
         this.preferences = {
           categories: {
             speed: { targetUnit: 'knots', displayFormat: '0.0' },
@@ -136,6 +382,38 @@ export class UnitsManager {
             }
           ]
         }
+
+        // Apply Imperial US preset by default on virgin install
+        try {
+          const presetPath = path.join(__dirname, '..', 'presets', 'imperial-us.json')
+          if (fs.existsSync(presetPath)) {
+            const presetData = JSON.parse(fs.readFileSync(presetPath, 'utf-8'))
+            const preset = presetData.categories
+
+            // Apply preset categories
+            for (const [category, settings] of Object.entries(preset)) {
+              if (this.preferences.categories[category]) {
+                this.preferences.categories[category] = {
+                  targetUnit: (settings as any).targetUnit,
+                  displayFormat: (settings as any).displayFormat
+                }
+              }
+            }
+
+            // Set current preset info
+            this.preferences.currentPreset = {
+              type: 'imperial-us',
+              name: presetData.name,
+              version: presetData.version,
+              appliedDate: new Date().toISOString()
+            }
+
+            this.app.debug('Applied Imperial (US) preset as default for virgin install')
+          }
+        } catch (error) {
+          this.app.error(`Failed to apply default preset: ${error}`)
+        }
+
         await this.savePreferences()
         this.app.debug('Created default units preferences file')
       }
@@ -282,125 +560,39 @@ export class UnitsManager {
    */
   getConversion(pathStr: string): ConversionResponse {
     this.app.debug(`getConversion called for: ${pathStr}`)
-
-    const pathOverridePref = this.preferences.pathOverrides?.[pathStr]
-
-    // Check if we have metadata for this path
-    let metadata = this.metadata[pathStr]
-    this.app.debug(`Metadata found: ${metadata ? 'yes' : 'no'}`)
+    const metadata = this.resolveMetadataForPath(pathStr)
 
     if (!metadata) {
-      // Try to match against path patterns first
-      const matchingPattern = this.findMatchingPattern(pathStr)
-      if (matchingPattern) {
-        this.app.debug(`Found matching pattern for ${pathStr}: ${matchingPattern.pattern}`)
-        const generated = this.generateMetadataFromPattern(matchingPattern)
-        if (generated) {
-          metadata = generated
-        } else {
-          this.app.debug(`Could not generate metadata from pattern for: ${pathStr}`)
-        }
-      }
-
-      // If still no metadata, try to infer from SignalK metadata or path override
-      if (!metadata) {
-        const skMetadata = this.app.getMetadata(pathStr)
-        this.app.debug(`SignalK metadata for ${pathStr}: ${JSON.stringify(skMetadata)}`)
-        if (skMetadata?.units) {
-          this.app.debug(`Found units in SignalK metadata: ${skMetadata.units}`)
-          const inferred = this.inferMetadataFromSignalK(pathStr, skMetadata.units)
-          if (!inferred) {
-            this.app.debug(`Could not infer metadata for path: ${pathStr}`)
-            // Return pass-through conversion with SignalK unit
-            return this.getPassThroughConversion(pathStr, skMetadata.units)
-          }
-          metadata = inferred
-          this.app.debug(`Inferred metadata: ${JSON.stringify(metadata)}`)
-        } else {
-          this.app.debug(`No SignalK metadata units found for path: ${pathStr}`)
-          // Try to synthesize metadata from path override base unit
-          if (pathOverridePref?.baseUnit) {
-            const baseUnit = pathOverridePref.baseUnit
-            const unitDef = this.unitDefinitions[baseUnit] || Object.values(comprehensiveDefaultUnits).find(meta => meta.baseUnit === baseUnit)
-            if (unitDef) {
-              metadata = {
-                baseUnit,
-                category: unitDef.category,
-                conversions: unitDef.conversions || {}
-              }
-            }
-          }
-
-          if (!metadata) {
-            return this.getPassThroughConversion(pathStr)
-          }
-        }
-      }
+      this.app.debug(`No metadata resolved for ${pathStr}, returning pass-through conversion.`)
+      return this.getPassThroughConversion(pathStr)
     }
 
-    // Get preference (path-specific or category-level)
-    const preference = this.getPreferenceForPath(pathStr, metadata.category)
+    const { preference, targetUnit, conversion } = this.resolveSelectedConversion(pathStr, metadata)
     this.app.debug(`Preference found: ${preference ? JSON.stringify(preference) : 'no'}`)
 
-    if (!preference) {
-      this.app.debug(`No preference found for path: ${pathStr}`)
-      // Return pass-through conversion using metadata's baseUnit
+    if (!preference || !targetUnit || !conversion) {
+      this.app.debug(`No conversion preference resolved for path: ${pathStr}`)
       return this.getPassThroughConversion(pathStr, metadata.baseUnit || undefined)
     }
-
-    // Get conversion definition
-    let conversion = metadata.conversions?.[preference.targetUnit]
-
-    if (!conversion) {
-      const baseUnit = metadata.baseUnit || preference.baseUnit
-
-      // Try unit definitions for the base unit
-      const unitDef = baseUnit ? this.unitDefinitions[baseUnit] : undefined
-      if (unitDef?.conversions?.[preference.targetUnit]) {
-        this.app.debug(`Using unit definition conversion for ${preference.targetUnit}`)
-        conversion = unitDef.conversions[preference.targetUnit]
-      }
-
-      if (!conversion && baseUnit) {
-        const fallback = Object.values(comprehensiveDefaultUnits).find(
-          (meta) => meta.baseUnit === baseUnit && meta.conversions?.[preference.targetUnit]
-        )
-        if (fallback) {
-          this.app.debug(`Using comprehensive default conversion for ${preference.targetUnit}`)
-          conversion = fallback.conversions[preference.targetUnit]
-        }
-      }
-    }
-
-    if (!conversion) {
-      this.app.debug(
-        `No conversion found for ${preference.targetUnit} in path: ${pathStr}`
-      )
-      // Return pass-through conversion using metadata's baseUnit
-      return this.getPassThroughConversion(pathStr, metadata.baseUnit || undefined)
-    }
-
-    this.app.debug(`Conversion object: ${JSON.stringify(conversion)}`)
 
     if (!conversion.formula) {
-      this.app.error(`Conversion for ${preference.targetUnit} has no formula`)
+      this.app.error(`Conversion for ${targetUnit} has no formula`)
       return this.getPassThroughConversion(pathStr, metadata.baseUnit || undefined)
     }
 
-    // Get metadata for type and supportsPut
     const skMeta = this.signalKMetadata[pathStr]
-    const valueType = this.detectValueType(skMeta?.units, skMeta?.value)
+    const valueType = this.detectValueType(skMeta?.units || metadata.baseUnit || undefined, skMeta?.value)
 
     return {
       path: pathStr,
       baseUnit: metadata.baseUnit,
-      targetUnit: preference.targetUnit,
+      targetUnit,
       formula: conversion.formula,
       inverseFormula: conversion.inverseFormula,
       displayFormat: preference.displayFormat,
       symbol: conversion.symbol,
       category: metadata.category,
-      valueType: valueType,
+      valueType,
       supportsPut: skMeta?.supportsPut,
       signalkTimestamp: skMeta?.timestamp,
       signalkSource: skMeta?.$source || skMeta?.source
@@ -690,6 +882,177 @@ export class UnitsManager {
    */
   getMetadata(): UnitsMetadataStore {
     return this.metadata
+  }
+
+  /**
+   * Get all paths with their conversion configuration
+   */
+  async getAllPathsInfo(): Promise<any[]> {
+    const pathsInfo: any[] = []
+
+    try {
+      const pathsSet = await this.collectSignalKPaths()
+      const paths = Array.from(pathsSet)
+      this.app.debug(`Processing ${paths.length} total unique paths`)
+
+      if (paths.length === 0) {
+        this.app.debug('No paths found from SignalK API')
+        return []
+      }
+
+      // Build info for each path
+      for (const path of paths) {
+        const pathOverride = this.preferences.pathOverrides?.[path]
+        const matchingPattern = this.findMatchingPattern(path)
+        const skMetadata = this.signalKMetadata[path]
+        const metadataEntry = this.resolveMetadataForPath(path)
+
+        let status: string
+        let source: string
+        let baseUnit: string
+        let category: string
+        let displayUnit: string
+        let targetUnit: string | undefined
+
+        // Determine status and configuration based on priority hierarchy
+        if (pathOverride) {
+          status = 'override'
+          source = 'Path Override'
+          baseUnit = pathOverride.baseUnit || skMetadata?.units || '-'
+          const overrideCategory = (pathOverride as any)?.category as string | undefined
+          category = overrideCategory
+            || matchingPattern?.category
+            || metadataEntry?.category
+            || this.getCategoryFromBaseUnit(pathOverride.baseUnit || skMetadata?.units)
+            || '-'
+          displayUnit = pathOverride.targetUnit
+          targetUnit = pathOverride.targetUnit
+        } else if (matchingPattern) {
+          status = 'pattern'
+          source = `Pattern: ${matchingPattern.pattern}`
+          const patternBaseUnit = matchingPattern.baseUnit || this.getBaseUnitForCategory(matchingPattern.category)
+          baseUnit = patternBaseUnit || '-'
+          category = matchingPattern.category
+          const categoryPref = this.preferences.categories?.[matchingPattern.category]
+          targetUnit = matchingPattern.targetUnit || categoryPref?.targetUnit
+          displayUnit = targetUnit || baseUnit || '-'
+        } else if (skMetadata?.units) {
+          status = 'signalk'
+          source = 'SignalK Metadata'
+          baseUnit = skMetadata.units
+          category = metadataEntry?.category || this.getCategoryFromBaseUnit(skMetadata.units) || '-'
+          displayUnit = baseUnit
+          targetUnit = undefined
+        } else {
+          status = 'none'
+          source = 'None'
+          baseUnit = '-'
+          category = '-'
+          displayUnit = '-'
+          targetUnit = undefined
+        }
+
+        // Get value details if available
+        const value = this.app.getSelfPath(path)
+        const valueType = this.detectValueType(skMetadata?.units, value)
+
+        pathsInfo.push({
+          path,
+          status,
+          source,
+          baseUnit,
+          category,
+          displayUnit,
+          targetUnit,
+          valueType,
+          supportsPut: skMetadata?.supportsPut || false,
+          value: value !== undefined ? value : null,
+          units: skMetadata?.units || null,
+          description: skMetadata?.description || null
+        })
+      }
+
+      this.app.debug(`Built info for ${pathsInfo.length} paths`)
+      return pathsInfo
+    } catch (error) {
+      this.app.error(`Error getting all paths info: ${error}`)
+      return []
+    }
+  }
+
+  /**
+   * Build a map of all discovered paths to their metadata definitions.
+   */
+  async getPathsMetadata(): Promise<Record<string, UnitMetadata>> {
+    const result: Record<string, UnitMetadata> = {}
+
+    try {
+      const pathsSet = await this.collectSignalKPaths()
+
+      // Include any overrides even if not currently present in the SignalK data
+      Object.keys(this.preferences.pathOverrides || {}).forEach(path => pathsSet.add(path))
+
+      for (const path of pathsSet) {
+        const metadata = this.resolveMetadataForPath(path)
+
+        if (metadata) {
+          const { targetUnit, conversion } = this.resolveSelectedConversion(path, metadata)
+
+          result[path] = {
+            baseUnit: metadata.baseUnit,
+            category: metadata.category,
+            conversions: targetUnit && conversion
+              ? { [targetUnit]: { ...conversion } }
+              : {}
+          }
+        } else {
+          const skMeta = this.app.getMetadata(path)
+          const baseUnit = skMeta?.units || null
+          result[path] = {
+            baseUnit,
+            category: this.getCategoryFromBaseUnit(baseUnit) || 'custom',
+            conversions: {}
+          }
+        }
+      }
+
+      return result
+    } catch (error) {
+      this.app.error(`Error building path metadata map: ${error}`)
+      return {}
+    }
+  }
+
+  /**
+   * Extract all paths from SignalK data object
+   */
+  private extractAllPaths(obj: any, prefix = ''): string[] {
+    const paths: string[] = []
+
+    if (!obj || typeof obj !== 'object') {
+      return paths
+    }
+
+    for (const key in obj) {
+      // Skip meta keys
+      if (key === 'meta' || key === 'timestamp' || key === 'source' || key === '$source' || key === 'values' || key === 'sentence') {
+        continue
+      }
+
+      const currentPath = prefix ? `${prefix}.${key}` : key
+      const value = obj[key]
+
+      if (value && typeof value === 'object') {
+        // If it has a 'value' property, it's a leaf node
+        if ('value' in value) {
+          paths.push(currentPath)
+        }
+        // Recurse into nested objects
+        paths.push(...this.extractAllPaths(value, currentPath))
+      }
+    }
+
+    return paths
   }
 
   /**

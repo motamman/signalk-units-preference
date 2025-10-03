@@ -297,40 +297,6 @@ module.exports = (app: ServerAPI): Plugin => {
 
         return envelope
       }
-      // GET /plugins/signalk-units-preference/paths
-      // Get all available SignalK paths from the data model
-      router.get('/paths', (req: Request, res: Response) => {
-        try {
-          const fullModel = app.getPath('/')
-          const paths: string[] = []
-
-          function extractPaths(obj: any, prefix = ''): void {
-            if (!obj || typeof obj !== 'object') return
-
-            for (const key in obj) {
-              if (key === 'meta' || key === '$source' || key === 'timestamp' || key === '_attr') {
-                continue
-              }
-
-              const currentPath = prefix ? `${prefix}.${key}` : key
-
-              if (obj[key] && typeof obj[key] === 'object') {
-                if (obj[key].value !== undefined) {
-                  paths.push(currentPath)
-                }
-                extractPaths(obj[key], currentPath)
-              }
-            }
-          }
-
-          extractPaths(fullModel)
-          res.json({ paths: paths.sort() })
-        } catch (error) {
-          app.error(`Error getting paths: ${error}`)
-          res.status(500).json({ error: 'Internal server error' })
-        }
-      })
-
       // POST /plugins/signalk-units-preference/signalk-metadata
       // Receive SignalK metadata from frontend
       router.post('/signalk-metadata', async (req: Request, res: Response) => {
@@ -473,6 +439,18 @@ module.exports = (app: ServerAPI): Plugin => {
           res.json(metadata)
         } catch (error) {
           app.error(`Error getting metadata: ${error}`)
+          res.status(500).json({ error: 'Internal server error' })
+        }
+      })
+
+      // GET /plugins/signalk-units-preference/paths
+      // Return metadata definitions for all discovered SignalK paths
+      router.get('/paths', async (req: Request, res: Response) => {
+        try {
+          const pathsMetadata = await unitsManager.getPathsMetadata()
+          res.json(pathsMetadata)
+        } catch (error) {
+          app.error(`Error getting paths metadata: ${error}`)
           res.status(500).json({ error: 'Internal server error' })
         }
       })
