@@ -275,6 +275,7 @@
     "schemas": {
       "ConversionResponse": {
         "type": "object",
+        "required": ["path", "baseUnit", "category", "conversions"],
         "properties": {
           "path": {
             "type": "string",
@@ -285,29 +286,49 @@
             "nullable": true,
             "description": "Base unit (SI or custom)"
           },
-          "targetUnit": {
+          "category": {
             "type": "string",
-            "description": "Target unit for display"
+            "description": "Measurement category"
           },
-          "factor": {
-            "type": "number",
-            "description": "Conversion factor from base to target"
+          "conversions": {
+            "type": "object",
+            "description": "Selected conversion definition(s)",
+            "additionalProperties": {
+              "type": "object",
+              "required": ["formula", "inverseFormula", "symbol"],
+              "properties": {
+                "formula": {
+                  "type": "string",
+                  "description": "Conversion formula"
+                },
+                "inverseFormula": {
+                  "type": "string",
+                  "description": "Inverse conversion formula"
+                },
+                "symbol": {
+                  "type": "string",
+                  "description": "Unit symbol"
+                }
+              }
+            }
           },
-          "inverseFactor": {
-            "type": "number",
-            "description": "Inverse factor from target to base"
+          "valueType": {
+            "type": "string",
+            "description": "Detected SignalK value type"
           },
           "displayFormat": {
             "type": "string",
-            "description": "Display format (e.g., 0.0)"
+            "description": "Preferred display format"
           },
-          "symbol": {
+          "signalk_timestamp": {
             "type": "string",
-            "description": "Symbol for target unit"
+            "nullable": true,
+            "description": "Latest SignalK timestamp associated with the path"
           },
-          "category": {
+          "$source": {
             "type": "string",
-            "description": "Category of measurement"
+            "nullable": true,
+            "description": "SignalK source identifier ($source)"
           }
         }
       },

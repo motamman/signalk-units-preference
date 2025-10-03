@@ -172,7 +172,11 @@ module.exports = (app: ServerAPI): Plugin => {
         options?: { typeHint?: SupportedValueType }
       ): DeltaResponse => {
         const conversionInfo = unitsManager.getConversion(pathStr)
-        const { value } = normalizeValueForConversion(rawValue, conversionInfo.valueType, options?.typeHint)
+        const normalized = normalizeValueForConversion(
+          rawValue,
+          conversionInfo.valueType,
+          options?.typeHint
+        )
 
         const baseUpdate = {
           $source: conversionInfo.signalkSource,
@@ -189,7 +193,7 @@ module.exports = (app: ServerAPI): Plugin => {
           ? normalized.usedType
           : toSupportedValueType(conversionInfo.valueType)
 
-        let convertedValue = normalized.value
+        let convertedValue: any = normalized.value
         let formatted = ''
         let displayFormat = conversionInfo.displayFormat
         let symbol = conversionInfo.symbol || ''
@@ -342,7 +346,25 @@ module.exports = (app: ServerAPI): Plugin => {
           app.debug(`Getting conversion for path: ${pathStr}`)
 
           const conversion = unitsManager.getConversion(pathStr)
-          res.json(conversion)
+
+          const response = {
+            path: conversion.path,
+            baseUnit: conversion.baseUnit,
+            category: conversion.category,
+            conversions: {
+              [conversion.targetUnit]: {
+                formula: conversion.formula,
+                inverseFormula: conversion.inverseFormula,
+                symbol: conversion.symbol
+              }
+            },
+            valueType: conversion.valueType,
+            displayFormat: conversion.displayFormat,
+            signalk_timestamp: conversion.signalkTimestamp,
+            $source: conversion.signalkSource
+          }
+
+          res.json(response)
         } catch (error) {
           app.error(`Error getting conversion: ${error}`)
           res.status(500).json({ error: 'Internal server error' })
