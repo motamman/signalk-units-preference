@@ -165,10 +165,30 @@ export class UnitsManager {
   }
 
   /**
-   * Get all unit definitions
+   * Get all unit definitions (built-in + custom)
    */
   getUnitDefinitions(): Record<string, UnitMetadata> {
-    return this.unitDefinitions
+    // Extract base unit definitions from comprehensive defaults
+    const baseUnitDefs: Record<string, UnitMetadata> = {}
+
+    for (const [_path, meta] of Object.entries(comprehensiveDefaultUnits)) {
+      if (meta.baseUnit && !baseUnitDefs[meta.baseUnit]) {
+        baseUnitDefs[meta.baseUnit] = {
+          baseUnit: meta.baseUnit,
+          category: meta.category || meta.baseUnit,
+          conversions: meta.conversions || {}
+        }
+      } else if (meta.baseUnit && meta.conversions) {
+        // Merge conversions if we've seen this base unit before
+        baseUnitDefs[meta.baseUnit].conversions = {
+          ...baseUnitDefs[meta.baseUnit].conversions,
+          ...meta.conversions
+        }
+      }
+    }
+
+    // Merge built-in units with custom units (custom units override built-in)
+    return { ...baseUnitDefs, ...this.unitDefinitions }
   }
 
   /**

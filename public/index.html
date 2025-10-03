@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Units Preference Manager</title>
+    <title>SignalK Units Preference Manager</title>
+    <link rel="icon" type="image/png" href="units.png">
     <style>
         * {
             box-sizing: border-box;
@@ -15,72 +16,114 @@
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
             background: #f5f5f5;
             color: #333;
-            padding: 20px;
+            line-height: 1.6;
         }
 
         .container {
-            max-width: 1200px;
+            max-width: 1400px;
             margin: 0 auto;
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            padding: 30px;
+            padding: 20px;
         }
 
-        h1 {
-            color: #2c3e50;
+        .header {
+            background: linear-gradient(135deg, #FAC10F 0%, #977408 100%);
+            color: #241c00;
+            padding: 20px 0;
+            margin-bottom: 20px;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
             margin-bottom: 10px;
+            color: black;
         }
 
-        .subtitle {
-            color: #7f8c8d;
-            margin-bottom: 30px;
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .section {
+            background: white;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .section h2 {
+            color: #667eea;
+            margin-bottom: 15px;
+            font-size: 1.5rem;
         }
 
         .tabs {
             display: flex;
-            gap: 10px;
-            border-bottom: 2px solid #ecf0f1;
-            margin-bottom: 30px;
+            background: white;
+            border-radius: 10px 10px 0 0;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 0;
+            overflow-x: auto;
         }
 
         .tab {
-            padding: 10px 20px;
-            background: none;
+            background: #f8f9fa;
             border: none;
+            padding: 15px 20px;
             cursor: pointer;
-            font-size: 16px;
-            color: #7f8c8d;
-            border-bottom: 2px solid transparent;
-            margin-bottom: -2px;
+            font-size: 14px;
+            font-weight: 500;
+            color: #666;
+            border-radius: 0;
             transition: all 0.3s;
+            white-space: nowrap;
+            border-bottom: 3px solid transparent;
+            margin: 0;
+        }
+
+        .tab:first-child {
+            border-radius: 10px 0 0 0;
+        }
+
+        .tab:last-child {
+            border-radius: 0 10px 0 0;
         }
 
         .tab:hover {
-            color: #3498db;
+            background: #e9ecef;
+            color: #333;
         }
 
         .tab.active {
-            color: #3498db;
-            border-bottom-color: #3498db;
+            background: white;
+            color: #667eea;
+            border-bottom-color: #667eea;
         }
 
         .tab-content {
             display: none;
+            background: white;
+            border-radius: 0 0 10px 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            padding: 20px;
         }
 
         .tab-content.active {
             display: block;
         }
 
-        .section {
-            margin-bottom: 30px;
+        .tab-content .section {
+            margin-bottom: 0;
+            box-shadow: none;
+            border-radius: 0;
+            padding: 30px 0;
         }
 
-        .section h2 {
-            color: #2c3e50;
-            margin-bottom: 15px;
-            font-size: 20px;
+        .tab-content .section:first-child {
+            padding-top: 0;
         }
 
         .category-list, .override-list {
@@ -88,14 +131,18 @@
             gap: 15px;
         }
 
-        .category-item, .override-item {
+        .category-item {
+            border-radius: 6px;
+        }
+
+        .override-item {
             background: #f8f9fa;
             padding: 20px;
             border-radius: 6px;
             border: 1px solid #e9ecef;
         }
 
-        .category-header, .override-header {
+        .override-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -127,34 +174,62 @@
 
         .input-group input,
         .input-group select {
-            padding: 8px 12px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
             font-size: 14px;
+            transition: border-color 0.3s;
         }
 
         .input-group input:focus,
         .input-group select:focus {
             outline: none;
-            border-color: #3498db;
+            border-color: #667eea;
+        }
+
+        input, select, textarea {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: #667eea;
         }
 
         button {
-            padding: 8px 16px;
+            background: #667eea;
+            color: white;
+            padding: 12px 20px;
             border: none;
-            border-radius: 4px;
+            border-radius: 5px;
             cursor: pointer;
             font-size: 14px;
-            transition: all 0.3s;
+            transition: background-color 0.3s;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+
+        button:hover {
+            background: #5a6fd8;
+        }
+
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
         }
 
         .btn-primary {
-            background: #3498db;
+            background: #667eea;
             color: white;
         }
 
         .btn-primary:hover {
-            background: #2980b9;
+            background: #5a6fd8;
         }
 
         .btn-danger {
@@ -176,17 +251,11 @@
         }
 
         .btn-secondary {
-            background: #95a5a6;
-            color: white;
-            padding: 8px 16px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 14px;
+            background: #6c757d;
         }
 
         .btn-secondary:hover {
-            background: #7f8c8d;
+            background: #5a6268;
         }
 
         .add-override {
@@ -376,15 +445,185 @@
         }
 
         .metadata-sortable-header .sort-arrow {
-            color: #007bff;
+            color: #667eea;
             font-size: 10px;
+        }
+
+        /* Collapsible Section Styles */
+        .collapsible-header {
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 20px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            transition: background-color 0.3s;
+            user-select: none;
+            margin-bottom: 15px;
+        }
+
+        .collapsible-header:hover {
+            background: #e9ecef;
+        }
+
+        .collapsible-header h2 {
+            margin: 0;
+            font-size: 1.2rem;
+        }
+
+        .collapse-icon {
+            font-size: 1.2rem;
+            transition: transform 0.3s;
+            color: #667eea;
+        }
+
+        .collapse-icon.collapsed {
+            transform: rotate(-90deg);
+        }
+
+        .collapsible-content {
+            overflow: hidden;
+            transition: max-height 0.3s ease-out, opacity 0.3s ease-out;
+            max-height: 2000px;
+            opacity: 1;
+        }
+
+        .collapsible-content.collapsed {
+            max-height: 0;
+            opacity: 0;
+        }
+
+        .category-item .collapsible-header {
+            padding: 15px;
+            margin-bottom: 0;
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 6px 6px 0 0;
+        }
+
+        .category-item .collapsible-header:hover {
+            background: #e9ecef;
+        }
+
+        .category-item .collapsible-header h3 {
+            margin: 0;
+            font-size: 1rem;
+        }
+
+        .category-item .collapsible-content {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-top: none;
+            border-radius: 0 0 6px 6px;
+            padding: 15px;
+        }
+
+        .category-item .collapsible-content.collapsed {
+            padding: 0;
+            border: none;
+        }
+
+        .category-item:has(.collapsible-content:not(.collapsed)) .collapsible-header {
+            border-radius: 6px 6px 0 0;
+        }
+
+        .category-item:has(.collapsible-content.collapsed) .collapsible-header {
+            border-radius: 6px;
+        }
+
+        .category-item [id^="category-edit-"] > div {
+            background: #fff3cd;
+            padding: 15px;
+            border-radius: 4px;
+            border: 1px dashed #ffc107;
+        }
+
+        .category-item [id^="category-edit-"] h4 {
+            margin: 0 0 15px 0;
+            color: #856404;
+            font-size: 14px;
+        }
+
+        /* Unit Definition Item Styles */
+        .unit-definition-item {
+            border-radius: 6px;
+        }
+
+        .unit-definition-item .collapsible-header {
+            padding: 15px;
+            margin-bottom: 0;
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 6px 6px 0 0;
+        }
+
+        .unit-definition-item .collapsible-header:hover {
+            background: #e9ecef;
+        }
+
+        .unit-definition-item .collapsible-header h3 {
+            margin: 0;
+            font-size: 1rem;
+        }
+
+        .unit-definition-item .collapsible-content {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-top: none;
+            border-radius: 0 0 6px 6px;
+            padding: 15px;
+        }
+
+        .unit-definition-item .collapsible-content.collapsed {
+            padding: 0;
+            border: none;
+        }
+
+        .unit-definition-item:has(.collapsible-content:not(.collapsed)) .collapsible-header {
+            border-radius: 6px 6px 0 0;
+        }
+
+        .unit-definition-item:has(.collapsible-content.collapsed) .collapsible-header {
+            border-radius: 6px;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 10px;
+            }
+
+            .header h1 {
+                font-size: 2rem;
+            }
+
+            .tabs {
+                flex-wrap: wrap;
+            }
+
+            .tab {
+                flex: 1;
+                min-width: 120px;
+                padding: 12px 15px;
+                font-size: 13px;
+            }
+
+            .tab:first-child,
+            .tab:last-child {
+                border-radius: 0;
+            }
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Units Preference Manager</h1>
-        <p class="subtitle">Configure unit conversions and display preferences for SignalK data</p>
+        <div class="header">
+            <h1>
+                <img src="units.png" alt="Units" style="height: 80px; vertical-align: middle; margin-right: 10px; border-radius: 5px;">
+                SignalK Units Preference Manager
+            </h1>
+            <p>Configure unit conversions and display preferences</p>
+        </div>
 
         <div id="statusMessage" class="status-message"></div>
 
@@ -398,30 +637,35 @@
 
         <div id="categories" class="tab-content active">
             <div class="section">
-                <h2>Add Custom Category</h2>
-                <p style="color: #7f8c8d; margin-bottom: 20px;">
-                    Create a custom category with its own base unit and default target unit.
-                </p>
-                <div class="add-override" style="grid-template-columns: 1fr 1fr 1fr 1fr auto;">
-                    <div class="input-group">
-                        <label>Category Name</label>
-                        <input type="text" id="newCategoryName" placeholder="e.g., fuelConsumption">
+                <div class="collapsible-header" onclick="toggleCollapsible('addCategoryContent')">
+                    <h2>Add Custom Category</h2>
+                    <span class="collapse-icon collapsed">▼</span>
+                </div>
+                <div id="addCategoryContent" class="collapsible-content collapsed">
+                    <p style="color: #7f8c8d; margin-bottom: 20px;">
+                        Create a custom category with its own base unit and default target unit.
+                    </p>
+                    <div class="add-override" style="grid-template-columns: 1fr 1fr 1fr 1fr auto;">
+                        <div class="input-group">
+                            <label>Category Name</label>
+                            <input type="text" id="newCategoryName" placeholder="e.g., fuelConsumption">
+                        </div>
+                        <div class="input-group">
+                            <label>Base Unit</label>
+                            <div id="newCategoryBaseContainer"></div>
+                            <input type="text" id="newCategoryBaseCustom" placeholder="Enter custom base unit" style="display: none; margin-top: 5px;">
+                        </div>
+                        <div class="input-group">
+                            <label>Target Unit</label>
+                            <div id="newCategoryTargetContainer"></div>
+                            <input type="text" id="newCategoryTargetCustom" placeholder="Enter custom target unit" style="display: none; margin-top: 5px;">
+                        </div>
+                        <div class="input-group">
+                            <label>Display Format</label>
+                            <input type="text" id="newCategoryFormat" placeholder="e.g., 0.0" value="0.0">
+                        </div>
+                        <button class="btn-success" onclick="addCustomCategory()">Add Category</button>
                     </div>
-                    <div class="input-group">
-                        <label>Base Unit</label>
-                        <div id="newCategoryBaseContainer"></div>
-                        <input type="text" id="newCategoryBaseCustom" placeholder="Enter custom base unit" style="display: none; margin-top: 5px;">
-                    </div>
-                    <div class="input-group">
-                        <label>Target Unit</label>
-                        <div id="newCategoryTargetContainer"></div>
-                        <input type="text" id="newCategoryTargetCustom" placeholder="Enter custom target unit" style="display: none; margin-top: 5px;">
-                    </div>
-                    <div class="input-group">
-                        <label>Display Format</label>
-                        <input type="text" id="newCategoryFormat" placeholder="e.g., 0.0" value="0.0">
-                    </div>
-                    <button class="btn-success" onclick="addCustomCategory()">Add Category</button>
                 </div>
             </div>
 
@@ -493,60 +737,64 @@
 
         <div id="units" class="tab-content">
             <div class="section">
-                <h2>Add Base Unit</h2>
-                <p style="color: #7f8c8d; margin-bottom: 20px;">
-                    Define a new base unit that can be used across paths.
-                </p>
-                <div class="add-override" style="display: grid; grid-template-columns: 2fr 3fr auto; gap: 15px; align-items: end;">
-                    <div class="input-group">
-                        <label>Base Unit Symbol</label>
-                        <input type="text" id="newBaseUnitSymbol" placeholder="e.g., L/h, bar, psi">
-                    </div>
-                    <div class="input-group">
-                        <label>Description (optional)</label>
-                        <input type="text" id="newBaseUnitDesc" placeholder="e.g., Liters per hour, Pressure">
-                    </div>
-                    <button class="btn-success" onclick="addBaseUnit()" style="padding: 10px 24px;">Add Base Unit</button>
+                <div class="collapsible-header" onclick="toggleCollapsible('addUnitDefinitionsContent')">
+                    <h2>Add Unit Definitions</h2>
+                    <span class="collapse-icon collapsed">▼</span>
                 </div>
-            </div>
+                <div id="addUnitDefinitionsContent" class="collapsible-content collapsed">
+                    <h3 style="color: #667eea; margin-bottom: 10px; font-size: 1.2rem;">Add Base Unit</h3>
+                    <p style="color: #7f8c8d; margin-bottom: 20px;">
+                        Define a new base unit that can be used across paths.
+                    </p>
+                    <div class="add-override" style="display: grid; grid-template-columns: 2fr 3fr auto; gap: 15px; align-items: end; margin-bottom: 30px;">
+                        <div class="input-group">
+                            <label>Base Unit Symbol</label>
+                            <input type="text" id="newBaseUnitSymbol" placeholder="e.g., L/h, bar, psi">
+                        </div>
+                        <div class="input-group">
+                            <label>Description (optional)</label>
+                            <input type="text" id="newBaseUnitDesc" placeholder="e.g., Liters per hour, Pressure">
+                        </div>
+                        <button class="btn-success" onclick="addBaseUnit()" style="padding: 10px 24px;">Add Base Unit</button>
+                    </div>
 
-            <div class="section">
-                <h2>Add Conversion Formula</h2>
-                <p style="color: #7f8c8d; margin-bottom: 20px;">
-                    Add a conversion formula to an existing base unit.
-                </p>
-                <div class="add-override">
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
-                        <div class="input-group">
-                            <label>Base Unit</label>
-                            <div id="conversionBaseUnitContainer"></div>
+                    <h3 style="color: #667eea; margin-bottom: 10px; font-size: 1.2rem;">Add Conversion Formula</h3>
+                    <p style="color: #7f8c8d; margin-bottom: 20px;">
+                        Add a conversion formula to an existing base unit.
+                    </p>
+                    <div class="add-override">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+                            <div class="input-group">
+                                <label>Base Unit</label>
+                                <div id="conversionBaseUnitContainer"></div>
+                            </div>
+                            <div class="input-group">
+                                <label>Target Unit Name</label>
+                                <input type="text" id="conversionTargetUnit" placeholder="e.g., gal/h, fahrenheit">
+                            </div>
                         </div>
-                        <div class="input-group">
-                            <label>Target Unit Name</label>
-                            <input type="text" id="conversionTargetUnit" placeholder="e.g., gal/h, fahrenheit">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+                            <div class="input-group">
+                                <label>
+                                    Formula (base → target)
+                                    <span class="tooltip-icon" data-tooltip="JavaScript expression using 'value' variable. Example: value * 0.264172 to convert L/h to gal/h">?</span>
+                                </label>
+                                <input type="text" id="conversionFormula" placeholder="e.g., value * 0.264172">
+                            </div>
+                            <div class="input-group">
+                                <label>
+                                    Inverse Formula (target → base)
+                                    <span class="tooltip-icon" data-tooltip="JavaScript expression to convert back. Example: value * 3.78541">?</span>
+                                </label>
+                                <input type="text" id="conversionInverseFormula" placeholder="e.g., value * 3.78541">
+                            </div>
+                            <div class="input-group">
+                                <label>Symbol</label>
+                                <input type="text" id="conversionSymbol" placeholder="e.g., gal/h, °F">
+                            </div>
                         </div>
+                        <button class="btn-success" onclick="addConversion()" style="padding: 10px 24px;">Add Conversion</button>
                     </div>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-bottom: 15px;">
-                        <div class="input-group">
-                            <label>
-                                Formula (base → target)
-                                <span class="tooltip-icon" data-tooltip="JavaScript expression using 'value' variable. Example: value * 0.264172 to convert L/h to gal/h">?</span>
-                            </label>
-                            <input type="text" id="conversionFormula" placeholder="e.g., value * 0.264172">
-                        </div>
-                        <div class="input-group">
-                            <label>
-                                Inverse Formula (target → base)
-                                <span class="tooltip-icon" data-tooltip="JavaScript expression to convert back. Example: value * 3.78541">?</span>
-                            </label>
-                            <input type="text" id="conversionInverseFormula" placeholder="e.g., value * 3.78541">
-                        </div>
-                        <div class="input-group">
-                            <label>Symbol</label>
-                            <input type="text" id="conversionSymbol" placeholder="e.g., gal/h, °F">
-                        </div>
-                    </div>
-                    <button class="btn-success" onclick="addConversion()" style="padding: 10px 24px;">Add Conversion</button>
                 </div>
             </div>
 
@@ -610,6 +858,39 @@
         </div>
     </div>
 
+    <script>
+        // Toggle collapsible sections
+        function toggleCollapsible(contentId) {
+            const content = document.getElementById(contentId);
+            const header = content.previousElementSibling;
+            const icon = header.querySelector('.collapse-icon');
+
+            content.classList.toggle('collapsed');
+            icon.classList.toggle('collapsed');
+        }
+
+        // Toggle individual category item
+        function toggleCategoryItem(categoryName) {
+            const content = document.getElementById(`category-content-${categoryName}`);
+            const icon = document.getElementById(`category-icon-${categoryName}`);
+
+            if (content && icon) {
+                content.classList.toggle('collapsed');
+                icon.classList.toggle('collapsed');
+            }
+        }
+
+        // Toggle unit item (defined here as well for initial load)
+        function toggleUnitItem(baseUnit) {
+            const content = document.getElementById(`unit-content-${baseUnit}`);
+            const icon = document.getElementById(`unit-icon-${baseUnit}`);
+
+            if (content && icon) {
+                content.classList.toggle('collapsed');
+                icon.classList.toggle('collapsed');
+            }
+        }
+    </script>
     <script src="app.js"></script>
     <script src="pathTree.js"></script>
 </body>

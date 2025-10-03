@@ -93,18 +93,11 @@ The plugin uses a **priority hierarchy** to determine which conversion to apply:
 npm install signalk-units-preference
 ```
 
-### From source
-```bash
-cd signalk-units-preference
-npm install
-npm run build
-```
-
 Enable the plugin in SignalK Server Admin UI.
 
 ## Web UI Guide
 
-Access the web interface at: `http://your-signalk-server:3000/signalk-units-preference`
+Access the web interface at: `http://localhost.com:3000/signalk-units-preference`
 
 ### Tab Overview
 

@@ -307,31 +307,44 @@ function renderCategories() {
 
       return `
       <div class="category-item">
-        <div class="category-header">
-          <span class="category-name">${category}${isCustom ? ' <span style="color: #667eea; font-size: 12px;">(custom)</span>' : ''}</span>
+        <div class="collapsible-header" onclick="toggleCategoryItem('${category}')">
+          <div>
+            <h3 class="category-name" style="display: inline;">${category}${isCustom ? ' <span style="color: #667eea; font-size: 12px;">(custom)</span>' : ''}</h3>
+            <div style="color: #7f8c8d; font-size: 13px; margin-top: 5px;">Base: ${baseUnit} | Available: ${availableUnits.join(', ') || 'None'}</div>
+          </div>
           <div style="display: flex; align-items: center; gap: 10px;">
-            <span style="color: #7f8c8d; font-size: 13px;">Base: ${baseUnit} | Available: ${availableUnits.join(', ') || 'None'}</span>
-            ${isCustom ? `<button class="btn-danger" onclick="deleteCategory('${category}')" style="padding: 4px 12px; font-size: 12px;">Delete</button>` : ''}
+            ${isCustom ? `
+              <button class="btn-primary" onclick="event.stopPropagation(); editCategory('${category}')" style="padding: 4px 12px; font-size: 12px;">Edit</button>
+              <button class="btn-danger" onclick="event.stopPropagation(); deleteCategory('${category}')" style="padding: 4px 12px; font-size: 12px;">Delete</button>
+            ` : ''}
+            <span class="collapse-icon" id="category-icon-${category}">▼</span>
           </div>
         </div>
-        <div class="form-group">
-          <div class="input-group">
-            <label>Target Unit</label>
-            <select onchange="updateCategory('${category}', 'targetUnit', this.value)">
-              <option value="">-- Select Unit --</option>
-              ${availableUnits.map(unit => `
-                <option value="${unit}" ${unit === pref.targetUnit ? 'selected' : ''}>${unit}</option>
-              `).join('')}
-            </select>
+        <div class="collapsible-content" id="category-content-${category}">
+          <div id="category-view-${category}">
+            <div class="form-group">
+              <div class="input-group">
+                <label>Target Unit</label>
+                <select onchange="updateCategory('${category}', 'targetUnit', this.value)">
+                  <option value="">-- Select Unit --</option>
+                  ${availableUnits.map(unit => `
+                    <option value="${unit}" ${unit === pref.targetUnit ? 'selected' : ''}>${unit}</option>
+                  `).join('')}
+                </select>
+              </div>
+              <div class="input-group">
+                <label>Display Format</label>
+                <input
+                  type="text"
+                  value="${pref.displayFormat || '0.0'}"
+                  onchange="updateCategory('${category}', 'displayFormat', this.value)"
+                  placeholder="e.g., 0.0"
+                >
+              </div>
+            </div>
           </div>
-          <div class="input-group">
-            <label>Display Format</label>
-            <input
-              type="text"
-              value="${pref.displayFormat || '0.0'}"
-              onchange="updateCategory('${category}', 'displayFormat', this.value)"
-              placeholder="e.g., 0.0"
-            >
+          <div id="category-edit-${category}" style="display: none;">
+            <!-- Edit form will be inserted here -->
           </div>
         </div>
       </div>
@@ -749,6 +762,123 @@ async function deleteCategory(category) {
   } catch (error) {
     showStatus('Failed to delete category: ' + error.message, 'error')
   }
+}
+
+// Edit custom category
+function editCategory(category) {
+  const pref = preferences?.categories?.[category] || {}
+  const baseUnit = pref.baseUnit || ''
+  const targetUnit = pref.targetUnit || ''
+  const displayFormat = pref.displayFormat || '0.0'
+
+  const viewDiv = document.getElementById(`category-view-${category}`)
+  const editDiv = document.getElementById(`category-edit-${category}`)
+
+  // Create unique IDs for this edit form
+  const baseSelectId = `edit-base-${category}`
+  const targetSelectId = `edit-target-${category}`
+  const formatInputId = `edit-format-${category}`
+
+  // Build edit form
+  editDiv.innerHTML = `
+    <div style="background: #fff3cd; padding: 15px; border-radius: 4px; border: 1px dashed #ffc107;">
+      <h4 style="margin: 0 0 15px 0; color: #856404; font-size: 14px;">Edit Category: ${category}</h4>
+      <div class="form-group" style="margin-bottom: 15px;">
+        <div class="input-group">
+          <label>Base Unit</label>
+          <div id="${baseSelectId}-container"></div>
+        </div>
+        <div class="input-group">
+          <label>Target Unit</label>
+          <div id="${targetSelectId}-container"></div>
+        </div>
+        <div class="input-group">
+          <label>Display Format</label>
+          <input type="text" id="${formatInputId}" value="${displayFormat}" placeholder="e.g., 0.0">
+        </div>
+      </div>
+      <div style="display: flex; gap: 10px;">
+        <button class="btn-success" onclick="saveEditCategory('${category}')" style="padding: 8px 16px;">Save Changes</button>
+        <button class="btn-secondary" onclick="cancelEditCategory('${category}')" style="padding: 8px 16px;">Cancel</button>
+      </div>
+    </div>
+  `
+
+  // Populate dropdowns
+  document.getElementById(`${baseSelectId}-container`).innerHTML = createBaseUnitDropdown(baseSelectId, baseUnit, false)
+  document.getElementById(`${targetSelectId}-container`).innerHTML = createTargetUnitDropdown(targetSelectId, baseUnit, targetUnit, false)
+
+  // Handle base unit change to update target units
+  document.getElementById(baseSelectId).addEventListener('change', (e) => {
+    const newBaseUnit = e.target.value
+    document.getElementById(`${targetSelectId}-container`).innerHTML = createTargetUnitDropdown(targetSelectId, newBaseUnit, '', false)
+  })
+
+  // Show edit form, hide view
+  viewDiv.style.display = 'none'
+  editDiv.style.display = 'block'
+
+  // Ensure the content is expanded
+  const content = document.getElementById(`category-content-${category}`)
+  const icon = document.getElementById(`category-icon-${category}`)
+  if (content.classList.contains('collapsed')) {
+    content.classList.remove('collapsed')
+    icon.classList.remove('collapsed')
+  }
+}
+
+// Save edited category
+async function saveEditCategory(category) {
+  const baseSelectId = `edit-base-${category}`
+  const targetSelectId = `edit-target-${category}`
+  const formatInputId = `edit-format-${category}`
+
+  const baseUnit = document.getElementById(baseSelectId).value
+  const targetUnit = document.getElementById(targetSelectId).value
+  const displayFormat = document.getElementById(formatInputId).value
+
+  if (!baseUnit || !targetUnit || !displayFormat) {
+    showStatus('Please fill in all fields', 'error')
+    return
+  }
+
+  try {
+    const categoryPref = {
+      baseUnit,
+      targetUnit,
+      displayFormat
+    }
+
+    const res = await fetch(`${API_BASE}/categories/${category}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(categoryPref)
+    })
+
+    if (!res.ok) throw new Error('Failed to update category')
+
+    showStatus(`Updated category: ${category}`, 'success')
+
+    // Reload schema and data
+    await loadSchema()
+    await loadData()
+
+    // Reinitialize dropdowns
+    initializePatternDropdowns()
+    initializeCustomCategoryDropdowns()
+  } catch (error) {
+    showStatus('Failed to update category: ' + error.message, 'error')
+  }
+}
+
+// Cancel editing category
+function cancelEditCategory(category) {
+  const viewDiv = document.getElementById(`category-view-${category}`)
+  const editDiv = document.getElementById(`category-edit-${category}`)
+
+  // Show view, hide edit form
+  viewDiv.style.display = 'block'
+  editDiv.style.display = 'none'
 }
 
 // Initialize custom category form dropdowns
@@ -1251,7 +1381,7 @@ async function addBaseUnit() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         baseUnit: symbol,
-        description: description || symbol,
+        category: description || symbol,
         conversions: {}
       })
     })
@@ -1336,6 +1466,7 @@ async function loadUnitDefinitions() {
     const res = await fetch(`${API_BASE}/unit-definitions`)
     if (!res.ok) throw new Error('Failed to load')
     unitDefinitions = await res.json()
+    console.log('Loaded unitDefinitions:', unitDefinitions)
   } catch (error) {
     console.error('Error loading unit definitions:', error)
     unitDefinitions = {}
@@ -1347,53 +1478,67 @@ function renderUnitDefinitions() {
   const container = document.getElementById('unitDefinitionsList')
 
   const defs = Object.entries(unitDefinitions)
+  console.log('Rendering unit definitions, count:', defs.length)
+
   if (defs.length === 0) {
     container.innerHTML = '<div class="empty-state">No custom unit definitions yet</div>'
     return
   }
 
   container.innerHTML = defs.map(([baseUnit, def]) => {
+    console.log(`Rendering baseUnit: ${baseUnit}, category: ${def.category}`)
     const conversions = Object.entries(def.conversions || {})
 
     return `
-      <div style="background: #f8f9fa; padding: 20px; border-radius: 6px; margin-bottom: 15px; border: 1px solid #e9ecef;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+      <div class="unit-definition-item" style="margin-bottom: 15px;">
+        <div class="collapsible-header" onclick="toggleUnitItem('${baseUnit}')">
           <div>
-            <h3 style="margin: 0; color: #2c3e50; font-family: monospace;">${baseUnit}</h3>
-            <p style="margin: 5px 0 0 0; color: #7f8c8d; font-size: 14px;">${def.description || baseUnit}</p>
+            <h3 style="margin: 0; font-family: monospace;">${baseUnit}</h3>
+            <p style="margin: 5px 0 0 0; color: #7f8c8d; font-size: 14px;">${def.category || baseUnit}</p>
           </div>
-          <button class="btn-danger" onclick="deleteBaseUnit('${baseUnit}')" style="padding: 6px 16px; font-size: 13px;">Delete Unit</button>
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <button class="btn-primary" onclick="event.stopPropagation(); editBaseUnit('${baseUnit}')" style="padding: 4px 12px; font-size: 12px;">Edit</button>
+            <button class="btn-danger" onclick="event.stopPropagation(); deleteBaseUnit('${baseUnit}')" style="padding: 4px 12px; font-size: 12px;">Delete</button>
+            <span class="collapse-icon" id="unit-icon-${baseUnit}">▼</span>
+          </div>
         </div>
-
-        ${conversions.length > 0 ? `
-          <div style="background: white; padding: 15px; border-radius: 4px;">
-            <h4 style="margin: 0 0 10px 0;">Available Conversions</h4>
-            <table style="width: 100%; border-collapse: collapse;">
-              <thead>
-                <tr style="border-bottom: 2px solid #dee2e6; text-align: left;">
-                  <th style="padding: 8px;">Target Unit</th>
-                  <th style="padding: 8px;">Formula</th>
-                  <th style="padding: 8px;">Inverse Formula</th>
-                  <th style="padding: 8px;">Symbol</th>
-                  <th style="padding: 8px;"></th>
-                </tr>
-              </thead>
-              <tbody>
-                ${conversions.map(([target, conv]) => `
-                  <tr style="border-bottom: 1px solid #f0f0f0;">
-                    <td style="padding: 8px; font-family: monospace;">${target}</td>
-                    <td style="padding: 8px; font-family: monospace; font-size: 12px;">${conv.formula}</td>
-                    <td style="padding: 8px; font-family: monospace; font-size: 12px;">${conv.inverseFormula}</td>
-                    <td style="padding: 8px;">${conv.symbol}</td>
-                    <td style="padding: 8px;">
-                      <button class="btn-danger" onclick="deleteConversion('${baseUnit}', '${target}')" style="padding: 4px 12px; font-size: 12px;">Delete</button>
-                    </td>
-                  </tr>
-                `).join('')}
-              </tbody>
-            </table>
+        <div class="collapsible-content" id="unit-content-${baseUnit}">
+          <div id="unit-view-${baseUnit}">
+            ${conversions.length > 0 ? `
+              <div style="background: white; padding: 15px; border-radius: 4px;">
+                <h4 style="margin: 0 0 10px 0;">Available Conversions</h4>
+                <table style="width: 100%; border-collapse: collapse;">
+                  <thead>
+                    <tr style="border-bottom: 2px solid #dee2e6; text-align: left;">
+                      <th style="padding: 8px;">Target Unit</th>
+                      <th style="padding: 8px;">Formula</th>
+                      <th style="padding: 8px;">Inverse Formula</th>
+                      <th style="padding: 8px;">Symbol</th>
+                      <th style="padding: 8px;"></th>
+                    </tr>
+                  </thead>
+                  <tbody id="conversions-tbody-${baseUnit}">
+                    ${conversions.map(([target, conv]) => `
+                      <tr id="conversion-row-${baseUnit}-${target}" style="border-bottom: 1px solid #f0f0f0;">
+                        <td style="padding: 8px; font-family: monospace;">${target}</td>
+                        <td style="padding: 8px; font-family: monospace; font-size: 12px;">${conv.formula}</td>
+                        <td style="padding: 8px; font-family: monospace; font-size: 12px;">${conv.inverseFormula}</td>
+                        <td style="padding: 8px;">${conv.symbol}</td>
+                        <td style="padding: 8px;">
+                          <button class="btn-primary" onclick="editConversion('${baseUnit}', '${target}')" style="padding: 4px 12px; font-size: 12px; margin-right: 5px;">Edit</button>
+                          <button class="btn-danger" onclick="deleteConversion('${baseUnit}', '${target}')" style="padding: 4px 12px; font-size: 12px;">Delete</button>
+                        </td>
+                      </tr>
+                    `).join('')}
+                  </tbody>
+                </table>
+              </div>
+            ` : '<p style="color: #7f8c8d; font-style: italic;">No conversions defined yet</p>'}
           </div>
-        ` : '<p style="color: #7f8c8d; font-style: italic;">No conversions defined yet</p>'}
+          <div id="unit-edit-${baseUnit}" style="display: none;">
+            <!-- Edit form will be inserted here -->
+          </div>
+        </div>
       </div>
     `
   }).join('')
@@ -1453,6 +1598,237 @@ async function deleteConversion(baseUnit, targetUnit) {
   } catch (error) {
     showStatus('Failed to delete: ' + error.message, 'error')
   }
+}
+
+// Toggle unit item
+function toggleUnitItem(baseUnit) {
+  const content = document.getElementById(`unit-content-${baseUnit}`)
+  const icon = document.getElementById(`unit-icon-${baseUnit}`)
+
+  if (content && icon) {
+    content.classList.toggle('collapsed')
+    icon.classList.toggle('collapsed')
+  }
+}
+
+// Edit base unit
+function editBaseUnit(baseUnit) {
+  const def = unitDefinitions[baseUnit] || {}
+  const description = def.category || ''
+
+  const viewDiv = document.getElementById(`unit-view-${baseUnit}`)
+  const editDiv = document.getElementById(`unit-edit-${baseUnit}`)
+
+  const symbolInputId = `edit-unit-symbol-${baseUnit}`
+  const descInputId = `edit-unit-desc-${baseUnit}`
+
+  // Build edit form
+  editDiv.innerHTML = `
+    <div style="background: #fff3cd; padding: 15px; border-radius: 4px; border: 1px dashed #ffc107; margin-top: 10px;">
+      <h4 style="margin: 0 0 15px 0; color: #856404; font-size: 14px;">Edit Base Unit: ${baseUnit}</h4>
+      <div class="form-group" style="margin-bottom: 15px;">
+        <div class="input-group">
+          <label>Base Unit Symbol</label>
+          <input type="text" id="${symbolInputId}" value="${baseUnit}" placeholder="e.g., L/h, bar" readonly style="background: #f5f5f5;">
+          <small style="color: #666; display: block; margin-top: 3px;">Symbol cannot be changed</small>
+        </div>
+        <div class="input-group">
+          <label>Description</label>
+          <input type="text" id="${descInputId}" value="${description}" placeholder="e.g., Liters per hour">
+        </div>
+      </div>
+      <div style="display: flex; gap: 10px;">
+        <button class="btn-success" onclick="saveEditBaseUnit('${baseUnit}')" style="padding: 8px 16px;">Save Changes</button>
+        <button class="btn-secondary" onclick="cancelEditBaseUnit('${baseUnit}')" style="padding: 8px 16px;">Cancel</button>
+      </div>
+    </div>
+  `
+
+  // Show edit form, hide view
+  viewDiv.style.display = 'none'
+  editDiv.style.display = 'block'
+
+  // Ensure the content is expanded
+  const content = document.getElementById(`unit-content-${baseUnit}`)
+  const icon = document.getElementById(`unit-icon-${baseUnit}`)
+  if (content.classList.contains('collapsed')) {
+    content.classList.remove('collapsed')
+    icon.classList.remove('collapsed')
+  }
+}
+
+// Save edited base unit
+async function saveEditBaseUnit(baseUnit) {
+  const descInputId = `edit-unit-desc-${baseUnit}`
+  const description = document.getElementById(descInputId).value.trim()
+
+  try {
+    // Get the existing unit definition and update only the category (description)
+    const existingDef = unitDefinitions[baseUnit] || { conversions: {} }
+    const updatedDef = {
+      baseUnit: baseUnit,
+      category: description || baseUnit,
+      conversions: existingDef.conversions || {}
+    }
+
+    console.log('Saving base unit:', updatedDef)
+
+    const res = await fetch(`${API_BASE}/unit-definitions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updatedDef)
+    })
+
+    if (!res.ok) {
+      const errorText = await res.text()
+      console.error('Failed to update base unit:', errorText)
+      throw new Error('Failed to update base unit')
+    }
+
+    const result = await res.json()
+    console.log('Save result:', result)
+
+    showStatus(`Updated base unit: ${baseUnit}`, 'success')
+
+    // Update local unitDefinitions to reflect the change immediately
+    if (unitDefinitions[baseUnit]) {
+      unitDefinitions[baseUnit].category = description
+    }
+
+    // Reload schema and unit definitions
+    await loadSchema()
+    await loadUnitDefinitions()
+
+    console.log('Updated unitDefinitions:', unitDefinitions[baseUnit])
+
+    renderUnitDefinitions()
+
+    initializePatternDropdowns()
+    initializeCustomCategoryDropdowns()
+    initializeUnitDefinitionsDropdowns()
+    initializePathOverridesDropdowns()
+  } catch (error) {
+    console.error('Error updating base unit:', error)
+    showStatus('Failed to update base unit: ' + error.message, 'error')
+  }
+}
+
+// Cancel editing base unit
+function cancelEditBaseUnit(baseUnit) {
+  const viewDiv = document.getElementById(`unit-view-${baseUnit}`)
+  const editDiv = document.getElementById(`unit-edit-${baseUnit}`)
+
+  viewDiv.style.display = 'block'
+  editDiv.style.display = 'none'
+}
+
+// Edit conversion
+function editConversion(baseUnit, targetUnit) {
+  const conv = unitDefinitions[baseUnit]?.conversions?.[targetUnit] || {}
+
+  const rowId = `conversion-row-${baseUnit}-${targetUnit}`
+  const row = document.getElementById(rowId)
+
+  if (!row) return
+
+  const editRowId = `conversion-edit-${baseUnit}-${targetUnit}`
+  const targetInputId = `edit-conv-target-${baseUnit}-${targetUnit}`
+  const formulaInputId = `edit-conv-formula-${baseUnit}-${targetUnit}`
+  const inverseInputId = `edit-conv-inverse-${baseUnit}-${targetUnit}`
+  const symbolInputId = `edit-conv-symbol-${baseUnit}-${targetUnit}`
+
+  // Create edit row
+  const editRow = document.createElement('tr')
+  editRow.id = editRowId
+  editRow.innerHTML = `
+    <td colspan="5" style="padding: 15px; background: #fff3cd;">
+      <h5 style="margin: 0 0 10px 0; color: #856404; font-size: 13px;">Edit Conversion: ${baseUnit} → ${targetUnit}</h5>
+      <div style="display: grid; grid-template-columns: 1fr 2fr 2fr 1fr; gap: 10px; margin-bottom: 10px;">
+        <div>
+          <label style="font-size: 12px; color: #666; display: block; margin-bottom: 3px;">Target Unit</label>
+          <input type="text" id="${targetInputId}" value="${targetUnit}" readonly style="background: #f5f5f5; padding: 6px; width: 100%; border: 1px solid #ddd; border-radius: 4px; font-family: monospace;">
+        </div>
+        <div>
+          <label style="font-size: 12px; color: #666; display: block; margin-bottom: 3px;">Formula (base → target)</label>
+          <input type="text" id="${formulaInputId}" value="${conv.formula}" placeholder="e.g., value * 0.264" style="padding: 6px; width: 100%; border: 1px solid #ddd; border-radius: 4px; font-family: monospace;">
+        </div>
+        <div>
+          <label style="font-size: 12px; color: #666; display: block; margin-bottom: 3px;">Inverse Formula (target → base)</label>
+          <input type="text" id="${inverseInputId}" value="${conv.inverseFormula}" placeholder="e.g., value * 3.785" style="padding: 6px; width: 100%; border: 1px solid #ddd; border-radius: 4px; font-family: monospace;">
+        </div>
+        <div>
+          <label style="font-size: 12px; color: #666; display: block; margin-bottom: 3px;">Symbol</label>
+          <input type="text" id="${symbolInputId}" value="${conv.symbol}" placeholder="e.g., gal/h" style="padding: 6px; width: 100%; border: 1px solid #ddd; border-radius: 4px;">
+        </div>
+      </div>
+      <div style="display: flex; gap: 10px;">
+        <button class="btn-success" onclick="saveEditConversion('${baseUnit}', '${targetUnit}')" style="padding: 6px 12px; font-size: 12px;">Save Changes</button>
+        <button class="btn-secondary" onclick="cancelEditConversion('${baseUnit}', '${targetUnit}')" style="padding: 6px 12px; font-size: 12px;">Cancel</button>
+      </div>
+    </td>
+  `
+
+  // Insert edit row after current row and hide current row
+  row.style.display = 'none'
+  row.parentNode.insertBefore(editRow, row.nextSibling)
+}
+
+// Save edited conversion
+async function saveEditConversion(baseUnit, targetUnit) {
+  const formulaInputId = `edit-conv-formula-${baseUnit}-${targetUnit}`
+  const inverseInputId = `edit-conv-inverse-${baseUnit}-${targetUnit}`
+  const symbolInputId = `edit-conv-symbol-${baseUnit}-${targetUnit}`
+
+  const formula = document.getElementById(formulaInputId).value.trim()
+  const inverseFormula = document.getElementById(inverseInputId).value.trim()
+  const symbol = document.getElementById(symbolInputId).value.trim()
+
+  if (!formula || !inverseFormula || !symbol) {
+    showStatus('Please fill in all fields', 'error')
+    return
+  }
+
+  try {
+    // Use POST to overwrite the existing conversion
+    const res = await fetch(`${API_BASE}/unit-definitions/${baseUnit}/conversions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        targetUnit,
+        formula,
+        inverseFormula,
+        symbol
+      })
+    })
+
+    if (!res.ok) throw new Error('Failed to update conversion')
+
+    showStatus(`Updated conversion: ${baseUnit} → ${targetUnit}`, 'success')
+
+    // Reload schema and unit definitions
+    await loadSchema()
+    await loadUnitDefinitions()
+    renderUnitDefinitions()
+
+    initializePatternDropdowns()
+    initializeCustomCategoryDropdowns()
+    initializeUnitDefinitionsDropdowns()
+    initializePathOverridesDropdowns()
+  } catch (error) {
+    showStatus('Failed to update conversion: ' + error.message, 'error')
+  }
+}
+
+// Cancel editing conversion
+function cancelEditConversion(baseUnit, targetUnit) {
+  const rowId = `conversion-row-${baseUnit}-${targetUnit}`
+  const editRowId = `conversion-edit-${baseUnit}-${targetUnit}`
+
+  const row = document.getElementById(rowId)
+  const editRow = document.getElementById(editRowId)
+
+  if (row) row.style.display = ''
+  if (editRow) editRow.remove()
 }
 
 // Initialize Unit Definitions dropdowns
