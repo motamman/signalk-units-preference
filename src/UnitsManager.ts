@@ -396,24 +396,26 @@ export class UnitsManager {
     const pathsSet = new Set<string>()
 
     try {
-      const apiUrl = `http://localhost:${(this.app as any).config?.settings?.port || 3000}/signalk/v1/api/`
+      let hostname = 'localhost'
+      let port = 3000
+      let protocol = 'http'
 
-      type FetchFn = (input: string, init?: any) => Promise<{ ok: boolean; statusText: string; json(): Promise<any> }>
-      let fetchFn: FetchFn | null = null
+      const configSettings = (this.app as any).config?.settings
+      if (configSettings) {
+        hostname = configSettings.hostname || hostname
+        port = configSettings.port || port
+        protocol = configSettings.ssl ? 'https' : protocol
+      }
+
+      const apiUrl = `${protocol}://${hostname}:${port}/signalk/v1/api/`
 
       const globalFetch = (globalThis as any).fetch
-      if (typeof globalFetch === 'function') {
-        fetchFn = globalFetch.bind(globalThis) as FetchFn
-      } else {
-        try {
-          // eslint-disable-next-line @typescript-eslint/no-var-requires
-          const fetchModule = require('node-fetch')
-          fetchFn = (fetchModule.default || fetchModule) as FetchFn
-        } catch (err) {
-          this.app.error('Fetch API not available and "node-fetch" is not installed. Unable to load SignalK metadata.')
-          return pathsSet
-        }
+      if (typeof globalFetch !== 'function') {
+        this.app.error('Fetch API is unavailable. Unable to load SignalK metadata without native fetch support.')
+        return pathsSet
       }
+
+      const fetchFn = globalFetch.bind(globalThis) as (input: string, init?: any) => Promise<{ ok: boolean; statusText: string; json(): Promise<any> }>
 
       this.app.debug(`Fetching from SignalK API: ${apiUrl}`)
       const response = await fetchFn(apiUrl)
