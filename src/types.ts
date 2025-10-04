@@ -8,6 +8,10 @@ export interface ConversionDefinition {
   inverseFormula: string
   /** Symbol to display for this unit (e.g., "kn", "°C", "mph") */
   symbol: string
+  /** Optional: Named date format for date/time conversions */
+  dateFormat?: string
+  /** Optional: Whether to render using local time zone */
+  useLocalTime?: boolean
   /** Legacy: Multiplication factor (deprecated, use formula instead) */
   factor?: number
   /** Legacy: Inverse factor (deprecated, use inverseFormula instead) */
@@ -135,6 +139,10 @@ export interface ConversionResponse {
   category: string
   /** Value type (number, boolean, string, date) */
   valueType: PathValueType
+  /** Optional: Named date format when category is date/time */
+  dateFormat?: string
+  /** Optional: Whether to render using local time zone */
+  useLocalTime?: boolean
   /** Whether this path supports PUT operations */
   supportsPut?: boolean
   /** Latest SignalK timestamp, if available */

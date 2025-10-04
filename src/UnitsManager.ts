@@ -355,7 +355,8 @@ export class UnitsManager {
             distance: { targetUnit: 'nm', displayFormat: '0.0' },
             depth: { targetUnit: 'm', displayFormat: '0.0' },
             angle: { targetUnit: 'deg', displayFormat: '0' },
-            percentage: { targetUnit: 'percent', displayFormat: '0' }
+            percentage: { targetUnit: 'percent', displayFormat: '0' },
+            dateTime: { targetUnit: 'short-date', displayFormat: 'short-date' }
           },
           pathOverrides: {},
           pathPatterns: [
@@ -583,16 +584,20 @@ export class UnitsManager {
     const skMeta = this.signalKMetadata[pathStr]
     const valueType = this.detectValueType(skMeta?.units || metadata.baseUnit || undefined, skMeta?.value)
 
+    const displayFormat = conversion.dateFormat || preference.displayFormat || targetUnit
+
     return {
       path: pathStr,
       baseUnit: metadata.baseUnit,
       targetUnit,
       formula: conversion.formula,
       inverseFormula: conversion.inverseFormula,
-      displayFormat: preference.displayFormat,
+      displayFormat,
       symbol: conversion.symbol,
       category: metadata.category,
       valueType,
+      dateFormat: conversion.dateFormat || displayFormat,
+      useLocalTime: conversion.useLocalTime,
       supportsPut: skMeta?.supportsPut,
       signalkTimestamp: skMeta?.timestamp,
       signalkSource: skMeta?.$source || skMeta?.source
@@ -648,6 +653,8 @@ export class UnitsManager {
       symbol: symbol,
       category: 'none',
       valueType: valueType,
+      dateFormat: valueType === 'date' ? 'ISO-8601' : undefined,
+      useLocalTime: valueType === 'date' ? false : undefined,
       supportsPut: skMeta?.supportsPut,
       signalkTimestamp: skMeta?.timestamp,
       signalkSource: skMeta?.$source || skMeta?.source
@@ -1002,7 +1009,15 @@ export class UnitsManager {
             baseUnit: metadata.baseUnit,
             category: metadata.category,
             conversions: targetUnit && conversion
-              ? { [targetUnit]: { ...conversion } }
+              ? {
+                  [targetUnit]: {
+                    formula: conversion.formula,
+                    inverseFormula: conversion.inverseFormula,
+                    symbol: conversion.symbol,
+                    dateFormat: conversion.dateFormat,
+                    useLocalTime: conversion.useLocalTime
+                  }
+                }
               : {}
           }
         } else {
@@ -1264,7 +1279,8 @@ export class UnitsManager {
       's': 's (time)',
       'C': 'C (charge)',
       'deg': 'deg (latitude/longitude)',
-      'm3/s': 'm³/s (volume rate)'
+      'm3/s': 'm³/s (volume rate)',
+      'RFC 3339 (UTC)': 'RFC 3339 (UTC) (date/time)'
     }
     return labels[unit] || unit
   }

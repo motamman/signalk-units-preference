@@ -15,6 +15,14 @@ let unitSchema = {
   categoryToBaseUnit: {}
 }
 
+function sanitizeIdSegment(value) {
+  return String(value).replace(/[^a-zA-Z0-9_-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')
+}
+
+function buildConversionId(prefix, baseUnit, targetUnit) {
+  return `${prefix}-${sanitizeIdSegment(baseUnit)}-${sanitizeIdSegment(targetUnit)}`
+}
+
 // Preset dirty state tracking
 let originalPresetState = null
 let isPresetDirty = false
@@ -2040,6 +2048,7 @@ function renderUnitDefinitions() {
     const badge = isCustom
       ? '<span style="background: #667eea; color: white; padding: 2px 8px; border-radius: 3px; font-size: 11px; margin-left: 8px;">CUSTOM</span>'
       : '<span style="background: #6c757d; color: white; padding: 2px 8px; border-radius: 3px; font-size: 11px; margin-left: 8px;">CORE</span>'
+    const safeBaseUnit = sanitizeIdSegment(baseUnit)
 
     return `
       <div class="unit-definition-item" style="padding: 12px 16px; background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 6px; margin-bottom: 8px;">
@@ -2052,11 +2061,11 @@ function renderUnitDefinitions() {
           <div style="display: flex; align-items: center; gap: 10px;">
             <button class="btn-primary btn-edit" onclick="event.stopPropagation(); editBaseUnit('${baseUnit}')">Edit</button>
             <button class="btn-danger btn-delete" onclick="event.stopPropagation(); deleteBaseUnit('${baseUnit}')">Delete</button>
-            <span class="collapse-icon collapsed" id="unit-icon-${baseUnit}">▼</span>
+            <span class="collapse-icon collapsed" id="unit-icon-${safeBaseUnit}">▼</span>
           </div>
         </div>
-        <div class="collapsible-content collapsed" id="unit-content-${baseUnit}">
-          <div id="unit-view-${baseUnit}">
+        <div class="collapsible-content collapsed" id="unit-content-${safeBaseUnit}">
+          <div id="unit-view-${safeBaseUnit}">
             ${conversions.length > 0 ? `
               <div style="background: white; padding: 15px; border-radius: 4px;">
                 <h4 style="margin: 0 0 10px 0;">Available Conversions</h4>
@@ -2070,9 +2079,10 @@ function renderUnitDefinitions() {
                       <th style="padding: 8px;"></th>
                     </tr>
                   </thead>
-                  <tbody id="conversions-tbody-${baseUnit}">
-                    ${conversions.map(([target, conv]) => `
-                      <tr id="conversion-row-${baseUnit}-${target}" style="border-bottom: 1px solid #f0f0f0;">
+                  <tbody id="conversions-tbody-${safeBaseUnit}">
+                    ${conversions.map(([target, conv]) => {
+                      return `
+                      <tr id="${buildConversionId('conversion-row', baseUnit, target)}" style="border-bottom: 1px solid #f0f0f0;">
                         <td style="padding: 8px; font-family: monospace;">${target}</td>
                         <td style="padding: 8px; font-family: monospace; font-size: 12px;">${conv.formula}</td>
                         <td style="padding: 8px; font-family: monospace; font-size: 12px;">${conv.inverseFormula}</td>
@@ -2081,14 +2091,14 @@ function renderUnitDefinitions() {
                           <button class="btn-primary btn-edit" onclick="editConversion('${baseUnit}', '${target}')">Edit</button>
                           <button class="btn-danger btn-delete" onclick="deleteConversion('${baseUnit}', '${target}')">Delete</button>
                         </td>
-                      </tr>
-                    `).join('')}
+                      </tr>`
+                    }).join('')}
                   </tbody>
                 </table>
               </div>
             ` : '<p style="color: #7f8c8d; font-style: italic;">No conversions defined yet</p>'}
           </div>
-          <div id="unit-edit-${baseUnit}" style="display: none;">
+          <div id="unit-edit-${safeBaseUnit}" style="display: none;">
             <!-- Edit form will be inserted here -->
           </div>
         </div>
@@ -2169,8 +2179,9 @@ async function deleteConversion(baseUnit, targetUnit) {
 
 // Toggle unit item
 function toggleUnitItem(baseUnit) {
-  const content = document.getElementById(`unit-content-${baseUnit}`)
-  const icon = document.getElementById(`unit-icon-${baseUnit}`)
+  const safeBaseUnit = sanitizeIdSegment(baseUnit)
+  const content = document.getElementById(`unit-content-${safeBaseUnit}`)
+  const icon = document.getElementById(`unit-icon-${safeBaseUnit}`)
 
   if (!content || !icon) return
 
@@ -2178,12 +2189,12 @@ function toggleUnitItem(baseUnit) {
 
   // Close all other units (accordion behavior)
   document.querySelectorAll('[id^="unit-content-"]').forEach(el => {
-    if (el.id !== `unit-content-${baseUnit}`) {
+    if (el.id !== `unit-content-${safeBaseUnit}`) {
       el.classList.add('collapsed')
     }
   })
   document.querySelectorAll('[id^="unit-icon-"]').forEach(el => {
-    if (el.id !== `unit-icon-${baseUnit}`) {
+    if (el.id !== `unit-icon-${safeBaseUnit}`) {
       el.classList.add('collapsed')
     }
   })
@@ -2202,12 +2213,13 @@ function toggleUnitItem(baseUnit) {
 function editBaseUnit(baseUnit) {
   const def = unitDefinitions[baseUnit] || {}
   const description = def.category || ''
+  const safeBaseUnit = sanitizeIdSegment(baseUnit)
 
-  const viewDiv = document.getElementById(`unit-view-${baseUnit}`)
-  const editDiv = document.getElementById(`unit-edit-${baseUnit}`)
+  const viewDiv = document.getElementById(`unit-view-${safeBaseUnit}`)
+  const editDiv = document.getElementById(`unit-edit-${safeBaseUnit}`)
 
-  const symbolInputId = `edit-unit-symbol-${baseUnit}`
-  const descInputId = `edit-unit-desc-${baseUnit}`
+  const symbolInputId = `edit-unit-symbol-${safeBaseUnit}`
+  const descInputId = `edit-unit-desc-${safeBaseUnit}`
 
   // Build edit form
   editDiv.innerHTML = `
@@ -2236,8 +2248,8 @@ function editBaseUnit(baseUnit) {
   editDiv.style.display = 'block'
 
   // Ensure the content is expanded
-  const content = document.getElementById(`unit-content-${baseUnit}`)
-  const icon = document.getElementById(`unit-icon-${baseUnit}`)
+  const content = document.getElementById(`unit-content-${safeBaseUnit}`)
+  const icon = document.getElementById(`unit-icon-${safeBaseUnit}`)
   if (content.classList.contains('collapsed')) {
     content.classList.remove('collapsed')
     icon.classList.remove('collapsed')
@@ -2246,7 +2258,8 @@ function editBaseUnit(baseUnit) {
 
 // Save edited base unit
 async function saveEditBaseUnit(baseUnit) {
-  const descInputId = `edit-unit-desc-${baseUnit}`
+  const safeBaseUnit = sanitizeIdSegment(baseUnit)
+  const descInputId = `edit-unit-desc-${safeBaseUnit}`
   const description = document.getElementById(descInputId).value.trim()
 
   try {
@@ -2302,8 +2315,9 @@ async function saveEditBaseUnit(baseUnit) {
 
 // Cancel editing base unit
 function cancelEditBaseUnit(baseUnit) {
-  const viewDiv = document.getElementById(`unit-view-${baseUnit}`)
-  const editDiv = document.getElementById(`unit-edit-${baseUnit}`)
+  const safeBaseUnit = sanitizeIdSegment(baseUnit)
+  const viewDiv = document.getElementById(`unit-view-${safeBaseUnit}`)
+  const editDiv = document.getElementById(`unit-edit-${safeBaseUnit}`)
 
   viewDiv.style.display = 'block'
   editDiv.style.display = 'none'
@@ -2313,16 +2327,16 @@ function cancelEditBaseUnit(baseUnit) {
 function editConversion(baseUnit, targetUnit) {
   const conv = unitDefinitions[baseUnit]?.conversions?.[targetUnit] || {}
 
-  const rowId = `conversion-row-${baseUnit}-${targetUnit}`
+  const rowId = buildConversionId('conversion-row', baseUnit, targetUnit)
   const row = document.getElementById(rowId)
 
   if (!row) return
 
-  const editRowId = `conversion-edit-${baseUnit}-${targetUnit}`
-  const targetInputId = `edit-conv-target-${baseUnit}-${targetUnit}`
-  const formulaInputId = `edit-conv-formula-${baseUnit}-${targetUnit}`
-  const inverseInputId = `edit-conv-inverse-${baseUnit}-${targetUnit}`
-  const symbolInputId = `edit-conv-symbol-${baseUnit}-${targetUnit}`
+  const editRowId = buildConversionId('conversion-edit', baseUnit, targetUnit)
+  const targetInputId = buildConversionId('edit-conv-target', baseUnit, targetUnit)
+  const formulaInputId = buildConversionId('edit-conv-formula', baseUnit, targetUnit)
+  const inverseInputId = buildConversionId('edit-conv-inverse', baseUnit, targetUnit)
+  const symbolInputId = buildConversionId('edit-conv-symbol', baseUnit, targetUnit)
 
   // Create edit row
   const editRow = document.createElement('tr')
@@ -2362,9 +2376,9 @@ function editConversion(baseUnit, targetUnit) {
 
 // Save edited conversion
 async function saveEditConversion(baseUnit, targetUnit) {
-  const formulaInputId = `edit-conv-formula-${baseUnit}-${targetUnit}`
-  const inverseInputId = `edit-conv-inverse-${baseUnit}-${targetUnit}`
-  const symbolInputId = `edit-conv-symbol-${baseUnit}-${targetUnit}`
+  const formulaInputId = buildConversionId('edit-conv-formula', baseUnit, targetUnit)
+  const inverseInputId = buildConversionId('edit-conv-inverse', baseUnit, targetUnit)
+  const symbolInputId = buildConversionId('edit-conv-symbol', baseUnit, targetUnit)
 
   const formula = document.getElementById(formulaInputId).value.trim()
   const inverseFormula = document.getElementById(inverseInputId).value.trim()
@@ -2408,8 +2422,8 @@ async function saveEditConversion(baseUnit, targetUnit) {
 
 // Cancel editing conversion
 function cancelEditConversion(baseUnit, targetUnit) {
-  const rowId = `conversion-row-${baseUnit}-${targetUnit}`
-  const editRowId = `conversion-edit-${baseUnit}-${targetUnit}`
+  const rowId = buildConversionId('conversion-row', baseUnit, targetUnit)
+  const editRowId = buildConversionId('conversion-edit', baseUnit, targetUnit)
 
   const row = document.getElementById(rowId)
   const editRow = document.getElementById(editRowId)

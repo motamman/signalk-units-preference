@@ -87,6 +87,14 @@ Paths without conversions automatically return their original values with Signal
 - **Preserves Units**: Returns base unit from SignalK specification
 - **Formula**: `value` (no conversion)
 
+### 9. **Date/Time Formatting**
+Render ISO-8601 SignalK timestamps in human-friendly formats.
+
+- **Multiple Presets**: Short & long dates, regional formats, time-of-day, epoch seconds
+- **Local vs UTC**: Target units with `-local` suffix render in the vessel's local timezone
+- **Category-Aware**: New `dateTime` category ties into presets, patterns, and overrides
+- **Drop-In**: Select the desired target unit (e.g., `short-date`, `time-24hrs`, `epoch-seconds`)—no custom code required
+
 ## How It Works
 
 The plugin uses a **priority hierarchy** to determine which conversion to apply:

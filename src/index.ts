@@ -3,6 +3,7 @@ import { IRouter, Request, Response } from 'express'
 import { UnitsManager } from './UnitsManager'
 import {
   ConversionDeltaValue,
+  ConversionResponse,
   DeltaResponse,
   DeltaValueEntry,
   PluginConfig
@@ -83,6 +84,108 @@ module.exports = (app: ServerAPI): Plugin => {
           error.details = details
         }
         return error
+      }
+
+      const MONTH_NAMES_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+      const MONTH_NAMES_LONG = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+      const WEEKDAY_NAMES_LONG = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+
+      const pad2 = (value: number): string => value.toString().padStart(2, '0')
+
+      const getDateParts = (date: Date, useLocal: boolean) => ({
+        year: useLocal ? date.getFullYear() : date.getUTCFullYear(),
+        monthIndex: useLocal ? date.getMonth() : date.getUTCMonth(),
+        day: useLocal ? date.getDate() : date.getUTCDate(),
+        hours: useLocal ? date.getHours() : date.getUTCHours(),
+        minutes: useLocal ? date.getMinutes() : date.getUTCMinutes(),
+        seconds: useLocal ? date.getSeconds() : date.getUTCSeconds(),
+        weekday: useLocal ? date.getDay() : date.getUTCDay()
+      })
+
+      const formatDateConversion = (
+        isoValue: string,
+        conversionInfo: ConversionResponse,
+        pathStr: string
+      ): { convertedValue: any; formatted: string; displayFormat: string } => {
+        const date = new Date(isoValue)
+        if (Number.isNaN(date.getTime())) {
+          throw createBadRequestError('Invalid ISO-8601 date value', {
+            received: isoValue,
+            path: pathStr
+          })
+        }
+
+        const targetUnit = conversionInfo.targetUnit || ''
+        const normalizedTarget = targetUnit.endsWith('-local') ? targetUnit.replace(/-local$/, '') : targetUnit
+        const useLocal = conversionInfo.useLocalTime ?? targetUnit.endsWith('-local')
+        const formatKey = (conversionInfo.dateFormat || normalizedTarget || '').toLowerCase()
+        const parts = getDateParts(date, useLocal)
+
+        const monthShort = MONTH_NAMES_SHORT[parts.monthIndex] || ''
+        const monthLong = MONTH_NAMES_LONG[parts.monthIndex] || ''
+        const weekdayLong = WEEKDAY_NAMES_LONG[parts.weekday] || ''
+
+        let formatted: string
+        let convertedValue: any
+
+        switch (formatKey) {
+          case 'short-date': {
+            formatted = `${monthShort} ${parts.day}, ${parts.year}`
+            convertedValue = formatted
+            break
+          }
+          case 'long-date': {
+            formatted = `${weekdayLong}, ${monthLong} ${parts.day}, ${parts.year}`
+            convertedValue = formatted
+            break
+          }
+          case 'dd/mm/yyyy': {
+            formatted = `${pad2(parts.day)}/${pad2(parts.monthIndex + 1)}/${parts.year}`
+            convertedValue = formatted
+            break
+          }
+          case 'mm/dd/yyyy': {
+            formatted = `${pad2(parts.monthIndex + 1)}/${pad2(parts.day)}/${parts.year}`
+            convertedValue = formatted
+            break
+          }
+          case 'mm/yyyy': {
+            formatted = `${pad2(parts.monthIndex + 1)}/${parts.year}`
+            convertedValue = formatted
+            break
+          }
+          case 'time-24hrs': {
+            formatted = `${pad2(parts.hours)}:${pad2(parts.minutes)}:${pad2(parts.seconds)}`
+            convertedValue = formatted
+            break
+          }
+          case 'time-am/pm': {
+            const hours12 = parts.hours % 12 || 12
+            const suffix = parts.hours >= 12 ? 'PM' : 'AM'
+            formatted = `${pad2(hours12)}:${pad2(parts.minutes)}:${pad2(parts.seconds)} ${suffix}`
+            convertedValue = formatted
+            break
+          }
+          case 'epoch-seconds': {
+            const epochSeconds = Math.floor(date.getTime() / 1000)
+            convertedValue = epochSeconds
+            formatted = String(epochSeconds)
+            break
+          }
+          default: {
+            formatted = isoValue
+            convertedValue = isoValue
+            break
+          }
+        }
+
+        const displayFormat = conversionInfo.displayFormat || formatKey || 'ISO-8601'
+
+        return {
+          convertedValue,
+          formatted,
+          displayFormat
+        }
       }
 
       const normalizeValueForConversion = (
@@ -207,7 +310,12 @@ module.exports = (app: ServerAPI): Plugin => {
         let displayFormat = conversionInfo.displayFormat
         let symbol = conversionInfo.symbol || ''
 
-        switch (resolvedType) {
+        let typeToUse = resolvedType
+        if (conversionInfo.dateFormat && typeof normalizedValue === 'string') {
+          typeToUse = 'date'
+        }
+
+        switch (typeToUse) {
           case 'number': {
             if (typeof normalizedValue !== 'number') {
               throw createBadRequestError('Expected numeric value for conversion', {
@@ -245,9 +353,10 @@ module.exports = (app: ServerAPI): Plugin => {
                 path: pathStr
               })
             }
-            convertedValue = normalizedValue
-            formatted = normalizedValue
-            displayFormat = 'ISO-8601'
+            const formattedDate = formatDateConversion(normalizedValue, conversionInfo, pathStr)
+            convertedValue = formattedDate.convertedValue
+            formatted = formattedDate.formatted
+            displayFormat = formattedDate.displayFormat
             symbol = ''
             break
           }
@@ -329,7 +438,9 @@ module.exports = (app: ServerAPI): Plugin => {
                 [targetUnit]: {
                   formula: conversion.formula,
                   inverseFormula: conversion.inverseFormula,
-                  symbol: conversion.symbol || ''
+                  symbol: conversion.symbol || '',
+                  dateFormat: conversion.dateFormat,
+                  useLocalTime: conversion.useLocalTime
                 }
               }
             }
