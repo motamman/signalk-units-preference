@@ -1,7 +1,7 @@
 {
   "name": "signalk-units-preference",
   "version": "0.5.0-beta.1",
-  "description": "SignalK plugin for managing unit conversions and display preferences",
+  "description": "SignalK webapp for managing unit conversions and display preferences",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
@@ -11,13 +11,26 @@
   "keywords": [
     "signalk-node-server-plugin",
     "signalk-category-utility",
-    "signalk-webapp"
+    "signalk-webapp",
+    "unit converter",
+    "signalk-target units",
+    "signalk-preferences"
   ],
-  "author": "",
-  "license": "Apache-2.0",
+  "author": "Maurice Tamman",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/motamman/signalk-units-preference.git"
+  },
+  "bugs": {
+    "url": "https://github.com/motamman/signalk-units-preference/issues"
+  },
+  "homepage": "https://github.com/motamman/signalk-units-preference#readme",
   "signalk": {
-    "appIcon": "./icon.png",
-    "displayName": "Units Preference"
+    "appSupport": "webapp",
+    "compatibility": ">=2.13.0",
+    "displayName": "Units Preference",
+    "appIcon": "units.png"
   },
   "dependencies": {
     "express": "^4.18.2"
