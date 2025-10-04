@@ -8,15 +8,26 @@ import {
   DeltaValueEntry,
   PluginConfig
 } from './types'
-import openApiSpec from './openapi.json'
-import * as fs from 'fs'
 import * as path from 'path'
+import * as fs from 'fs'
 
 const PLUGIN_ID = 'signalk-units-preference'
 const PLUGIN_NAME = 'Units Preference Manager'
 
 module.exports = (app: ServerAPI): Plugin => {
+  const DEFAULT_PLUGIN_SCHEMA = {
+    type: 'object',
+    properties: {
+      debug: {
+        type: 'boolean',
+        title: 'Enable debug logging',
+        default: false
+      }
+    }
+  }
+
   let unitsManager: UnitsManager
+  let openApiSpec: object = DEFAULT_PLUGIN_SCHEMA
   let pluginConfig: PluginConfig = {}
 
   const plugin: Plugin = {
@@ -25,16 +36,7 @@ module.exports = (app: ServerAPI): Plugin => {
     description:
       'Manages unit conversions and display preferences for SignalK data paths',
 
-    schema: () => ({
-      type: 'object',
-      properties: {
-        debug: {
-          type: 'boolean',
-          title: 'Enable debug logging',
-          default: false
-        }
-      }
-    }),
+    schema: () => openApiSpec,
 
     start: async (config: PluginConfig) => {
       pluginConfig = config
@@ -43,6 +45,15 @@ module.exports = (app: ServerAPI): Plugin => {
         const dataDir = app.getDataDirPath()
         unitsManager = new UnitsManager(app, dataDir)
         await unitsManager.initialize()
+
+        const openApiPath = path.join(__dirname, 'openapi.json')
+        if (fs.existsSync(openApiPath)) {
+          const jsonData = fs.readFileSync(openApiPath, 'utf-8')
+          openApiSpec = JSON.parse(jsonData)
+        } else {
+          app.debug(`OpenAPI spec not found at ${openApiPath}`)
+          openApiSpec = DEFAULT_PLUGIN_SCHEMA
+        }
 
         app.setPluginStatus('Running')
         app.debug('Plugin started successfully')
