@@ -7,10 +7,22 @@ export function evaluateFormula(formula: string, value: number): number {
   // Replace 'value' with the actual number
   const expression = formula.replace(/value/g, value.toString())
 
-  // Validate: only allow numbers, operators, parentheses, and whitespace
-  const safePattern = /^[\d\s+\-*/().]+$/
+  // Validate: allow numbers, operators, parentheses, whitespace, and Math functions
+  // Allow: digits, operators, parentheses, dots, commas, and word characters (for Math.pow, etc)
+  const safePattern = /^[\d\s+\-*/().,\w]+$/
   if (!safePattern.test(expression)) {
     throw new Error(`Unsafe formula: ${formula}`)
+  }
+
+  // Additional check: only allow specific Math methods
+  const allowedMathFunctions = ['Math.pow', 'Math.sqrt', 'Math.abs', 'Math.round', 'Math.floor', 'Math.ceil', 'Math.min', 'Math.max']
+  const hasMath = /Math\.\w+/.test(expression)
+  if (hasMath) {
+    const mathFunctions = expression.match(/Math\.\w+/g) || []
+    const invalidFunctions = mathFunctions.filter(fn => !allowedMathFunctions.includes(fn))
+    if (invalidFunctions.length > 0) {
+      throw new Error(`Unsafe Math functions: ${invalidFunctions.join(', ')}`)
+    }
   }
 
   try {

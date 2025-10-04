@@ -860,7 +860,10 @@ export class UnitsManager {
     conversion: ConversionDefinition
   ): Promise<void> {
     if (!this.unitDefinitions[baseUnit]) {
-      throw new Error(`Base unit ${baseUnit} not found`)
+      throw new Error(`Cannot add conversion to built-in base unit "${baseUnit}". Only custom base units can be modified.`)
+    }
+    if (!this.unitDefinitions[baseUnit].conversions) {
+      this.unitDefinitions[baseUnit].conversions = {}
     }
     this.unitDefinitions[baseUnit].conversions[targetUnit] = conversion
     await this.saveUnitDefinitions()

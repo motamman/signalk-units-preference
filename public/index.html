@@ -508,6 +508,15 @@
             color: #0066cc;
         }
 
+        .autocomplete-item:hover,
+        .autocomplete-item.selected {
+            background: #e3f2fd;
+        }
+
+        .autocomplete-item:last-child {
+            border-bottom: none;
+        }
+
         .path-tree-toggle {
             width: 16px;
             height: 16px;
@@ -985,9 +994,8 @@
                         <div style="display: grid; grid-template-columns: 2.5fr 1fr 1fr 0.8fr; gap: 12px; margin-bottom: 15px;">
                             <div class="input-group" style="margin: 0; position: relative;">
                                 <label style="font-weight: 500; margin-bottom: 6px; display: block; font-size: 13px;">Path</label>
-                                <input type="text" id="overridePathSearch" class="path-tree-search" placeholder="🔍 Search paths..." style="width: 100%;">
-                                <div id="overridePathTree" class="path-tree-container" style="display: none; position: absolute; z-index: 1000; background: white; border: 1px solid #dee2e6; border-radius: 4px; max-height: 300px; overflow-y: auto; width: 100%; margin-top: 2px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"></div>
-                                <input type="hidden" id="selectedOverridePath">
+                                <input type="text" id="overridePathInput" placeholder="Type to search paths..." style="width: 100%;" autocomplete="off">
+                                <div id="overridePathAutocomplete" style="display: none; position: absolute; z-index: 1000; background: white; border: 1px solid #dee2e6; border-radius: 4px; max-height: 300px; overflow-y: auto; width: 100%; margin-top: 2px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"></div>
                             </div>
                             <div class="input-group" style="margin: 0;">
                                 <label style="font-weight: 500; margin-bottom: 6px; display: block; font-size: 13px;">Base Unit</label>

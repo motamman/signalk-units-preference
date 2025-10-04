@@ -2645,7 +2645,7 @@ function initializeUnitDefinitionsDropdowns() {
 
 // Add a path override
 async function addPathOverride() {
-  const path = document.getElementById('selectedOverridePath').value.trim()
+  const path = document.getElementById('overridePathInput').value.trim()
   const baseSelect = document.getElementById('overrideBaseUnit')
   const targetSelect = document.getElementById('overrideTargetUnit')
   const format = document.getElementById('overrideFormat').value.trim()
@@ -2686,8 +2686,7 @@ async function addPathOverride() {
     showStatus(`Added path override: ${path}`, 'success')
 
     // Clear form
-    document.getElementById('selectedOverridePath').value = ''
-    document.getElementById('overridePathSearch').value = ''
+    document.getElementById('overridePathInput').value = ''
     document.getElementById('overrideFormat').value = '0.0'
 
     // Re-render without reloading (to preserve dirty state)
@@ -2716,6 +2715,7 @@ function renderPathOverrides() {
       const targetUnit = override.targetUnit || 'none'
       const displayFormat = override.displayFormat || '0.0'
       const safePath = override.path.replace(/\./g, '-')
+      const escapedPath = override.path.replace(/'/g, "\\'")
 
       return `
       <div class="override-item" style="padding: 12px 16px; background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 6px; margin-bottom: 8px;">
@@ -2729,8 +2729,8 @@ function renderPathOverrides() {
             <a href="${convertUrl}" target="_blank" title="Test conversion with current value (${currentValue})" style="color: #2ecc71; font-size: 14px; text-decoration: none;">▶️</a>
           </div>
           <div style="display: flex; gap: 8px;">
-            <button class="btn-primary btn-edit" onclick="editPathOverride('${override.path}')">Edit</button>
-            <button class="btn-danger btn-delete" onclick="deletePathOverride('${override.path}')">Delete</button>
+            <button class="btn-primary btn-edit" onclick="editPathOverride('${escapedPath}')">Edit</button>
+            <button class="btn-danger btn-delete" onclick="deletePathOverride('${escapedPath}')">Delete</button>
           </div>
         </div>
         <div id="override-edit-${safePath}" style="display: none;"></div>
@@ -2771,6 +2771,7 @@ async function editPathOverride(path) {
   const baseSelectId = `edit-override-base-${safePath}`
   const targetSelectId = `edit-override-target-${safePath}`
   const formatInputId = `edit-override-format-${safePath}`
+  const escapedPath = path.replace(/'/g, "\\'")
 
   editDiv.innerHTML = `
     <div style="background: #fff3cd; padding: 16px; border-radius: 6px; margin-top: 12px;">
@@ -2789,8 +2790,8 @@ async function editPathOverride(path) {
         </div>
       </div>
       <div style="display: flex; gap: 10px;">
-        <button class="btn-success" onclick="saveEditPathOverride('${path}')" style="padding: 8px 16px;">Save Changes</button>
-        <button class="btn-secondary" onclick="cancelEditPathOverride('${path}')" style="padding: 8px 16px;">Cancel</button>
+        <button class="btn-success" onclick="saveEditPathOverride('${escapedPath}')" style="padding: 8px 16px;">Save Changes</button>
+        <button class="btn-secondary" onclick="cancelEditPathOverride('${escapedPath}')" style="padding: 8px 16px;">Cancel</button>
       </div>
     </div>
   `
@@ -2842,6 +2843,7 @@ async function saveEditPathOverride(path) {
 
   try {
     const overridePref = {
+      path,
       baseUnit,
       targetUnit,
       displayFormat
@@ -2941,5 +2943,183 @@ function initializePathOverridesDropdowns() {
         <option value="">-- Select Base Unit First --</option>
       </select>
     `
+  }
+
+  // Initialize path autocomplete
+  initializePathAutocomplete()
+}
+
+// Initialize path autocomplete for override input
+function initializePathAutocomplete() {
+  const input = document.getElementById('overridePathInput')
+  const dropdown = document.getElementById('overridePathAutocomplete')
+
+  if (!input || !dropdown) return
+
+  let selectedIndex = -1
+
+  // Show autocomplete on focus (show first 50 paths)
+  input.addEventListener('focus', function () {
+    if (this.value.trim()) {
+      // If there's already text, trigger the input handler
+      input.dispatchEvent(new Event('input'))
+      return
+    }
+
+    // Check if paths are loaded
+    if (!availablePaths || availablePaths.length === 0) {
+      dropdown.innerHTML =
+        '<div style="padding: 12px; color: #e74c3c; font-style: italic;">No paths available. Make sure SignalK is running and has data.</div>'
+      dropdown.style.display = 'block'
+      return
+    }
+
+    // Show first 50 paths
+    const displayPaths = availablePaths.slice(0, 50)
+
+    dropdown.innerHTML = displayPaths
+      .map(
+        (path, index) => `
+        <div class="autocomplete-item" data-index="${index}" data-path="${path}"
+             style="padding: 8px 12px; cursor: pointer; border-bottom: 1px solid #f0f0f0; font-family: monospace; font-size: 12px;">
+          ${path}
+        </div>
+      `
+      )
+      .join('')
+
+    if (availablePaths.length > 50) {
+      dropdown.innerHTML += `<div style="padding: 8px 12px; color: #999; font-size: 11px; border-top: 2px solid #dee2e6;">Showing 50 of ${availablePaths.length} paths. Start typing to filter.</div>`
+    }
+
+    dropdown.style.display = 'block'
+    selectedIndex = -1
+
+    // Add hover and click handlers
+    dropdown.querySelectorAll('.autocomplete-item').forEach((item, index) => {
+      item.addEventListener('mouseenter', function () {
+        dropdown.querySelectorAll('.autocomplete-item').forEach(i => i.classList.remove('selected'))
+        this.classList.add('selected')
+        selectedIndex = index
+      })
+
+      item.addEventListener('click', function () {
+        input.value = this.dataset.path
+        dropdown.style.display = 'none'
+        selectedIndex = -1
+      })
+    })
+  })
+
+  // Show autocomplete on input
+  input.addEventListener('input', function () {
+    const searchTerm = this.value.toLowerCase().trim()
+
+    if (!searchTerm) {
+      dropdown.style.display = 'none'
+      selectedIndex = -1
+      return
+    }
+
+    // Check if paths are loaded
+    if (!availablePaths || availablePaths.length === 0) {
+      dropdown.innerHTML =
+        '<div style="padding: 12px; color: #e74c3c; font-style: italic;">No paths available. Make sure SignalK is running and has data.</div>'
+      dropdown.style.display = 'block'
+      return
+    }
+
+    // Filter paths
+    const matches = availablePaths.filter(path => path.toLowerCase().includes(searchTerm))
+
+    if (matches.length === 0) {
+      dropdown.innerHTML =
+        '<div style="padding: 12px; color: #999; font-style: italic;">No matching paths</div>'
+      dropdown.style.display = 'block'
+      return
+    }
+
+    // Limit to 50 results for performance
+    const displayMatches = matches.slice(0, 50)
+
+    dropdown.innerHTML = displayMatches
+      .map(
+        (path, index) => `
+        <div class="autocomplete-item" data-index="${index}" data-path="${path}"
+             style="padding: 8px 12px; cursor: pointer; border-bottom: 1px solid #f0f0f0; font-family: monospace; font-size: 12px;">
+          ${path}
+        </div>
+      `
+      )
+      .join('')
+
+    if (matches.length > 50) {
+      dropdown.innerHTML += `<div style="padding: 8px 12px; color: #999; font-size: 11px; border-top: 2px solid #dee2e6;">Showing 50 of ${matches.length} matches. Keep typing to narrow results.</div>`
+    }
+
+    dropdown.style.display = 'block'
+    selectedIndex = -1
+
+    // Add hover and click handlers
+    dropdown.querySelectorAll('.autocomplete-item').forEach((item, index) => {
+      item.addEventListener('mouseenter', function () {
+        dropdown.querySelectorAll('.autocomplete-item').forEach(i => i.classList.remove('selected'))
+        this.classList.add('selected')
+        selectedIndex = index
+      })
+
+      item.addEventListener('click', function () {
+        input.value = this.dataset.path
+        dropdown.style.display = 'none'
+        selectedIndex = -1
+      })
+    })
+  })
+
+  // Keyboard navigation
+  input.addEventListener('keydown', function (e) {
+    const items = dropdown.querySelectorAll('.autocomplete-item')
+
+    if (!items.length) return
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      selectedIndex = Math.min(selectedIndex + 1, items.length - 1)
+      updateSelection(items, selectedIndex)
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      selectedIndex = Math.max(selectedIndex - 1, 0)
+      updateSelection(items, selectedIndex)
+    } else if (e.key === 'Enter') {
+      e.preventDefault()
+      if (selectedIndex >= 0 && items[selectedIndex]) {
+        input.value = items[selectedIndex].dataset.path
+        dropdown.style.display = 'none'
+        selectedIndex = -1
+      }
+    } else if (e.key === 'Escape') {
+      dropdown.style.display = 'none'
+      selectedIndex = -1
+    }
+  })
+
+  // Close on click outside
+  document.addEventListener('click', function (e) {
+    if (!input.contains(e.target) && !dropdown.contains(e.target)) {
+      dropdown.style.display = 'none'
+      selectedIndex = -1
+    }
+  })
+
+  // Helper to update selection styling
+  function updateSelection(items, index) {
+    items.forEach((item, i) => {
+      if (i === index) {
+        item.classList.add('selected')
+        item.scrollIntoView({ block: 'nearest' })
+      } else {
+        item.classList.remove('selected')
+      }
+    })
   }
 }

@@ -145,65 +145,8 @@ function renderPathTree() {
     }
   }
 
-  // Override tab
-  const overrideContainer = document.getElementById('overridePathTree')
-  if (overrideContainer) {
-    console.log('Setting up override path tree')
-    overrideContainer.innerHTML = renderTreeNode(pathTree, 0)
-
-    const overrideSearchInput = document.getElementById('overridePathSearch')
-    if (overrideSearchInput) {
-      console.log('Override search input found, adding listeners')
-
-      // Show tree on focus or click
-      overrideSearchInput.addEventListener('focus', e => {
-        console.log('Override search focused')
-        overrideContainer.style.display = 'block'
-      })
-
-      overrideSearchInput.addEventListener('click', e => {
-        console.log('Override search clicked')
-        e.stopPropagation()
-        overrideContainer.style.display = 'block'
-      })
-
-      // Filter tree on input (or show all if empty)
-      overrideSearchInput.addEventListener('input', e => {
-        console.log('Override search input:', e.target.value)
-        overrideContainer.style.display = 'block'
-        if (e.target.value) {
-          filterPathTree(e.target.value, 'overridePathTree')
-        } else {
-          // Show all paths when search is cleared
-          overrideContainer.querySelectorAll('.path-tree-node').forEach(el => {
-            el.style.display = ''
-          })
-          overrideContainer.querySelectorAll('.path-tree-children').forEach(el => {
-            el.classList.remove('expanded')
-          })
-          overrideContainer.querySelectorAll('.path-tree-toggle').forEach(el => {
-            if (el.textContent) el.textContent = '▶'
-          })
-        }
-      })
-
-      // Prevent container clicks from closing
-      overrideContainer.addEventListener('click', e => {
-        e.stopPropagation()
-      })
-
-      // Close dropdown when clicking outside
-      document.addEventListener('click', e => {
-        if (!overrideSearchInput.contains(e.target) && !overrideContainer.contains(e.target)) {
-          overrideContainer.style.display = 'none'
-        }
-      })
-    } else {
-      console.error('Override search input NOT found')
-    }
-  } else {
-    console.error('Override path tree container NOT found')
-  }
+  // Override tab now uses autocomplete instead of tree
+  console.log('Override path selection now uses autocomplete')
 }
 
 // Render a tree node
@@ -269,7 +212,6 @@ function selectPath(path) {
   const clickedItem = event.target.closest('.path-tree-item')
   const container = clickedItem.closest('.path-tree-container')
   const isMetadataTree = container.id === 'metadataPathTree'
-  const isOverrideTree = container.id === 'overridePathTree'
 
   // Remove previous selection in this container only
   container.querySelectorAll('.path-tree-item.selected').forEach(el => {
@@ -282,11 +224,6 @@ function selectPath(path) {
   if (isMetadataTree) {
     // Metadata tab
     selectMetadataPath(path)
-  } else if (isOverrideTree) {
-    // Override tab
-    document.getElementById('selectedOverridePath').value = path
-    document.getElementById('overridePathSearch').value = path
-    container.style.display = 'none'
   } else {
     // Pattern tab (legacy)
     const newOverridePathEl = document.getElementById('newOverridePath')

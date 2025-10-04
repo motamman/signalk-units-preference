@@ -677,7 +677,7 @@ module.exports = (app: ServerAPI): Plugin => {
             res.json({ success: true, baseUnit, targetUnit })
           } catch (error) {
             app.error(`Error adding conversion: ${error}`)
-            res.status(500).json({ error: 'Internal server error' })
+            res.status(400).json({ error: error instanceof Error ? error.message : 'Internal server error' })
           }
         }
       )
