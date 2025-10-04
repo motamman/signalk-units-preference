@@ -32,9 +32,7 @@ export function evaluateFormula(formula: string, value: number): number {
  * Format examples: "0", "0.0", "0.00"
  */
 export function formatNumber(value: number, format: string): string {
-  const decimalPlaces = format.includes('.')
-    ? format.split('.')[1].length
-    : 0
+  const decimalPlaces = format.includes('.') ? format.split('.')[1].length : 0
 
   return value.toFixed(decimalPlaces)
 }

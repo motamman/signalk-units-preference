@@ -1,13 +1,7 @@
 import { Plugin, ServerAPI } from '@signalk/server-api'
 import { IRouter, Request, Response } from 'express'
 import { UnitsManager } from './UnitsManager'
-import {
-  ConversionDeltaValue,
-  ConversionResponse,
-  DeltaResponse,
-  DeltaValueEntry,
-  PluginConfig
-} from './types'
+import { ConversionDeltaValue, DeltaResponse, DeltaValueEntry } from './types'
 import * as path from 'path'
 import * as fs from 'fs'
 
@@ -28,19 +22,15 @@ module.exports = (app: ServerAPI): Plugin => {
 
   let unitsManager: UnitsManager
   let openApiSpec: object = DEFAULT_PLUGIN_SCHEMA
-  let pluginConfig: PluginConfig = {}
 
   const plugin: Plugin = {
     id: PLUGIN_ID,
     name: PLUGIN_NAME,
-    description:
-      'Manages unit conversions and display preferences for SignalK data paths',
+    description: 'Manages unit conversions and display preferences for SignalK data paths',
 
     schema: () => DEFAULT_PLUGIN_SCHEMA,
 
-    start: async (config: PluginConfig) => {
-      pluginConfig = config
-
+    start: async () => {
       try {
         const dataDir = app.getDataDirPath()
         unitsManager = new UnitsManager(app, dataDir)
@@ -102,7 +92,10 @@ module.exports = (app: ServerAPI): Plugin => {
         expectedType: string,
         typeHint?: SupportedValueType
       ): { value: unknown; usedType: SupportedValueType } => {
-        const targetType = typeHint !== undefined && typeHint !== 'unknown' ? typeHint : toSupportedValueType(expectedType)
+        const targetType =
+          typeHint !== undefined && typeHint !== 'unknown'
+            ? typeHint
+            : toSupportedValueType(expectedType)
 
         if (targetType === 'number') {
           if (typeof rawValue === 'number' && Number.isFinite(rawValue)) {
@@ -208,9 +201,10 @@ module.exports = (app: ServerAPI): Plugin => {
           updates: [baseUpdate]
         }
 
-        const resolvedType = normalized.usedType !== 'unknown'
-          ? normalized.usedType
-          : toSupportedValueType(conversionInfo.valueType)
+        const resolvedType =
+          normalized.usedType !== 'unknown'
+            ? normalized.usedType
+            : toSupportedValueType(conversionInfo.valueType)
 
         const normalizedValue = normalized.value
 
@@ -219,7 +213,8 @@ module.exports = (app: ServerAPI): Plugin => {
         let displayFormat = conversionInfo.displayFormat
         let symbol = conversionInfo.symbol || ''
 
-        const isDateCategory = conversionInfo.category === 'dateTime' || conversionInfo.category === 'epoch'
+        const isDateCategory =
+          conversionInfo.category === 'dateTime' || conversionInfo.category === 'epoch'
         let typeToUse = resolvedType
         if (conversionInfo.dateFormat || isDateCategory) {
           typeToUse = 'date'
@@ -458,11 +453,19 @@ module.exports = (app: ServerAPI): Plugin => {
       // GET /plugins/signalk-units-preference/unit-convert
       router.get('/unit-convert', (req: Request, res: Response) => {
         try {
-          const baseUnitParam = Array.isArray(req.query.baseUnit) ? req.query.baseUnit[0] : req.query.baseUnit
-          const targetUnitParam = Array.isArray(req.query.targetUnit) ? req.query.targetUnit[0] : req.query.targetUnit
+          const baseUnitParam = Array.isArray(req.query.baseUnit)
+            ? req.query.baseUnit[0]
+            : req.query.baseUnit
+          const targetUnitParam = Array.isArray(req.query.targetUnit)
+            ? req.query.targetUnit[0]
+            : req.query.targetUnit
           const valueParam = Array.isArray(req.query.value) ? req.query.value[0] : req.query.value
-          const displayFormatParam = Array.isArray(req.query.displayFormat) ? req.query.displayFormat[0] : req.query.displayFormat
-          const useLocalParam = Array.isArray(req.query.useLocalTime) ? req.query.useLocalTime[0] : req.query.useLocalTime
+          const displayFormatParam = Array.isArray(req.query.displayFormat)
+            ? req.query.displayFormat[0]
+            : req.query.displayFormat
+          const useLocalParam = Array.isArray(req.query.useLocalTime)
+            ? req.query.useLocalTime[0]
+            : req.query.useLocalTime
 
           if (!baseUnitParam || typeof baseUnitParam !== 'string') {
             throw createBadRequestError('baseUnit query parameter is required')
@@ -474,9 +477,10 @@ module.exports = (app: ServerAPI): Plugin => {
             throw createBadRequestError('value query parameter is required')
           }
 
-          const useLocalTime = typeof useLocalParam === 'string'
-            ? ['true', '1', 'yes', 'y', 'on'].includes(useLocalParam.toLowerCase())
-            : undefined
+          const useLocalTime =
+            typeof useLocalParam === 'string'
+              ? ['true', '1', 'yes', 'y', 'on'].includes(useLocalParam.toLowerCase())
+              : undefined
 
           const result = unitsManager.convertUnitValue(baseUnitParam, targetUnitParam, valueParam, {
             displayFormat: typeof displayFormatParam === 'string' ? displayFormatParam : undefined,
@@ -544,9 +548,10 @@ module.exports = (app: ServerAPI): Plugin => {
       router.post('/convert', (req: Request, res: Response) => {
         try {
           // Support both JSON and form data
-          let path = req.body.path
+          const path = req.body.path
           let value = req.body.value
-          const typeHintBody = typeof req.body.type === 'string' ? toSupportedValueType(req.body.type) : undefined
+          const typeHintBody =
+            typeof req.body.type === 'string' ? toSupportedValueType(req.body.type) : undefined
 
           // If value is a string from form data, try to parse it as JSON
           if (typeof value === 'string' && value !== '') {
@@ -659,39 +664,45 @@ module.exports = (app: ServerAPI): Plugin => {
 
       // POST /plugins/signalk-units-preference/unit-definitions/:baseUnit/conversions
       // Add a conversion to a base unit
-      router.post('/unit-definitions/:baseUnit/conversions', async (req: Request, res: Response) => {
-        try {
-          const baseUnit = req.params.baseUnit
-          const { targetUnit, formula, inverseFormula, symbol } = req.body
-          if (!targetUnit || !formula || !inverseFormula || !symbol) {
-            return res.status(400).json({
-              error: 'targetUnit, formula, inverseFormula, and symbol are required'
+      router.post(
+        '/unit-definitions/:baseUnit/conversions',
+        async (req: Request, res: Response) => {
+          try {
+            const baseUnit = req.params.baseUnit
+            const { targetUnit, formula, inverseFormula, symbol } = req.body
+            if (!targetUnit || !formula || !inverseFormula || !symbol) {
+              return res.status(400).json({
+                error: 'targetUnit, formula, inverseFormula, and symbol are required'
+              })
+            }
+            await unitsManager.addConversionToUnit(baseUnit, targetUnit, {
+              formula,
+              inverseFormula,
+              symbol
             })
+            res.json({ success: true, baseUnit, targetUnit })
+          } catch (error) {
+            app.error(`Error adding conversion: ${error}`)
+            res.status(500).json({ error: 'Internal server error' })
           }
-          await unitsManager.addConversionToUnit(baseUnit, targetUnit, {
-            formula,
-            inverseFormula,
-            symbol
-          })
-          res.json({ success: true, baseUnit, targetUnit })
-        } catch (error) {
-          app.error(`Error adding conversion: ${error}`)
-          res.status(500).json({ error: 'Internal server error' })
         }
-      })
+      )
 
       // DELETE /plugins/signalk-units-preference/unit-definitions/:baseUnit/conversions/:targetUnit
       // Delete a conversion
-      router.delete('/unit-definitions/:baseUnit/conversions/:targetUnit', async (req: Request, res: Response) => {
-        try {
-          const { baseUnit, targetUnit } = req.params
-          await unitsManager.deleteConversionFromUnit(baseUnit, targetUnit)
-          res.json({ success: true, baseUnit, targetUnit })
-        } catch (error) {
-          app.error(`Error deleting conversion: ${error}`)
-          res.status(500).json({ error: 'Internal server error' })
+      router.delete(
+        '/unit-definitions/:baseUnit/conversions/:targetUnit',
+        async (req: Request, res: Response) => {
+          try {
+            const { baseUnit, targetUnit } = req.params
+            await unitsManager.deleteConversionFromUnit(baseUnit, targetUnit)
+            res.json({ success: true, baseUnit, targetUnit })
+          } catch (error) {
+            app.error(`Error deleting conversion: ${error}`)
+            res.status(500).json({ error: 'Internal server error' })
+          }
         }
-      })
+      )
 
       // GET /plugins/signalk-units-preference/current-preset
       // Get current preset information
@@ -741,44 +752,38 @@ module.exports = (app: ServerAPI): Plugin => {
 
       // PUT /plugins/signalk-units-preference/categories/:category
       // Update category preference
-      router.put(
-        '/categories/:category',
-        async (req: Request, res: Response) => {
-          try {
-            const category = req.params.category
-            const preference = req.body
+      router.put('/categories/:category', async (req: Request, res: Response) => {
+        try {
+          const category = req.params.category
+          const preference = req.body
 
-            if (preference.targetUnit === undefined || preference.displayFormat === undefined) {
-              return res.status(400).json({
-                error: 'Invalid preference format',
-                required: ['targetUnit', 'displayFormat']
-              })
-            }
-
-            await unitsManager.updateCategoryPreference(category, preference)
-            res.json({ success: true, category })
-          } catch (error) {
-            app.error(`Error updating category preference: ${error}`)
-            res.status(500).json({ error: 'Internal server error' })
+          if (preference.targetUnit === undefined || preference.displayFormat === undefined) {
+            return res.status(400).json({
+              error: 'Invalid preference format',
+              required: ['targetUnit', 'displayFormat']
+            })
           }
+
+          await unitsManager.updateCategoryPreference(category, preference)
+          res.json({ success: true, category })
+        } catch (error) {
+          app.error(`Error updating category preference: ${error}`)
+          res.status(500).json({ error: 'Internal server error' })
         }
-      )
+      })
 
       // DELETE /plugins/signalk-units-preference/categories/:category
       // Delete custom category preference
-      router.delete(
-        '/categories/:category',
-        async (req: Request, res: Response) => {
-          try {
-            const category = req.params.category
-            await unitsManager.deleteCategoryPreference(category)
-            res.json({ success: true, category })
-          } catch (error) {
-            app.error(`Error deleting category preference: ${error}`)
-            res.status(500).json({ error: 'Internal server error' })
-          }
+      router.delete('/categories/:category', async (req: Request, res: Response) => {
+        try {
+          const category = req.params.category
+          await unitsManager.deleteCategoryPreference(category)
+          res.json({ success: true, category })
+        } catch (error) {
+          app.error(`Error deleting category preference: ${error}`)
+          res.status(500).json({ error: 'Internal server error' })
         }
-      )
+      })
 
       // GET /plugins/signalk-units-preference/overrides
       // Get all path overrides
@@ -816,44 +821,38 @@ module.exports = (app: ServerAPI): Plugin => {
 
       // PUT /plugins/signalk-units-preference/overrides/:path
       // Update path-specific override
-      router.put(
-        '/overrides/:path(*)',
-        async (req: Request, res: Response) => {
-          try {
-            const pathStr = req.params.path
-            const preference = req.body
+      router.put('/overrides/:path(*)', async (req: Request, res: Response) => {
+        try {
+          const pathStr = req.params.path
+          const preference = req.body
 
-            if (!preference.targetUnit || !preference.displayFormat) {
-              return res.status(400).json({
-                error: 'Invalid preference format',
-                required: ['targetUnit', 'displayFormat']
-              })
-            }
-
-            await unitsManager.updatePathOverride(pathStr, preference)
-            res.json({ success: true, path: pathStr })
-          } catch (error) {
-            app.error(`Error updating path override: ${error}`)
-            res.status(500).json({ error: 'Internal server error' })
+          if (!preference.targetUnit || !preference.displayFormat) {
+            return res.status(400).json({
+              error: 'Invalid preference format',
+              required: ['targetUnit', 'displayFormat']
+            })
           }
+
+          await unitsManager.updatePathOverride(pathStr, preference)
+          res.json({ success: true, path: pathStr })
+        } catch (error) {
+          app.error(`Error updating path override: ${error}`)
+          res.status(500).json({ error: 'Internal server error' })
         }
-      )
+      })
 
       // DELETE /plugins/signalk-units-preference/overrides/:path
       // Delete path-specific override
-      router.delete(
-        '/overrides/:path(*)',
-        async (req: Request, res: Response) => {
-          try {
-            const pathStr = req.params.path
-            await unitsManager.deletePathOverride(pathStr)
-            res.json({ success: true, path: pathStr })
-          } catch (error) {
-            app.error(`Error deleting path override: ${error}`)
-            res.status(500).json({ error: 'Internal server error' })
-          }
+      router.delete('/overrides/:path(*)', async (req: Request, res: Response) => {
+        try {
+          const pathStr = req.params.path
+          await unitsManager.deletePathOverride(pathStr)
+          res.json({ success: true, path: pathStr })
+        } catch (error) {
+          app.error(`Error deleting path override: ${error}`)
+          res.status(500).json({ error: 'Internal server error' })
         }
-      )
+      })
 
       // GET /plugins/signalk-units-preference/patterns
       // Get all path patterns
@@ -918,7 +917,9 @@ module.exports = (app: ServerAPI): Plugin => {
           res.json({ success: true, index })
         } catch (error) {
           app.error(`Error updating pattern: ${error}`)
-          res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error' })
+          res
+            .status(500)
+            .json({ error: error instanceof Error ? error.message : 'Internal server error' })
         }
       })
 
@@ -931,7 +932,9 @@ module.exports = (app: ServerAPI): Plugin => {
           res.json({ success: true, index })
         } catch (error) {
           app.error(`Error deleting pattern: ${error}`)
-          res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error' })
+          res
+            .status(500)
+            .json({ error: error instanceof Error ? error.message : 'Internal server error' })
         }
       })
 
@@ -980,7 +983,9 @@ module.exports = (app: ServerAPI): Plugin => {
           })
         } catch (error) {
           app.error(`Error applying preset: ${error}`)
-          res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error' })
+          res
+            .status(500)
+            .json({ error: error instanceof Error ? error.message : 'Internal server error' })
         }
       })
 
@@ -993,7 +998,8 @@ module.exports = (app: ServerAPI): Plugin => {
           // Validate name format
           if (!/^[a-zA-Z0-9_-]+$/.test(presetName)) {
             return res.status(400).json({
-              error: 'Invalid preset name. Only letters, numbers, dashes, and underscores are allowed.'
+              error:
+                'Invalid preset name. Only letters, numbers, dashes, and underscores are allowed.'
             })
           }
 
@@ -1071,7 +1077,9 @@ module.exports = (app: ServerAPI): Plugin => {
           })
         } catch (error) {
           app.error(`Error saving custom preset: ${error}`)
-          res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error' })
+          res
+            .status(500)
+            .json({ error: error instanceof Error ? error.message : 'Internal server error' })
         }
       })
 
@@ -1088,8 +1096,7 @@ module.exports = (app: ServerAPI): Plugin => {
           }
 
           // Read all JSON files in custom directory
-          const files = fs.readdirSync(customPresetsDir)
-            .filter(file => file.endsWith('.json'))
+          const files = fs.readdirSync(customPresetsDir).filter(file => file.endsWith('.json'))
 
           const presets = files.map(file => {
             const presetPath = path.join(customPresetsDir, file)
@@ -1107,7 +1114,9 @@ module.exports = (app: ServerAPI): Plugin => {
           res.json(presets)
         } catch (error) {
           app.error(`Error listing custom presets: ${error}`)
-          res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error' })
+          res
+            .status(500)
+            .json({ error: error instanceof Error ? error.message : 'Internal server error' })
         }
       })
 
@@ -1150,7 +1159,9 @@ module.exports = (app: ServerAPI): Plugin => {
           })
         } catch (error) {
           app.error(`Error applying custom preset: ${error}`)
-          res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error' })
+          res
+            .status(500)
+            .json({ error: error instanceof Error ? error.message : 'Internal server error' })
         }
       })
 
@@ -1173,7 +1184,9 @@ module.exports = (app: ServerAPI): Plugin => {
           })
         } catch (error) {
           app.error(`Error deleting custom preset: ${error}`)
-          res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error' })
+          res
+            .status(500)
+            .json({ error: error instanceof Error ? error.message : 'Internal server error' })
         }
       })
 

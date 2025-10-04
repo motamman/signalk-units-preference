@@ -31,7 +31,11 @@ export const defaultUnitsMetadata: UnitsMetadataStore = {
     category: 'temperature',
     conversions: {
       celsius: { formula: 'value - 273.15', inverseFormula: 'value + 273.15', symbol: '°C' },
-      fahrenheit: { formula: '(value - 273.15) * 9/5 + 32', inverseFormula: '(value - 32) * 5/9 + 273.15', symbol: '°F' }
+      fahrenheit: {
+        formula: '(value - 273.15) * 9/5 + 32',
+        inverseFormula: '(value - 32) * 5/9 + 273.15',
+        symbol: '°F'
+      }
     }
   },
   'environment.water.temperature': {
@@ -39,7 +43,11 @@ export const defaultUnitsMetadata: UnitsMetadataStore = {
     category: 'temperature',
     conversions: {
       celsius: { formula: 'value - 273.15', inverseFormula: 'value + 273.15', symbol: '°C' },
-      fahrenheit: { formula: '(value - 273.15) * 9/5 + 32', inverseFormula: '(value - 32) * 5/9 + 273.15', symbol: '°F' }
+      fahrenheit: {
+        formula: '(value - 273.15) * 9/5 + 32',
+        inverseFormula: '(value - 32) * 5/9 + 273.15',
+        symbol: '°F'
+      }
     }
   },
 
@@ -114,7 +122,11 @@ export const defaultUnitsMetadata: UnitsMetadataStore = {
     conversions: {
       L: { formula: 'value * 1000', inverseFormula: 'value * 0.001', symbol: 'L' },
       gal: { formula: 'value * 264.172', inverseFormula: 'value * 0.00378541', symbol: 'gal' },
-      'gal(UK)': { formula: 'value * 219.969', inverseFormula: 'value * 0.00454609', symbol: 'gal(UK)' }
+      'gal(UK)': {
+        formula: 'value * 219.969',
+        inverseFormula: 'value * 0.00454609',
+        symbol: 'gal(UK)'
+      }
     }
   },
 
@@ -154,41 +166,190 @@ export const defaultUnitsMetadata: UnitsMetadataStore = {
     baseUnit: 'RFC 3339 (UTC)',
     category: 'dateTime',
     conversions: {
-      'short-date': { formula: 'value', inverseFormula: 'value', symbol: '', dateFormat: 'short-date' },
-      'short-date-local': { formula: 'value', inverseFormula: 'value', symbol: '', dateFormat: 'short-date', useLocalTime: true },
-      'long-date': { formula: 'value', inverseFormula: 'value', symbol: '', dateFormat: 'long-date' },
-      'long-date-local': { formula: 'value', inverseFormula: 'value', symbol: '', dateFormat: 'long-date', useLocalTime: true },
-      'dd/mm/yyyy': { formula: 'value', inverseFormula: 'value', symbol: '', dateFormat: 'dd/mm/yyyy' },
-      'dd/mm/yyyy-local': { formula: 'value', inverseFormula: 'value', symbol: '', dateFormat: 'dd/mm/yyyy', useLocalTime: true },
-      'mm/dd/yyyy': { formula: 'value', inverseFormula: 'value', symbol: '', dateFormat: 'mm/dd/yyyy' },
-      'mm/dd/yyyy-local': { formula: 'value', inverseFormula: 'value', symbol: '', dateFormat: 'mm/dd/yyyy', useLocalTime: true },
+      'short-date': {
+        formula: 'value',
+        inverseFormula: 'value',
+        symbol: '',
+        dateFormat: 'short-date'
+      },
+      'short-date-local': {
+        formula: 'value',
+        inverseFormula: 'value',
+        symbol: '',
+        dateFormat: 'short-date',
+        useLocalTime: true
+      },
+      'long-date': {
+        formula: 'value',
+        inverseFormula: 'value',
+        symbol: '',
+        dateFormat: 'long-date'
+      },
+      'long-date-local': {
+        formula: 'value',
+        inverseFormula: 'value',
+        symbol: '',
+        dateFormat: 'long-date',
+        useLocalTime: true
+      },
+      'dd/mm/yyyy': {
+        formula: 'value',
+        inverseFormula: 'value',
+        symbol: '',
+        dateFormat: 'dd/mm/yyyy'
+      },
+      'dd/mm/yyyy-local': {
+        formula: 'value',
+        inverseFormula: 'value',
+        symbol: '',
+        dateFormat: 'dd/mm/yyyy',
+        useLocalTime: true
+      },
+      'mm/dd/yyyy': {
+        formula: 'value',
+        inverseFormula: 'value',
+        symbol: '',
+        dateFormat: 'mm/dd/yyyy'
+      },
+      'mm/dd/yyyy-local': {
+        formula: 'value',
+        inverseFormula: 'value',
+        symbol: '',
+        dateFormat: 'mm/dd/yyyy',
+        useLocalTime: true
+      },
       'mm/yyyy': { formula: 'value', inverseFormula: 'value', symbol: '', dateFormat: 'mm/yyyy' },
-      'mm/yyyy-local': { formula: 'value', inverseFormula: 'value', symbol: '', dateFormat: 'mm/yyyy', useLocalTime: true },
-      'time-24hrs': { formula: 'value', inverseFormula: 'value', symbol: '', dateFormat: 'time-24hrs' },
-      'time-24hrs-local': { formula: 'value', inverseFormula: 'value', symbol: '', dateFormat: 'time-24hrs', useLocalTime: true },
-      'time-am/pm': { formula: 'value', inverseFormula: 'value', symbol: '', dateFormat: 'time-am/pm' },
-      'time-am/pm-local': { formula: 'value', inverseFormula: 'value', symbol: '', dateFormat: 'time-am/pm', useLocalTime: true },
-      'epoch-seconds': { formula: 'value', inverseFormula: 'value', symbol: '', dateFormat: 'epoch-seconds' }
+      'mm/yyyy-local': {
+        formula: 'value',
+        inverseFormula: 'value',
+        symbol: '',
+        dateFormat: 'mm/yyyy',
+        useLocalTime: true
+      },
+      'time-24hrs': {
+        formula: 'value',
+        inverseFormula: 'value',
+        symbol: '',
+        dateFormat: 'time-24hrs'
+      },
+      'time-24hrs-local': {
+        formula: 'value',
+        inverseFormula: 'value',
+        symbol: '',
+        dateFormat: 'time-24hrs',
+        useLocalTime: true
+      },
+      'time-am/pm': {
+        formula: 'value',
+        inverseFormula: 'value',
+        symbol: '',
+        dateFormat: 'time-am/pm'
+      },
+      'time-am/pm-local': {
+        formula: 'value',
+        inverseFormula: 'value',
+        symbol: '',
+        dateFormat: 'time-am/pm',
+        useLocalTime: true
+      },
+      'epoch-seconds': {
+        formula: 'value',
+        inverseFormula: 'value',
+        symbol: '',
+        dateFormat: 'epoch-seconds'
+      }
     }
   },
   'navigation.datetime.epoch': {
     baseUnit: 'Epoch Seconds',
     category: 'epoch',
     conversions: {
-      'short-date': { formula: 'value', inverseFormula: 'value', symbol: '', dateFormat: 'short-date' },
-      'short-date-local': { formula: 'value', inverseFormula: 'value', symbol: '', dateFormat: 'short-date', useLocalTime: true },
-      'long-date': { formula: 'value', inverseFormula: 'value', symbol: '', dateFormat: 'long-date' },
-      'long-date-local': { formula: 'value', inverseFormula: 'value', symbol: '', dateFormat: 'long-date', useLocalTime: true },
-      'dd/mm/yyyy': { formula: 'value', inverseFormula: 'value', symbol: '', dateFormat: 'dd/mm/yyyy' },
-      'dd/mm/yyyy-local': { formula: 'value', inverseFormula: 'value', symbol: '', dateFormat: 'dd/mm/yyyy', useLocalTime: true },
-      'mm/dd/yyyy': { formula: 'value', inverseFormula: 'value', symbol: '', dateFormat: 'mm/dd/yyyy' },
-      'mm/dd/yyyy-local': { formula: 'value', inverseFormula: 'value', symbol: '', dateFormat: 'mm/dd/yyyy', useLocalTime: true },
+      'short-date': {
+        formula: 'value',
+        inverseFormula: 'value',
+        symbol: '',
+        dateFormat: 'short-date'
+      },
+      'short-date-local': {
+        formula: 'value',
+        inverseFormula: 'value',
+        symbol: '',
+        dateFormat: 'short-date',
+        useLocalTime: true
+      },
+      'long-date': {
+        formula: 'value',
+        inverseFormula: 'value',
+        symbol: '',
+        dateFormat: 'long-date'
+      },
+      'long-date-local': {
+        formula: 'value',
+        inverseFormula: 'value',
+        symbol: '',
+        dateFormat: 'long-date',
+        useLocalTime: true
+      },
+      'dd/mm/yyyy': {
+        formula: 'value',
+        inverseFormula: 'value',
+        symbol: '',
+        dateFormat: 'dd/mm/yyyy'
+      },
+      'dd/mm/yyyy-local': {
+        formula: 'value',
+        inverseFormula: 'value',
+        symbol: '',
+        dateFormat: 'dd/mm/yyyy',
+        useLocalTime: true
+      },
+      'mm/dd/yyyy': {
+        formula: 'value',
+        inverseFormula: 'value',
+        symbol: '',
+        dateFormat: 'mm/dd/yyyy'
+      },
+      'mm/dd/yyyy-local': {
+        formula: 'value',
+        inverseFormula: 'value',
+        symbol: '',
+        dateFormat: 'mm/dd/yyyy',
+        useLocalTime: true
+      },
       'mm/yyyy': { formula: 'value', inverseFormula: 'value', symbol: '', dateFormat: 'mm/yyyy' },
-      'mm/yyyy-local': { formula: 'value', inverseFormula: 'value', symbol: '', dateFormat: 'mm/yyyy', useLocalTime: true },
-      'time-24hrs': { formula: 'value', inverseFormula: 'value', symbol: '', dateFormat: 'time-24hrs' },
-      'time-24hrs-local': { formula: 'value', inverseFormula: 'value', symbol: '', dateFormat: 'time-24hrs', useLocalTime: true },
-      'time-am/pm': { formula: 'value', inverseFormula: 'value', symbol: '', dateFormat: 'time-am/pm' },
-      'time-am/pm-local': { formula: 'value', inverseFormula: 'value', symbol: '', dateFormat: 'time-am/pm', useLocalTime: true }
+      'mm/yyyy-local': {
+        formula: 'value',
+        inverseFormula: 'value',
+        symbol: '',
+        dateFormat: 'mm/yyyy',
+        useLocalTime: true
+      },
+      'time-24hrs': {
+        formula: 'value',
+        inverseFormula: 'value',
+        symbol: '',
+        dateFormat: 'time-24hrs'
+      },
+      'time-24hrs-local': {
+        formula: 'value',
+        inverseFormula: 'value',
+        symbol: '',
+        dateFormat: 'time-24hrs',
+        useLocalTime: true
+      },
+      'time-am/pm': {
+        formula: 'value',
+        inverseFormula: 'value',
+        symbol: '',
+        dateFormat: 'time-am/pm'
+      },
+      'time-am/pm-local': {
+        formula: 'value',
+        inverseFormula: 'value',
+        symbol: '',
+        dateFormat: 'time-am/pm',
+        useLocalTime: true
+      }
     }
   },
 
@@ -200,7 +361,7 @@ export const defaultUnitsMetadata: UnitsMetadataStore = {
       knots: { formula: 'value * 1.94384', inverseFormula: 'value * 0.514444', symbol: 'kn' },
       'km/h': { formula: 'value * 3.6', inverseFormula: 'value * 0.277778', symbol: 'km/h' },
       mph: { formula: 'value * 2.23694', inverseFormula: 'value * 0.44704', symbol: 'mph' },
-      'Beaufort': { formula: 'value * 1', inverseFormula: 'value * 1', symbol: 'Bf' }
+      Beaufort: { formula: 'value * 1', inverseFormula: 'value * 1', symbol: 'Bf' }
     }
   },
 

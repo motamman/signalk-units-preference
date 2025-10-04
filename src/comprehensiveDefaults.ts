@@ -176,7 +176,11 @@ export const comprehensiveDefaultUnits: UnitsMetadataStore = {
       'km/h': { formula: 'value * 3.6', inverseFormula: 'value * 0.277778', symbol: 'km/h' },
       mph: { formula: 'value * 2.23694', inverseFormula: 'value * 0.44704', symbol: 'mph' },
       'm/s': { formula: 'value * 1', inverseFormula: 'value * 1', symbol: 'm/s' },
-      Beaufort: { formula: 'Math.pow(value / 0.836, 2/3)', inverseFormula: '0.836 * Math.pow(value, 1.5)', symbol: 'Bf' }
+      Beaufort: {
+        formula: 'Math.pow(value / 0.836, 2/3)',
+        inverseFormula: '0.836 * Math.pow(value, 1.5)',
+        symbol: 'Bf'
+      }
     }
   },
   'environment.wind.speedTrue': {
@@ -246,7 +250,11 @@ export const comprehensiveDefaultUnits: UnitsMetadataStore = {
     category: 'temperature',
     conversions: {
       celsius: { formula: 'value - 273.15', inverseFormula: 'value + 273.15', symbol: '°C' },
-      fahrenheit: { formula: '(value - 273.15) * 9/5 + 32', inverseFormula: '(value - 32) * 5/9 + 273.15', symbol: '°F' },
+      fahrenheit: {
+        formula: '(value - 273.15) * 9/5 + 32',
+        inverseFormula: '(value - 32) * 5/9 + 273.15',
+        symbol: '°F'
+      },
       kelvin: { formula: 'value * 1', inverseFormula: 'value * 1', symbol: 'K' }
     }
   },
@@ -255,7 +263,11 @@ export const comprehensiveDefaultUnits: UnitsMetadataStore = {
     category: 'temperature',
     conversions: {
       celsius: { formula: 'value - 273.15', inverseFormula: 'value + 273.15', symbol: '°C' },
-      fahrenheit: { formula: '(value - 273.15) * 9/5 + 32', inverseFormula: '(value - 32) * 5/9 + 273.15', symbol: '°F' },
+      fahrenheit: {
+        formula: '(value - 273.15) * 9/5 + 32',
+        inverseFormula: '(value - 32) * 5/9 + 273.15',
+        symbol: '°F'
+      },
       kelvin: { formula: 'value * 1', inverseFormula: 'value * 1', symbol: 'K' }
     }
   },
@@ -323,7 +335,11 @@ export const comprehensiveDefaultUnits: UnitsMetadataStore = {
     category: 'temperature',
     conversions: {
       celsius: { formula: 'value - 273.15', inverseFormula: 'value + 273.15', symbol: '°C' },
-      fahrenheit: { formula: '(value - 273.15) * 9/5 + 32', inverseFormula: '(value - 32) * 5/9 + 273.15', symbol: '°F' },
+      fahrenheit: {
+        formula: '(value - 273.15) * 9/5 + 32',
+        inverseFormula: '(value - 32) * 5/9 + 273.15',
+        symbol: '°F'
+      },
       kelvin: { formula: 'value * 1', inverseFormula: 'value * 1', symbol: 'K' }
     }
   },
@@ -333,7 +349,11 @@ export const comprehensiveDefaultUnits: UnitsMetadataStore = {
     conversions: {
       'L/h': { formula: 'value * 3600000', inverseFormula: 'value / 3600000', symbol: 'L/h' },
       'gal/h': { formula: 'value * 951019', inverseFormula: 'value / 951019', symbol: 'gal/h' },
-      'gal(UK)/h': { formula: 'value * 791888.4', inverseFormula: 'value / 791888.4', symbol: 'gal(UK)/h' },
+      'gal(UK)/h': {
+        formula: 'value * 791888.4',
+        inverseFormula: 'value / 791888.4',
+        symbol: 'gal(UK)/h'
+      },
       'm3/s': { formula: 'value * 1', inverseFormula: 'value * 1', symbol: 'm³/s' }
     }
   },
@@ -345,8 +365,12 @@ export const comprehensiveDefaultUnits: UnitsMetadataStore = {
     conversions: {
       L: { formula: 'value * 1000', inverseFormula: 'value * 0.001', symbol: 'L' },
       gal: { formula: 'value * 264.172', inverseFormula: 'value * 0.00378541', symbol: 'gal' },
-      'gal(UK)': { formula: 'value * 219.969', inverseFormula: 'value * 0.00454609', symbol: 'gal(UK)' },
-      'm3': { formula: 'value * 1', inverseFormula: 'value * 1', symbol: 'm³' }
+      'gal(UK)': {
+        formula: 'value * 219.969',
+        inverseFormula: 'value * 0.00454609',
+        symbol: 'gal(UK)'
+      },
+      m3: { formula: 'value * 1', inverseFormula: 'value * 1', symbol: 'm³' }
     }
   },
   'tanks.*.*.capacity': {
@@ -355,8 +379,12 @@ export const comprehensiveDefaultUnits: UnitsMetadataStore = {
     conversions: {
       L: { formula: 'value * 1000', inverseFormula: 'value * 0.001', symbol: 'L' },
       gal: { formula: 'value * 264.172', inverseFormula: 'value * 0.00378541', symbol: 'gal' },
-      'gal(UK)': { formula: 'value * 219.969', inverseFormula: 'value * 0.00454609', symbol: 'gal(UK)' },
-      'm3': { formula: 'value * 1', inverseFormula: 'value * 1', symbol: 'm³' }
+      'gal(UK)': {
+        formula: 'value * 219.969',
+        inverseFormula: 'value * 0.00454609',
+        symbol: 'gal(UK)'
+      },
+      m3: { formula: 'value * 1', inverseFormula: 'value * 1', symbol: 'm³' }
     }
   },
   'tanks.*.*.apparent.currentLevel': {
@@ -399,7 +427,11 @@ export const comprehensiveDefaultUnits: UnitsMetadataStore = {
     category: 'temperature',
     conversions: {
       celsius: { formula: 'value - 273.15', inverseFormula: 'value + 273.15', symbol: '°C' },
-      fahrenheit: { formula: '(value - 273.15) * 9/5 + 32', inverseFormula: '(value - 32) * 5/9 + 273.15', symbol: '°F' },
+      fahrenheit: {
+        formula: '(value - 273.15) * 9/5 + 32',
+        inverseFormula: '(value - 32) * 5/9 + 273.15',
+        symbol: '°F'
+      },
       kelvin: { formula: 'value * 1', inverseFormula: 'value * 1', symbol: 'K' }
     }
   },
@@ -456,7 +488,11 @@ export const comprehensiveDefaultUnits: UnitsMetadataStore = {
     category: 'temperature',
     conversions: {
       celsius: { formula: 'value - 273.15', inverseFormula: 'value + 273.15', symbol: '°C' },
-      fahrenheit: { formula: '(value - 273.15) * 9/5 + 32', inverseFormula: '(value - 32) * 5/9 + 273.15', symbol: '°F' },
+      fahrenheit: {
+        formula: '(value - 273.15) * 9/5 + 32',
+        inverseFormula: '(value - 32) * 5/9 + 273.15',
+        symbol: '°F'
+      },
       kelvin: { formula: 'value * 1', inverseFormula: 'value * 1', symbol: 'K' }
     }
   },
@@ -465,7 +501,11 @@ export const comprehensiveDefaultUnits: UnitsMetadataStore = {
     category: 'temperature',
     conversions: {
       celsius: { formula: 'value - 273.15', inverseFormula: 'value + 273.15', symbol: '°C' },
-      fahrenheit: { formula: '(value - 273.15) * 9/5 + 32', inverseFormula: '(value - 32) * 5/9 + 273.15', symbol: '°F' },
+      fahrenheit: {
+        formula: '(value - 273.15) * 9/5 + 32',
+        inverseFormula: '(value - 32) * 5/9 + 273.15',
+        symbol: '°F'
+      },
       kelvin: { formula: 'value * 1', inverseFormula: 'value * 1', symbol: 'K' }
     }
   },
@@ -504,7 +544,11 @@ export const comprehensiveDefaultUnits: UnitsMetadataStore = {
     category: 'temperature',
     conversions: {
       celsius: { formula: 'value - 273.15', inverseFormula: 'value + 273.15', symbol: '°C' },
-      fahrenheit: { formula: '(value - 273.15) * 9/5 + 32', inverseFormula: '(value - 32) * 5/9 + 273.15', symbol: '°F' },
+      fahrenheit: {
+        formula: '(value - 273.15) * 9/5 + 32',
+        inverseFormula: '(value - 32) * 5/9 + 273.15',
+        symbol: '°F'
+      },
       kelvin: { formula: 'value * 1', inverseFormula: 'value * 1', symbol: 'K' }
     }
   }

@@ -1,5 +1,7 @@
 // Path tree utility functions
 
+let pathTree = {}
+
 // Extract paths, values, and metadata from SignalK API response
 function extractPathsFromSignalK(obj) {
   const paths = []
@@ -10,7 +12,15 @@ function extractPathsFromSignalK(obj) {
     if (!obj || typeof obj !== 'object') return
 
     for (const key in obj) {
-      if (key === 'meta' || key === 'timestamp' || key === 'source' || key === '$source' || key === 'values' || key === 'sentence') continue
+      if (
+        key === 'meta' ||
+        key === 'timestamp' ||
+        key === 'source' ||
+        key === '$source' ||
+        key === 'values' ||
+        key === 'sentence'
+      )
+        continue
 
       const currentPath = prefix ? `${prefix}.${key}` : key
 
@@ -30,8 +40,10 @@ function extractPathsFromSignalK(obj) {
 
   // Get the self vessel ID
   const selfVesselId = obj.self
-  const actualSelfId = selfVesselId && selfVesselId.startsWith('vessels.') ?
-    selfVesselId.replace('vessels.', '') : selfVesselId
+  const actualSelfId =
+    selfVesselId && selfVesselId.startsWith('vessels.')
+      ? selfVesselId.replace('vessels.', '')
+      : selfVesselId
 
   // Process self vessel if it exists
   if (obj.vessels && actualSelfId && obj.vessels[actualSelfId]) {
@@ -111,7 +123,9 @@ function renderPathTree() {
     // Setup search
     const searchInput = document.getElementById('pathTreeSearch')
     if (searchInput) {
-      searchInput.addEventListener('input', (e) => filterPathTree(e.target.value, 'pathTreeContainer'))
+      searchInput.addEventListener('input', e =>
+        filterPathTree(e.target.value, 'pathTreeContainer')
+      )
     }
   } else {
     console.log('pathTreeContainer not found')
@@ -125,7 +139,9 @@ function renderPathTree() {
 
     const metadataSearchInput = document.getElementById('metadataPathSearch')
     if (metadataSearchInput) {
-      metadataSearchInput.addEventListener('input', (e) => filterPathTree(e.target.value, 'metadataPathTree'))
+      metadataSearchInput.addEventListener('input', e =>
+        filterPathTree(e.target.value, 'metadataPathTree')
+      )
     }
   }
 
@@ -140,19 +156,19 @@ function renderPathTree() {
       console.log('Override search input found, adding listeners')
 
       // Show tree on focus or click
-      overrideSearchInput.addEventListener('focus', (e) => {
+      overrideSearchInput.addEventListener('focus', e => {
         console.log('Override search focused')
         overrideContainer.style.display = 'block'
       })
 
-      overrideSearchInput.addEventListener('click', (e) => {
+      overrideSearchInput.addEventListener('click', e => {
         console.log('Override search clicked')
         e.stopPropagation()
         overrideContainer.style.display = 'block'
       })
 
       // Filter tree on input (or show all if empty)
-      overrideSearchInput.addEventListener('input', (e) => {
+      overrideSearchInput.addEventListener('input', e => {
         console.log('Override search input:', e.target.value)
         overrideContainer.style.display = 'block'
         if (e.target.value) {
@@ -172,12 +188,12 @@ function renderPathTree() {
       })
 
       // Prevent container clicks from closing
-      overrideContainer.addEventListener('click', (e) => {
+      overrideContainer.addEventListener('click', e => {
         e.stopPropagation()
       })
 
       // Close dropdown when clicking outside
-      document.addEventListener('click', (e) => {
+      document.addEventListener('click', e => {
         if (!overrideSearchInput.contains(e.target) && !overrideContainer.contains(e.target)) {
           overrideContainer.style.display = 'none'
         }

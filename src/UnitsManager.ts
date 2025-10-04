@@ -25,9 +25,43 @@ class UnitConversionError extends Error {
   }
 }
 
-const MONTH_NAMES_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-const MONTH_NAMES_LONG = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
-const WEEKDAY_NAMES_LONG = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+const MONTH_NAMES_SHORT = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec'
+]
+const MONTH_NAMES_LONG = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December'
+]
+const WEEKDAY_NAMES_LONG = [
+  'Sunday',
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday'
+]
 
 const pad2 = (value: number): string => value.toString().padStart(2, '0')
 
@@ -246,7 +280,8 @@ export class UnitsManager {
       if (valueType === 'number') return 'number'
       if (valueType === 'string') {
         // Check if string is RFC3339 date
-        const rfc3339 = /^([0-9]+)-(0[1-9]|1[012])-(0[1-9]|[12][0-9]|3[01])[Tt]([01][0-9]|2[0-3]):([0-5][0-9]):([0-5][0-9]|60)(\.[0-9]+)?(([Zz])|([\+|\-]([01][0-9]|2[0-3]):[0-5][0-9]))$/
+        const rfc3339 =
+          /^([0-9]+)-(0[1-9]|1[012])-(0[1-9]|[12][0-9]|3[01])[Tt]([01][0-9]|2[0-3]):([0-5][0-9]):([0-5][0-9]|60)(\.[0-9]+)?(([Zz])|([+-]([01][0-9]|2[0-3]):[0-5][0-9]))$/
         if (rfc3339.test(value)) {
           return 'date'
         }
@@ -284,7 +319,9 @@ export class UnitsManager {
     }
 
     // Search comprehensive defaults
-    const comprehensiveEntry = Object.values(comprehensiveDefaultUnits).find(meta => meta.baseUnit === baseUnit)
+    const comprehensiveEntry = Object.values(comprehensiveDefaultUnits).find(
+      meta => meta.baseUnit === baseUnit
+    )
     if (comprehensiveEntry?.category) {
       return comprehensiveEntry.category
     }
@@ -306,10 +343,7 @@ export class UnitsManager {
       baseUnit: meta.baseUnit,
       category: meta.category,
       conversions: Object.fromEntries(
-        Object.entries(meta.conversions || {}).map(([target, def]) => [
-          target,
-          { ...def }
-        ])
+        Object.entries(meta.conversions || {}).map(([target, def]) => [target, { ...def }])
       )
     }
   }
@@ -329,8 +363,9 @@ export class UnitsManager {
     // Path override takes precedence when specifying a base unit
     if (pathOverridePref?.baseUnit) {
       const baseUnit = pathOverridePref.baseUnit
-      const unitDef = this.unitDefinitions[baseUnit]
-        || Object.values(comprehensiveDefaultUnits).find(meta => meta.baseUnit === baseUnit)
+      const unitDef =
+        this.unitDefinitions[baseUnit] ||
+        Object.values(comprehensiveDefaultUnits).find(meta => meta.baseUnit === baseUnit)
 
       if (unitDef) {
         metadata = {
@@ -368,8 +403,9 @@ export class UnitsManager {
           metadata = inferred
         } else {
           const baseUnit = skMetadata.units
-          const unitDef = this.unitDefinitions[baseUnit]
-            || Object.values(comprehensiveDefaultUnits).find(meta => meta.baseUnit === baseUnit)
+          const unitDef =
+            this.unitDefinitions[baseUnit] ||
+            Object.values(comprehensiveDefaultUnits).find(meta => meta.baseUnit === baseUnit)
 
           metadata = {
             baseUnit,
@@ -411,11 +447,16 @@ export class UnitsManager {
 
       const globalFetch = (globalThis as any).fetch
       if (typeof globalFetch !== 'function') {
-        this.app.error('Fetch API is unavailable. Unable to load SignalK metadata without native fetch support.')
+        this.app.error(
+          'Fetch API is unavailable. Unable to load SignalK metadata without native fetch support.'
+        )
         return pathsSet
       }
 
-      const fetchFn = globalFetch.bind(globalThis) as (input: string, init?: any) => Promise<{ ok: boolean; statusText: string; json(): Promise<any> }>
+      const fetchFn = globalFetch.bind(globalThis) as (
+        input: string,
+        init?: any
+      ) => Promise<{ ok: boolean; statusText: string; json(): Promise<any> }>
 
       this.app.debug(`Fetching from SignalK API: ${apiUrl}`)
       const response = await fetchFn(apiUrl)
@@ -431,7 +472,14 @@ export class UnitsManager {
         if (!obj || typeof obj !== 'object') return
 
         for (const key in obj) {
-          if (key === 'meta' || key === 'timestamp' || key === 'source' || key === '$source' || key === 'values' || key === 'sentence') {
+          if (
+            key === 'meta' ||
+            key === 'timestamp' ||
+            key === 'source' ||
+            key === '$source' ||
+            key === 'values' ||
+            key === 'sentence'
+          ) {
             continue
           }
 
@@ -447,9 +495,10 @@ export class UnitsManager {
       }
 
       const selfVesselId = data.self
-      const actualSelfId = selfVesselId && selfVesselId.startsWith('vessels.')
-        ? selfVesselId.replace('vessels.', '')
-        : selfVesselId
+      const actualSelfId =
+        selfVesselId && selfVesselId.startsWith('vessels.')
+          ? selfVesselId.replace('vessels.', '')
+          : selfVesselId
 
       if (data.vessels && actualSelfId && data.vessels[actualSelfId]) {
         this.app.debug(`Extracting paths from vessel: ${actualSelfId}`)
@@ -480,9 +529,7 @@ export class UnitsManager {
       return { preference: null, targetUnit: null, conversion: null }
     }
 
-    const targetUnit = preference.targetUnit?.trim()
-      ? preference.targetUnit.trim()
-      : null
+    const targetUnit = preference.targetUnit?.trim() ? preference.targetUnit.trim() : null
 
     if (!targetUnit) {
       return { preference, targetUnit: null, conversion: null }
@@ -666,7 +713,9 @@ export class UnitsManager {
     }
 
     for (const defaultRule of DEFAULT_PATH_PATTERNS) {
-      let existing = this.preferences.pathPatterns.find(rule => rule.pattern === defaultRule.pattern)
+      const existing = this.preferences.pathPatterns.find(
+        rule => rule.pattern === defaultRule.pattern
+      )
 
       if (!existing) {
         this.preferences.pathPatterns.push({ ...defaultRule })
@@ -708,11 +757,7 @@ export class UnitsManager {
    */
   async savePreferences(): Promise<void> {
     try {
-      fs.writeFileSync(
-        this.preferencesPath,
-        JSON.stringify(this.preferences, null, 2),
-        'utf-8'
-      )
+      fs.writeFileSync(this.preferencesPath, JSON.stringify(this.preferences, null, 2), 'utf-8')
       this.app.debug('Saved units preferences')
     } catch (error) {
       this.app.error(`Failed to save preferences: ${error}`)
@@ -745,11 +790,7 @@ export class UnitsManager {
    */
   async saveUnitDefinitions(): Promise<void> {
     try {
-      fs.writeFileSync(
-        this.definitionsPath,
-        JSON.stringify(this.unitDefinitions, null, 2),
-        'utf-8'
-      )
+      fs.writeFileSync(this.definitionsPath, JSON.stringify(this.unitDefinitions, null, 2), 'utf-8')
       this.app.debug('Saved unit definitions')
     } catch (error) {
       this.app.error(`Failed to save unit definitions: ${error}`)
@@ -764,7 +805,7 @@ export class UnitsManager {
     // Extract base unit definitions from comprehensive defaults
     const baseUnitDefs: Record<string, UnitMetadata & { isCustom?: boolean }> = {}
 
-    for (const [_path, meta] of Object.entries(comprehensiveDefaultUnits)) {
+    for (const [, meta] of Object.entries(comprehensiveDefaultUnits)) {
       if (meta.baseUnit && !baseUnitDefs[meta.baseUnit]) {
         baseUnitDefs[meta.baseUnit] = {
           baseUnit: meta.baseUnit,
@@ -861,16 +902,19 @@ export class UnitsManager {
     }
 
     const skMeta = this.signalKMetadata[pathStr]
-    const valueType = this.detectValueType(skMeta?.units || metadata.baseUnit || undefined, skMeta?.value)
+    const valueType = this.detectValueType(
+      skMeta?.units || metadata.baseUnit || undefined,
+      skMeta?.value
+    )
 
     const isDateCategory = metadata.category === 'dateTime' || metadata.category === 'epoch'
     const displayFormat = isDateCategory
-      ? (conversion.dateFormat || preference.displayFormat || 'ISO-8601')
-      : (preference.displayFormat || targetUnit || '')
+      ? conversion.dateFormat || preference.displayFormat || 'ISO-8601'
+      : preference.displayFormat || targetUnit || ''
 
     const dateFormatValue = isDateCategory
-      ? (conversion.dateFormat || preference.displayFormat || 'ISO-8601')
-      : (conversion.dateFormat || undefined)
+      ? conversion.dateFormat || preference.displayFormat || 'ISO-8601'
+      : conversion.dateFormat || undefined
 
     return {
       path: pathStr,
@@ -997,7 +1041,9 @@ export class UnitsManager {
       return this.cloneMetadata(metadataDef)
     }
 
-    const comprehensiveDef = Object.values(comprehensiveDefaultUnits).find(meta => meta.baseUnit === baseUnit)
+    const comprehensiveDef = Object.values(comprehensiveDefaultUnits).find(
+      meta => meta.baseUnit === baseUnit
+    )
     if (comprehensiveDef) {
       return this.cloneMetadata(comprehensiveDef)
     }
@@ -1149,7 +1195,9 @@ export class UnitsManager {
   private generateMetadataFromPattern(pattern: PathPatternRule): UnitMetadata | null {
     // Use pattern's baseUnit if provided, otherwise derive from category
     const baseUnit = pattern.baseUnit || this.getBaseUnitForCategory(pattern.category)
-    this.app.debug(`generateMetadataFromPattern - pattern: ${pattern.pattern}, category: ${pattern.category}, baseUnit: ${baseUnit}`)
+    this.app.debug(
+      `generateMetadataFromPattern - pattern: ${pattern.pattern}, category: ${pattern.category}, baseUnit: ${baseUnit}`
+    )
 
     if (!baseUnit) {
       this.app.debug(`No base unit found for category: ${pattern.category}`)
@@ -1168,15 +1216,17 @@ export class UnitsManager {
 
     // Try to find default conversions for this base unit
     const defaultsForBaseUnit =
-      Object.values(comprehensiveDefaultUnits).find((meta) => meta.baseUnit === baseUnit)
-      || Object.values(defaultUnitsMetadata).find((meta) => meta.baseUnit === baseUnit)
+      Object.values(comprehensiveDefaultUnits).find(meta => meta.baseUnit === baseUnit) ||
+      Object.values(defaultUnitsMetadata).find(meta => meta.baseUnit === baseUnit)
 
     if (!defaultsForBaseUnit) {
       this.app.debug(`No default conversions found for base unit: ${baseUnit}`)
       return null
     }
 
-    this.app.debug(`Found in comprehensiveDefaultUnits, conversions: ${Object.keys(defaultsForBaseUnit.conversions).join(', ')}`)
+    this.app.debug(
+      `Found in comprehensiveDefaultUnits, conversions: ${Object.keys(defaultsForBaseUnit.conversions).join(', ')}`
+    )
 
     return {
       baseUnit: baseUnit,
@@ -1197,7 +1247,7 @@ export class UnitsManager {
 
     // Look up in comprehensive defaults
     const defaultMeta = Object.values(comprehensiveDefaultUnits).find(
-      (meta) => meta.category === category
+      meta => meta.category === category
     )
 
     return defaultMeta?.baseUnit || null
@@ -1206,10 +1256,7 @@ export class UnitsManager {
   /**
    * Get preference for a path (check overrides first, then patterns, then category)
    */
-  private getPreferenceForPath(
-    pathStr: string,
-    category: string
-  ): CategoryPreference | null {
+  private getPreferenceForPath(pathStr: string, category: string): CategoryPreference | null {
     this.app.debug(`getPreferenceForPath: path=${pathStr}, category=${category}`)
     this.app.debug(`Available overrides: ${Object.keys(this.preferences.pathOverrides).join(', ')}`)
 
@@ -1249,13 +1296,10 @@ export class UnitsManager {
   /**
    * Infer metadata from SignalK metadata
    */
-  private inferMetadataFromSignalK(
-    _pathStr: string,
-    units: string
-  ): UnitMetadata | null {
+  private inferMetadataFromSignalK(_pathStr: string, units: string): UnitMetadata | null {
     // Try to find a matching base unit and category
     const category = Object.entries(categoryToBaseUnit).find(
-      ([_, baseUnit]) => baseUnit === units
+      ([, baseUnit]) => baseUnit === units
     )?.[0]
 
     if (!category) {
@@ -1269,7 +1313,7 @@ export class UnitsManager {
 
     // Find a similar path in default metadata with same category
     const similarPath = Object.entries(defaultUnitsMetadata).find(
-      ([_, meta]) => meta.category === category && meta.baseUnit === units
+      ([, meta]) => meta.category === category && meta.baseUnit === units
     )
 
     if (similarPath) {
@@ -1278,7 +1322,7 @@ export class UnitsManager {
 
     // Try comprehensive defaults
     const comprehensivePath = Object.entries(comprehensiveDefaultUnits).find(
-      ([_, meta]) => meta.category === category && meta.baseUnit === units
+      ([, meta]) => meta.category === category && meta.baseUnit === units
     )
 
     if (comprehensivePath) {
@@ -1336,17 +1380,19 @@ export class UnitsManager {
           source = 'Path Override'
           baseUnit = pathOverride.baseUnit || skMetadata?.units || '-'
           const overrideCategory = (pathOverride as any)?.category as string | undefined
-          category = overrideCategory
-            || matchingPattern?.category
-            || metadataEntry?.category
-            || this.getCategoryFromBaseUnit(pathOverride.baseUnit || skMetadata?.units)
-            || '-'
+          category =
+            overrideCategory ||
+            matchingPattern?.category ||
+            metadataEntry?.category ||
+            this.getCategoryFromBaseUnit(pathOverride.baseUnit || skMetadata?.units) ||
+            '-'
           displayUnit = pathOverride.targetUnit
           targetUnit = pathOverride.targetUnit
         } else if (matchingPattern) {
           status = 'pattern'
           source = `Pattern: ${matchingPattern.pattern}`
-          const patternBaseUnit = matchingPattern.baseUnit || this.getBaseUnitForCategory(matchingPattern.category)
+          const patternBaseUnit =
+            matchingPattern.baseUnit || this.getBaseUnitForCategory(matchingPattern.category)
           baseUnit = patternBaseUnit || '-'
           category = matchingPattern.category
           const categoryPref = this.preferences.categories?.[matchingPattern.category]
@@ -1356,7 +1402,8 @@ export class UnitsManager {
           status = 'signalk'
           source = 'SignalK Metadata'
           baseUnit = skMetadata.units
-          category = metadataEntry?.category || this.getCategoryFromBaseUnit(skMetadata.units) || '-'
+          category =
+            metadataEntry?.category || this.getCategoryFromBaseUnit(skMetadata.units) || '-'
           displayUnit = baseUnit
           targetUnit = undefined
         } else {
@@ -1417,17 +1464,18 @@ export class UnitsManager {
           result[path] = {
             baseUnit: metadata.baseUnit,
             category: metadata.category,
-            conversions: targetUnit && conversion
-              ? {
-                  [targetUnit]: {
-                    formula: conversion.formula,
-                    inverseFormula: conversion.inverseFormula,
-                    symbol: conversion.symbol,
-                    dateFormat: conversion.dateFormat,
-                    useLocalTime: conversion.useLocalTime
+            conversions:
+              targetUnit && conversion
+                ? {
+                    [targetUnit]: {
+                      formula: conversion.formula,
+                      inverseFormula: conversion.inverseFormula,
+                      symbol: conversion.symbol,
+                      dateFormat: conversion.dateFormat,
+                      useLocalTime: conversion.useLocalTime
+                    }
                   }
-                }
-              : {}
+                : {}
           }
         } else {
           const skMeta = this.app.getMetadata(path)
@@ -1459,7 +1507,14 @@ export class UnitsManager {
 
     for (const key in obj) {
       // Skip meta keys
-      if (key === 'meta' || key === 'timestamp' || key === 'source' || key === '$source' || key === 'values' || key === 'sentence') {
+      if (
+        key === 'meta' ||
+        key === 'timestamp' ||
+        key === 'source' ||
+        key === '$source' ||
+        key === 'values' ||
+        key === 'sentence'
+      ) {
         continue
       }
 
@@ -1489,10 +1544,7 @@ export class UnitsManager {
   /**
    * Update category preference
    */
-  async updateCategoryPreference(
-    category: string,
-    preference: CategoryPreference
-  ): Promise<void> {
+  async updateCategoryPreference(category: string, preference: CategoryPreference): Promise<void> {
     this.preferences.categories[category] = preference
     await this.savePreferences()
   }
@@ -1523,10 +1575,7 @@ export class UnitsManager {
   /**
    * Update path override
    */
-  async updatePathOverride(
-    pathStr: string,
-    preference: CategoryPreference
-  ): Promise<void> {
+  async updatePathOverride(pathStr: string, preference: CategoryPreference): Promise<void> {
     this.preferences.pathOverrides[pathStr] = {
       path: pathStr,
       ...preference
@@ -1626,7 +1675,7 @@ export class UnitsManager {
     // Scan all metadata (including comprehensive defaults)
     const allMetadata = { ...comprehensiveDefaultUnits, ...this.metadata }
 
-    for (const [_path, meta] of Object.entries(allMetadata)) {
+    for (const [, meta] of Object.entries(allMetadata)) {
       if (!meta.baseUnit) continue
 
       baseUnitsSet.add(meta.baseUnit)
@@ -1675,19 +1724,19 @@ export class UnitsManager {
   private getBaseUnitLabel(unit: string): string {
     const labels: Record<string, string> = {
       'm/s': 'm/s (speed)',
-      'K': 'K (temperature)',
-      'Pa': 'Pa (pressure)',
-      'm': 'm (distance/depth)',
-      'rad': 'rad (angle)',
-      'm3': 'm³ (volume)',
-      'V': 'V (voltage)',
-      'A': 'A (current)',
-      'W': 'W (power)',
-      'Hz': 'Hz (frequency)',
-      'ratio': 'ratio (percentage)',
-      's': 's (time)',
-      'C': 'C (charge)',
-      'deg': 'deg (latitude/longitude)',
+      K: 'K (temperature)',
+      Pa: 'Pa (pressure)',
+      m: 'm (distance/depth)',
+      rad: 'rad (angle)',
+      m3: 'm³ (volume)',
+      V: 'V (voltage)',
+      A: 'A (current)',
+      W: 'W (power)',
+      Hz: 'Hz (frequency)',
+      ratio: 'ratio (percentage)',
+      s: 's (time)',
+      C: 'C (charge)',
+      deg: 'deg (latitude/longitude)',
       'm3/s': 'm³/s (volume rate)',
       'RFC 3339 (UTC)': 'RFC 3339 (UTC) (date/time)'
     }

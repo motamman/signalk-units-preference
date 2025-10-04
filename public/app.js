@@ -1,9 +1,11 @@
+/* global loadPaths */
+/* eslint-disable no-unused-vars, @typescript-eslint/no-unused-vars */
+
 const API_BASE = '/plugins/signalk-units-preference'
 
 let preferences = null
 let metadata = null
 let availablePaths = []
-let pathTree = {}
 let signalKValues = {}
 let signalKValueDetails = {}
 
@@ -19,7 +21,10 @@ let unitSchema = {
 }
 
 function sanitizeIdSegment(value) {
-  return String(value).replace(/[^a-zA-Z0-9_-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')
+  return String(value)
+    .replace(/[^a-zA-Z0-9_-]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
 }
 
 function buildConversionId(prefix, baseUnit, targetUnit) {
@@ -28,7 +33,6 @@ function buildConversionId(prefix, baseUnit, targetUnit) {
 
 // Preset dirty state tracking
 let originalPresetState = null
-let isPresetDirty = false
 
 // Get current value for a path from SignalK
 function getCurrentValue(pathStr) {
@@ -41,10 +45,15 @@ function getCurrentValueDetails(pathStr) {
 
 // Create base unit dropdown HTML
 function createBaseUnitDropdown(id, selectedValue = '', includeCustom = true) {
-  const options = unitSchema.baseUnits.map(opt =>
-    `<option value="${opt.value}" ${opt.value === selectedValue ? 'selected' : ''}>${opt.label}</option>`
-  ).join('')
-  const customOption = includeCustom ? `<option value="custom" ${selectedValue === 'custom' ? 'selected' : ''}>✏️ Custom...</option>` : ''
+  const options = unitSchema.baseUnits
+    .map(
+      opt =>
+        `<option value="${opt.value}" ${opt.value === selectedValue ? 'selected' : ''}>${opt.label}</option>`
+    )
+    .join('')
+  const customOption = includeCustom
+    ? `<option value="custom" ${selectedValue === 'custom' ? 'selected' : ''}>✏️ Custom...</option>`
+    : ''
   return `
     <select id="${id}">
       <option value="">-- Select Base Unit --</option>
@@ -56,10 +65,12 @@ function createBaseUnitDropdown(id, selectedValue = '', includeCustom = true) {
 
 // Create category dropdown HTML
 function createCategoryDropdown(id, selectedValue = '', includeCustom = true) {
-  const options = unitSchema.categories.map(cat =>
-    `<option value="${cat}" ${cat === selectedValue ? 'selected' : ''}>${cat}</option>`
-  ).join('')
-  const customOption = includeCustom ? `<option value="custom" ${selectedValue === 'custom' ? 'selected' : ''}>✏️ Custom...</option>` : ''
+  const options = unitSchema.categories
+    .map(cat => `<option value="${cat}" ${cat === selectedValue ? 'selected' : ''}>${cat}</option>`)
+    .join('')
+  const customOption = includeCustom
+    ? `<option value="custom" ${selectedValue === 'custom' ? 'selected' : ''}>✏️ Custom...</option>`
+    : ''
   return `
     <select id="${id}">
       <option value="">-- Select Category --</option>
@@ -72,10 +83,14 @@ function createCategoryDropdown(id, selectedValue = '', includeCustom = true) {
 // Create target unit dropdown HTML based on base unit
 function createTargetUnitDropdown(id, baseUnit = '', selectedValue = '', includeCustom = true) {
   const units = unitSchema.targetUnitsByBase[baseUnit] || []
-  const options = units.map(unit =>
-    `<option value="${unit}" ${unit === selectedValue ? 'selected' : ''}>${unit}</option>`
-  ).join('')
-  const customOption = includeCustom ? `<option value="custom" ${selectedValue === 'custom' ? 'selected' : ''}>✏️ Custom...</option>` : ''
+  const options = units
+    .map(
+      unit => `<option value="${unit}" ${unit === selectedValue ? 'selected' : ''}>${unit}</option>`
+    )
+    .join('')
+  const customOption = includeCustom
+    ? `<option value="custom" ${selectedValue === 'custom' ? 'selected' : ''}>✏️ Custom...</option>`
+    : ''
   return `
     <select id="${id}">
       <option value="">-- Select Target Unit --</option>
@@ -114,10 +129,18 @@ document.addEventListener('DOMContentLoaded', async () => {
 // Initialize pattern form dropdowns
 function initializePatternDropdowns() {
   // Render category dropdown (with custom option)
-  document.getElementById('newPatternCategoryContainer').innerHTML = createCategoryDropdown('newPatternCategory', '', true)
+  document.getElementById('newPatternCategoryContainer').innerHTML = createCategoryDropdown(
+    'newPatternCategory',
+    '',
+    true
+  )
 
   // Initialize base unit dropdown (hidden by default)
-  document.getElementById('newPatternBaseContainer').innerHTML = createBaseUnitDropdown('newPatternBase', '', true)
+  document.getElementById('newPatternBaseContainer').innerHTML = createBaseUnitDropdown(
+    'newPatternBase',
+    '',
+    true
+  )
 
   // Target unit starts disabled until category is selected
   document.getElementById('newPatternTargetContainer').innerHTML = `
@@ -127,7 +150,7 @@ function initializePatternDropdowns() {
   `
 
   // Handle category change
-  document.getElementById('newPatternCategory').addEventListener('change', function() {
+  document.getElementById('newPatternCategory').addEventListener('change', function () {
     const targetContainer = document.getElementById('newPatternTargetContainer')
     const baseGroup = document.getElementById('newPatternBaseGroup')
     const categoryCustomInput = document.getElementById('newPatternCategoryCustom')
@@ -202,7 +225,7 @@ function attachBaseUnitHandler() {
   const targetContainer = document.getElementById('newPatternTargetContainer')
 
   if (baseSelect) {
-    baseSelect.addEventListener('change', function() {
+    baseSelect.addEventListener('change', function () {
       const customInput = document.getElementById('newPatternBaseCustom')
 
       if (this.value === 'custom') {
@@ -218,7 +241,12 @@ function attachBaseUnitHandler() {
       } else if (this.value) {
         customInput.style.display = 'none'
         // Populate target units based on selected base unit
-        targetContainer.innerHTML = createTargetUnitDropdown('newPatternTarget', this.value, '', true)
+        targetContainer.innerHTML = createTargetUnitDropdown(
+          'newPatternTarget',
+          this.value,
+          '',
+          true
+        )
         attachTargetUnitHandler()
       }
     })
@@ -229,7 +257,7 @@ function attachBaseUnitHandler() {
 function attachTargetUnitHandler() {
   const targetSelect = document.getElementById('newPatternTarget')
   if (targetSelect) {
-    targetSelect.addEventListener('change', function() {
+    targetSelect.addEventListener('change', function () {
       const customInput = document.getElementById('newPatternTargetCustom')
       if (this.value === 'custom') {
         customInput.style.display = 'block'
@@ -315,17 +343,14 @@ async function loadData() {
 function saveOriginalPresetState() {
   if (preferences?.currentPreset && preferences?.categories) {
     originalPresetState = JSON.parse(JSON.stringify(preferences.categories))
-    isPresetDirty = false
   } else {
     originalPresetState = null
-    isPresetDirty = false
   }
 }
 
 // Check if current categories differ from original preset
 function checkPresetDirty() {
   if (!originalPresetState || !preferences?.categories) {
-    isPresetDirty = false
     return false
   }
 
@@ -334,29 +359,15 @@ function checkPresetDirty() {
     const original = originalPresetState[category]
     if (!original) continue
 
-    if (current.targetUnit !== original.targetUnit ||
-        current.displayFormat !== original.displayFormat) {
-      isPresetDirty = true
+    if (
+      current.targetUnit !== original.targetUnit ||
+      current.displayFormat !== original.displayFormat
+    ) {
       return true
     }
   }
 
-  isPresetDirty = false
   return false
-}
-
-// Get available units for a category from metadata
-function getAvailableUnitsForCategory(category) {
-  const units = new Set()
-
-  // Find all paths with this category and collect their conversion options
-  for (const [path, meta] of Object.entries(metadata)) {
-    if (meta.category === category) {
-      Object.keys(meta.conversions).forEach(unit => units.add(unit))
-    }
-  }
-
-  return Array.from(units).sort()
 }
 
 // Render category preferences
@@ -445,7 +456,8 @@ function renderCategories() {
       const pref = preferences?.categories?.[category] || { targetUnit: '', displayFormat: '0.0' }
       const schemaBaseUnit = unitSchema.categoryToBaseUnit[category] || ''
       const prefBaseUnit = pref.baseUnit
-      const isCustom = prefBaseUnit !== undefined && prefBaseUnit !== schemaBaseUnit && prefBaseUnit !== ''
+      const isCustom =
+        prefBaseUnit !== undefined && prefBaseUnit !== schemaBaseUnit && prefBaseUnit !== ''
       const baseUnit = isCustom ? prefBaseUnit : schemaBaseUnit
       const targetUnit = pref.targetUnit || 'none'
       const displayFormat = pref.displayFormat || '0.0'
@@ -470,7 +482,8 @@ function renderCategories() {
           <div id="category-edit-${category}" style="display: none;"></div>
         </div>
       `
-    }).join('')
+    })
+    .join('')
 }
 
 // Extract all SignalK metadata at once
@@ -482,24 +495,32 @@ async function getAllSignalKMetadata() {
 
     const metadataMap = {}
 
-    function extractMeta(obj, prefix = '') {
+    const extractMeta = (obj, prefix = '') => {
       if (!obj || typeof obj !== 'object') return
 
       for (const key in obj) {
-        if (key === 'meta' || key === 'timestamp' || key === 'source' || key === '$source' || key === 'values' || key === 'sentence') continue
+        if (
+          key === 'meta' ||
+          key === 'timestamp' ||
+          key === 'source' ||
+          key === '$source' ||
+          key === 'values' ||
+          key === 'sentence'
+        )
+          continue
 
         const currentPath = prefix ? `${prefix}.${key}` : key
 
         if (obj[key] && typeof obj[key] === 'object') {
           // Check if this object has meta (capture all metadata, not just those with units)
-        if (obj[key].meta) {
-          metadataMap[currentPath] = {
-            ...obj[key].meta,
-            value: obj[key].value,
-            $source: obj[key].$source || obj[key].source,
-            timestamp: obj[key].timestamp
+          if (obj[key].meta) {
+            metadataMap[currentPath] = {
+              ...obj[key].meta,
+              value: obj[key].value,
+              $source: obj[key].$source || obj[key].source,
+              timestamp: obj[key].timestamp
+            }
           }
-        }
           extractMeta(obj[key], currentPath)
         }
       }
@@ -610,14 +631,17 @@ async function renderMetadata() {
       // Green: Has explicit path override
       color = '#d4edda'
       status = 'Path Override'
-      baseUnit = pathOverride.baseUnit || (matchingPattern?.baseUnit) || (skMeta?.units) || '-'
-      category = pathOverride.category || (matchingPattern?.category) || '-'
+      baseUnit = pathOverride.baseUnit || matchingPattern?.baseUnit || skMeta?.units || '-'
+      category = pathOverride.category || matchingPattern?.category || '-'
       displayUnit = pathOverride.targetUnit
     } else if (matchingPattern) {
       // Yellow: Matches a pattern rule
       color = '#fff3cd'
       status = `Pattern: ${matchingPattern.pattern}`
-      baseUnit = matchingPattern.baseUnit || (unitSchema?.categoryToBaseUnit?.[matchingPattern.category]) || '-'
+      baseUnit =
+        matchingPattern.baseUnit ||
+        unitSchema?.categoryToBaseUnit?.[matchingPattern.category] ||
+        '-'
       category = matchingPattern.category
       const categoryTarget = preferences?.categories?.[matchingPattern.category]?.targetUnit
       displayUnit = matchingPattern.targetUnit || categoryTarget || baseUnit || '-'
@@ -638,17 +662,18 @@ async function renderMetadata() {
     }
 
     // Add type and supportsPut from SignalK metadata
-    const valueType = skMeta?.units === 'RFC 3339 (UTC)' || skMeta?.units === 'ISO-8601 (UTC)'
-      ? 'date'
-      : skMeta?.units
-      ? 'number'
-      : typeof valueDetails?.value === 'boolean'
-      ? 'boolean'
-      : typeof valueDetails?.value === 'string'
-      ? 'string'
-      : typeof valueDetails?.value === 'object' && valueDetails?.value !== null
-      ? 'object'
-      : 'unknown'
+    const valueType =
+      skMeta?.units === 'RFC 3339 (UTC)' || skMeta?.units === 'ISO-8601 (UTC)'
+        ? 'date'
+        : skMeta?.units
+          ? 'number'
+          : typeof valueDetails?.value === 'boolean'
+            ? 'boolean'
+            : typeof valueDetails?.value === 'string'
+              ? 'string'
+              : typeof valueDetails?.value === 'object' && valueDetails?.value !== null
+                ? 'object'
+                : 'unknown'
 
     const supportsPut = skMeta?.supportsPut || false
     const signalkSource = valueDetails?.source || skMeta?.$source || skMeta?.source || null
@@ -713,7 +738,9 @@ function filterAndSortMetadata() {
         info.baseUnit,
         info.category,
         info.displayUnit
-      ].join(' ').toLowerCase()
+      ]
+        .join(' ')
+        .toLowerCase()
 
       if (!searchableText.includes(searchTerm)) {
         return false
@@ -739,12 +766,13 @@ function filterAndSortMetadata() {
         aVal = a.valueType
         bVal = b.valueType
         break
-      case 'supportsPut':
+      case 'supportsPut': {
         // Boolean comparison: true > false
         aVal = a.supportsPut ? 1 : 0
         bVal = b.supportsPut ? 1 : 0
         const boolComparison = aVal - bVal
         return window.metadataSortDirection === 'asc' ? boolComparison : -boolComparison
+      }
       case 'base':
         aVal = a.baseUnit
         bVal = b.baseUnit
@@ -768,10 +796,18 @@ function filterAndSortMetadata() {
   renderMetadataTable(filtered)
 
   // Update counts
-  document.getElementById('overrideCount').textContent = filtered.filter(p => p.status === 'Path Override').length
-  document.getElementById('patternCount').textContent = filtered.filter(p => p.status.startsWith('Pattern:')).length
-  document.getElementById('signalkCount').textContent = filtered.filter(p => p.status === 'SignalK Only').length
-  document.getElementById('noneCount').textContent = filtered.filter(p => p.status === 'None').length
+  document.getElementById('overrideCount').textContent = filtered.filter(
+    p => p.status === 'Path Override'
+  ).length
+  document.getElementById('patternCount').textContent = filtered.filter(p =>
+    p.status.startsWith('Pattern:')
+  ).length
+  document.getElementById('signalkCount').textContent = filtered.filter(
+    p => p.status === 'SignalK Only'
+  ).length
+  document.getElementById('noneCount').textContent = filtered.filter(
+    p => p.status === 'None'
+  ).length
 
   // Update result count
   const totalPaths = window.metadataPathInfo.length
@@ -835,57 +871,56 @@ function renderMetadataTable(pathInfo) {
 
   // Update table body
   const tbody = document.getElementById('metadataTableBody')
-  tbody.innerHTML = pathInfo.map(info => {
-    const conversionUrl = `${API_BASE}/conversion/${info.path}`
-  const details = getCurrentValueDetails(info.path)
-  const currentValue = details?.value
+  tbody.innerHTML = pathInfo
+    .map(info => {
+      const conversionUrl = `${API_BASE}/conversion/${info.path}`
+      const details = getCurrentValueDetails(info.path)
+      const currentValue = details?.value
 
-  // For numbers: use GET link. For others: use POST form with target="_blank"
-  let testLink = ''
-  if (currentValue !== undefined && currentValue !== null) {
-    if (info.valueType === 'number') {
-      const convertUrl = `${API_BASE}/convert/${info.path}/${currentValue}`
-      testLink = `<a href="${convertUrl}" target="_blank" title="Test conversion with current value (${currentValue})" style="color: #2ecc71; margin-left: 4px; text-decoration: none; font-size: 14px;">▶️</a>`
-    } else {
-      const formId = `convert-form-${info.path.replace(/\./g, '-')}`
-      const serializedValue =
-        typeof currentValue === 'object'
-          ? JSON.stringify(currentValue)
-          : typeof currentValue === 'string'
-          ? currentValue
-          : JSON.stringify(currentValue)
+      // For numbers: use GET link. For others: use POST form with target="_blank"
+      let testLink = ''
+      if (currentValue !== undefined && currentValue !== null) {
+        if (info.valueType === 'number') {
+          const convertUrl = `${API_BASE}/convert/${info.path}/${currentValue}`
+          testLink = `<a href="${convertUrl}" target="_blank" title="Test conversion with current value (${currentValue})" style="color: #2ecc71; margin-left: 4px; text-decoration: none; font-size: 14px;">▶️</a>`
+        } else {
+          const formId = `convert-form-${info.path.replace(/\./g, '-')}`
+          const serializedValue =
+            typeof currentValue === 'object'
+              ? JSON.stringify(currentValue)
+              : typeof currentValue === 'string'
+                ? currentValue
+                : JSON.stringify(currentValue)
 
-      testLink = `<form id="${formId}" method="POST" action="${API_BASE}/convert" target="_blank" style="display: inline; margin: 0;">
+          testLink = `<form id="${formId}" method="POST" action="${API_BASE}/convert" target="_blank" style="display: inline; margin: 0;">
         <input type="hidden" name="path" value="${info.path}">
         <input type="hidden" name="value" value="${serializedValue.replace(/"/g, '&quot;')}">
         <input type="hidden" name="type" value="${info.valueType}">
         <button type="submit" title="Test conversion with current value" style="color: #2ecc71; margin-left: 4px; background: none; border: none; cursor: pointer; font-size: 14px; padding: 0;">▶️</button>
       </form>`
-    }
-  }
+        }
+      }
 
-  const canUseGetLink =
-    currentValue !== undefined &&
-    currentValue !== null &&
-    typeof currentValue !== 'object'
+      const canUseGetLink =
+        currentValue !== undefined && currentValue !== null && typeof currentValue !== 'object'
 
-  const encodedCurrentValue =
-    canUseGetLink ? encodeURIComponent(String(currentValue)) : null
+      const encodedCurrentValue = canUseGetLink ? encodeURIComponent(String(currentValue)) : null
 
-  const getLink = canUseGetLink
-    ? `<a href="${API_BASE}/convert/${info.path}/${encodedCurrentValue}" target="_blank" title="Open GET conversion endpoint" style="color: #e67e22; margin-left: 4px; text-decoration: none; font-size: 14px;">🔗</a>`
-    : ''
+      const getLink = canUseGetLink
+        ? `<a href="${API_BASE}/convert/${info.path}/${encodedCurrentValue}" target="_blank" title="Open GET conversion endpoint" style="color: #e67e22; margin-left: 4px; text-decoration: none; font-size: 14px;">🔗</a>`
+        : ''
 
-  const sourceLine = details?.source || info.signalkSource
-  const timestampLine = details?.timestamp || info.signalkTimestamp
-  const metadataLine = sourceLine || timestampLine
-    ? `<div style="margin-top: 4px; font-size: 10px; color: #6c757d;">
+      const sourceLine = details?.source || info.signalkSource
+      const timestampLine = details?.timestamp || info.signalkTimestamp
+      const metadataLine =
+        sourceLine || timestampLine
+          ? `<div style="margin-top: 4px; font-size: 10px; color: #6c757d;">
         ${sourceLine ? `<span style="margin-right: 8px;">$source: ${sourceLine}</span>` : ''}
         ${timestampLine ? `<span>timestamp: ${new Date(timestampLine).toLocaleString()}</span>` : ''}
       </div>`
-    : ''
+          : ''
 
-  return `
+      return `
       <tr style="border-bottom: 1px solid ${metadataLine ? '#dee2e6' : '#f1f3f5'}; background: ${info.color};">
         <td style="padding: 8px; font-family: monospace; font-size: 11px; word-break: break-all; text-align: left;">
           ${info.path}
@@ -904,13 +939,17 @@ function renderMetadataTable(pathInfo) {
         <td style="padding: 8px; font-weight: bold;">${info.displayUnit}</td>
       </tr>
     `
-  }).join('')
+    })
+    .join('')
 }
 
 // Update category preference
 async function updateCategory(category, field, value) {
   try {
-    const currentPref = preferences.categories?.[category] || { targetUnit: '', displayFormat: '0.0' }
+    const currentPref = preferences.categories?.[category] || {
+      targetUnit: '',
+      displayFormat: '0.0'
+    }
     const updatedPref = { ...currentPref, [field]: value }
 
     const res = await fetch(`${API_BASE}/categories/${category}`, {
@@ -944,14 +983,16 @@ async function addCustomCategory() {
   const displayFormat = document.getElementById('newCategoryFormat').value.trim()
 
   // Get base unit (from dropdown or custom input)
-  const baseUnit = baseSelect.value === 'custom'
-    ? document.getElementById('newCategoryBaseCustom').value.trim()
-    : baseSelect.value.trim()
+  const baseUnit =
+    baseSelect.value === 'custom'
+      ? document.getElementById('newCategoryBaseCustom').value.trim()
+      : baseSelect.value.trim()
 
   // Get target unit (from dropdown or custom input)
-  const targetUnit = targetSelect.value === 'custom'
-    ? document.getElementById('newCategoryTargetCustom').value.trim()
-    : targetSelect.value.trim()
+  const targetUnit =
+    targetSelect.value === 'custom'
+      ? document.getElementById('newCategoryTargetCustom').value.trim()
+      : targetSelect.value.trim()
 
   // Validation
   if (!categoryName || !baseUnit || !targetUnit || !displayFormat) {
@@ -1063,7 +1104,10 @@ async function saveCustomPreset() {
     const result = await res.json()
 
     if (result?.version) {
-      showStatus(`Custom preset "${presetName}" saved successfully (version ${result.version}).`, 'success')
+      showStatus(
+        `Custom preset "${presetName}" saved successfully (version ${result.version}).`,
+        'success'
+      )
     } else {
       showStatus(`Custom preset "${presetName}" saved successfully!`, 'success')
     }
@@ -1113,7 +1157,10 @@ async function applyCustomPreset(presetId, presetName) {
     if (!res.ok) throw new Error('Failed to apply custom preset')
 
     const result = await res.json()
-    showStatus(`Applied custom preset "${presetName}" to ${result.categoriesUpdated} categories`, 'success')
+    showStatus(
+      `Applied custom preset "${presetName}" to ${result.categoriesUpdated} categories`,
+      'success'
+    )
 
     // Reload data to show updated preferences and reset dirty state
     await loadData()
@@ -1158,11 +1205,14 @@ function renderCustomPresets(customPresets) {
   if (!container) return
 
   if (customPresets.length === 0) {
-    container.innerHTML = '<div class="empty-state">No custom presets yet. Modify a preset and save it from the Categories tab.</div>'
+    container.innerHTML =
+      '<div class="empty-state">No custom presets yet. Modify a preset and save it from the Categories tab.</div>'
     return
   }
 
-  container.innerHTML = customPresets.map(preset => `
+  container.innerHTML = customPresets
+    .map(
+      preset => `
     <div style="background: #f8f9fa; padding: 16px; border-radius: 6px; border: 1px solid #e9ecef;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
         <div>
@@ -1183,13 +1233,15 @@ function renderCustomPresets(customPresets) {
         </button>
       </div>
     </div>
-  `).join('')
+  `
+    )
+    .join('')
 }
 
 // Apply unit system preset
 async function applyUnitPreset(presetType) {
   const presetNames = {
-    'metric': 'Metric',
+    metric: 'Metric',
     'imperial-us': 'Imperial (US)',
     'imperial-uk': 'Imperial (UK)'
   }
@@ -1206,7 +1258,10 @@ async function applyUnitPreset(presetType) {
     if (!res.ok) throw new Error('Failed to apply preset')
 
     const result = await res.json()
-    showStatus(`Applied ${presetNames[presetType]} preset to ${result.categoriesUpdated} categories`, 'success')
+    showStatus(
+      `Applied ${presetNames[presetType]} preset to ${result.categoriesUpdated} categories`,
+      'success'
+    )
 
     // Reload data to show updated preferences and reset dirty state
     await loadData()
@@ -1227,7 +1282,8 @@ function editCategory(category) {
   const pref = preferences?.categories?.[category] || {}
   const schemaBaseUnit = unitSchema.categoryToBaseUnit[category] || ''
   const prefBaseUnit = pref.baseUnit
-  const isCustom = prefBaseUnit !== undefined && prefBaseUnit !== schemaBaseUnit && prefBaseUnit !== ''
+  const isCustom =
+    prefBaseUnit !== undefined && prefBaseUnit !== schemaBaseUnit && prefBaseUnit !== ''
   const baseUnit = isCustom ? prefBaseUnit : schemaBaseUnit
   const targetUnit = pref.targetUnit || ''
   const displayFormat = pref.displayFormat || '0.0'
@@ -1267,7 +1323,11 @@ function editCategory(category) {
 
   // Populate dropdowns
   if (isCustom) {
-    document.getElementById(`${baseSelectId}-container`).innerHTML = createBaseUnitDropdown(baseSelectId, baseUnit, false)
+    document.getElementById(`${baseSelectId}-container`).innerHTML = createBaseUnitDropdown(
+      baseSelectId,
+      baseUnit,
+      false
+    )
   } else {
     // For core categories, show base unit as disabled/readonly
     document.getElementById(`${baseSelectId}-container`).innerHTML = `
@@ -1276,12 +1336,22 @@ function editCategory(category) {
       </select>
     `
   }
-  document.getElementById(`${targetSelectId}-container`).innerHTML = createTargetUnitDropdown(targetSelectId, baseUnit, targetUnit, false)
+  document.getElementById(`${targetSelectId}-container`).innerHTML = createTargetUnitDropdown(
+    targetSelectId,
+    baseUnit,
+    targetUnit,
+    false
+  )
 
   // Handle base unit change to update target units
-  document.getElementById(baseSelectId).addEventListener('change', (e) => {
+  document.getElementById(baseSelectId).addEventListener('change', e => {
     const newBaseUnit = e.target.value
-    document.getElementById(`${targetSelectId}-container`).innerHTML = createTargetUnitDropdown(targetSelectId, newBaseUnit, '', false)
+    document.getElementById(`${targetSelectId}-container`).innerHTML = createTargetUnitDropdown(
+      targetSelectId,
+      newBaseUnit,
+      '',
+      false
+    )
   })
 
   // Show edit form, hide view
@@ -1361,7 +1431,11 @@ function cancelEditCategory(category) {
 // Initialize custom category form dropdowns
 function initializeCustomCategoryDropdowns() {
   // Render base unit dropdown
-  document.getElementById('newCategoryBaseContainer').innerHTML = createBaseUnitDropdown('newCategoryBase', '', true)
+  document.getElementById('newCategoryBaseContainer').innerHTML = createBaseUnitDropdown(
+    'newCategoryBase',
+    '',
+    true
+  )
 
   // Initialize target unit dropdown (disabled until base is selected)
   document.getElementById('newCategoryTargetContainer').innerHTML = `
@@ -1371,7 +1445,7 @@ function initializeCustomCategoryDropdowns() {
   `
 
   // Handle base unit change
-  document.getElementById('newCategoryBase').addEventListener('change', function() {
+  document.getElementById('newCategoryBase').addEventListener('change', function () {
     const customInput = document.getElementById('newCategoryBaseCustom')
     const targetContainer = document.getElementById('newCategoryTargetContainer')
 
@@ -1388,7 +1462,12 @@ function initializeCustomCategoryDropdowns() {
     } else if (this.value) {
       customInput.style.display = 'none'
       // Populate target units based on selected base unit
-      targetContainer.innerHTML = createTargetUnitDropdown('newCategoryTarget', this.value, '', true)
+      targetContainer.innerHTML = createTargetUnitDropdown(
+        'newCategoryTarget',
+        this.value,
+        '',
+        true
+      )
       attachNewCategoryTargetHandler()
     } else {
       customInput.style.display = 'none'
@@ -1405,7 +1484,7 @@ function initializeCustomCategoryDropdowns() {
 function attachNewCategoryTargetHandler() {
   const targetSelect = document.getElementById('newCategoryTarget')
   if (targetSelect) {
-    targetSelect.addEventListener('change', function() {
+    targetSelect.addEventListener('change', function () {
       const customInput = document.getElementById('newCategoryTargetCustom')
       customInput.style.display = this.value === 'custom' ? 'block' : 'none'
     })
@@ -1426,16 +1505,21 @@ function renderPatterns() {
     .map((pattern, originalIndex) => ({ pattern, originalIndex }))
     .sort((a, b) => (b.pattern.priority || 0) - (a.pattern.priority || 0))
 
-  container.innerHTML = sorted.map(({ pattern, originalIndex }) => {
-    // Derive base unit: use pattern's baseUnit if present, otherwise from category
-    const baseUnit = pattern.baseUnit || unitSchema.categoryToBaseUnit[pattern.category] || '(derived from category)'
+  container.innerHTML = sorted
+    .map(({ pattern, originalIndex }) => {
+      // Derive base unit: use pattern's baseUnit if present, otherwise from category
+      const baseUnit =
+        pattern.baseUnit ||
+        unitSchema.categoryToBaseUnit[pattern.category] ||
+        '(derived from category)'
 
-    // Get category defaults for display
-    const categoryDefault = preferences.categories?.[pattern.category]
-    const targetUnit = pattern.targetUnit || categoryDefault?.targetUnit || '(category default)'
-    const displayFormat = pattern.displayFormat || categoryDefault?.displayFormat || '(category default)'
+      // Get category defaults for display
+      const categoryDefault = preferences.categories?.[pattern.category]
+      const targetUnit = pattern.targetUnit || categoryDefault?.targetUnit || '(category default)'
+      const displayFormat =
+        pattern.displayFormat || categoryDefault?.displayFormat || '(category default)'
 
-    return `
+      return `
     <div class="pattern-item" style="padding: 12px 16px; background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 6px; margin-bottom: 8px;">
       <div id="pattern-view-${originalIndex}" style="display: flex; align-items: center; justify-content: space-between; gap: 16px;">
         <div style="display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0;">
@@ -1452,7 +1536,9 @@ function renderPatterns() {
       </div>
       <div id="pattern-edit-${originalIndex}" style="display: none;"></div>
     </div>
-  `}).join('')
+  `
+    })
+    .join('')
 }
 
 // Add new pattern
@@ -1461,24 +1547,27 @@ async function addPattern() {
 
   // Get category (from dropdown or custom input)
   const categorySelect = document.getElementById('newPatternCategory')
-  const category = categorySelect.value === 'custom'
-    ? document.getElementById('newPatternCategoryCustom').value.trim()
-    : categorySelect.value.trim()
+  const category =
+    categorySelect.value === 'custom'
+      ? document.getElementById('newPatternCategoryCustom').value.trim()
+      : categorySelect.value.trim()
 
   // Get base unit (optional for known categories, required for custom)
   const baseSelect = document.getElementById('newPatternBase')
   let baseUnit = ''
   if (categorySelect.value === 'custom') {
-    baseUnit = baseSelect.value === 'custom'
-      ? document.getElementById('newPatternBaseCustom').value.trim()
-      : baseSelect.value.trim()
+    baseUnit =
+      baseSelect.value === 'custom'
+        ? document.getElementById('newPatternBaseCustom').value.trim()
+        : baseSelect.value.trim()
   }
 
   // Get target unit (optional for known categories, required for custom)
   const targetSelect = document.getElementById('newPatternTarget')
-  const targetUnit = targetSelect.value === 'custom'
-    ? document.getElementById('newPatternTargetCustom').value.trim()
-    : targetSelect.value.trim()
+  const targetUnit =
+    targetSelect.value === 'custom'
+      ? document.getElementById('newPatternTargetCustom').value.trim()
+      : targetSelect.value.trim()
 
   // Get display format (optional)
   const displayFormat = document.getElementById('newPatternFormat').value.trim()
@@ -1549,7 +1638,8 @@ function editPattern(index) {
   const editDiv = document.getElementById(`pattern-edit-${index}`)
 
   // Determine base unit to use for target units
-  const baseUnitForTargets = pattern.baseUnit || unitSchema.categoryToBaseUnit[pattern.category] || ''
+  const baseUnitForTargets =
+    pattern.baseUnit || unitSchema.categoryToBaseUnit[pattern.category] || ''
 
   // Build edit form
   editDiv.innerHTML = `
@@ -1589,9 +1679,12 @@ function editPattern(index) {
   `
 
   // Populate base unit dropdown
-  const baseOptions = unitSchema.baseUnits.map(opt =>
-    `<option value="${opt.value}" ${opt.value === pattern.baseUnit ? 'selected' : ''}>${opt.label}</option>`
-  ).join('')
+  const baseOptions = unitSchema.baseUnits
+    .map(
+      opt =>
+        `<option value="${opt.value}" ${opt.value === pattern.baseUnit ? 'selected' : ''}>${opt.label}</option>`
+    )
+    .join('')
   document.getElementById(`edit-pattern-base-container-${index}`).innerHTML = `
     <select id="edit-pattern-base-${index}">
       <option value="">-- Use Category Default --</option>
@@ -1601,9 +1694,12 @@ function editPattern(index) {
 
   // Populate target unit dropdown
   const targetUnits = unitSchema.targetUnitsByBase[baseUnitForTargets] || []
-  const targetOptions = targetUnits.map(unit =>
-    `<option value="${unit}" ${unit === pattern.targetUnit ? 'selected' : ''}>${unit}</option>`
-  ).join('')
+  const targetOptions = targetUnits
+    .map(
+      unit =>
+        `<option value="${unit}" ${unit === pattern.targetUnit ? 'selected' : ''}>${unit}</option>`
+    )
+    .join('')
   document.getElementById(`edit-pattern-target-container-${index}`).innerHTML = `
     <select id="edit-pattern-target-${index}">
       <option value="">-- Use Category Default --</option>
@@ -1612,7 +1708,7 @@ function editPattern(index) {
   `
 
   // Handle base unit change to update target units
-  document.getElementById(`edit-pattern-base-${index}`).addEventListener('change', (e) => {
+  document.getElementById(`edit-pattern-base-${index}`).addEventListener('change', e => {
     const selectedBase = e.target.value
     const baseForTargets = selectedBase || unitSchema.categoryToBaseUnit[pattern.category] || ''
     const units = unitSchema.targetUnitsByBase[baseForTargets] || []
@@ -1709,57 +1805,79 @@ const conversionTemplates = {
     { unit: 'km/h', formula: 'value * 3.6', inverseFormula: 'value * 0.277778', symbol: 'km/h' },
     { unit: 'mph', formula: 'value * 2.23694', inverseFormula: 'value * 0.44704', symbol: 'mph' }
   ],
-  'K': [
+  K: [
     { unit: 'celsius', formula: 'value - 273.15', inverseFormula: 'value + 273.15', symbol: '°C' },
-    { unit: 'fahrenheit', formula: '(value - 273.15) * 9/5 + 32', inverseFormula: '(value - 32) * 5/9 + 273.15', symbol: '°F' }
+    {
+      unit: 'fahrenheit',
+      formula: '(value - 273.15) * 9/5 + 32',
+      inverseFormula: '(value - 32) * 5/9 + 273.15',
+      symbol: '°F'
+    }
   ],
-  'Pa': [
+  Pa: [
     { unit: 'hPa', formula: 'value * 0.01', inverseFormula: 'value * 100', symbol: 'hPa' },
     { unit: 'mbar', formula: 'value * 0.01', inverseFormula: 'value * 100', symbol: 'mbar' },
-    { unit: 'inHg', formula: 'value * 0.0002953', inverseFormula: 'value * 3386.39', symbol: 'inHg' },
-    { unit: 'psi', formula: 'value * 0.000145038', inverseFormula: 'value * 6894.76', symbol: 'psi' }
+    {
+      unit: 'inHg',
+      formula: 'value * 0.0002953',
+      inverseFormula: 'value * 3386.39',
+      symbol: 'inHg'
+    },
+    {
+      unit: 'psi',
+      formula: 'value * 0.000145038',
+      inverseFormula: 'value * 6894.76',
+      symbol: 'psi'
+    }
   ],
-  'm': [
+  m: [
     { unit: 'ft', formula: 'value * 3.28084', inverseFormula: 'value * 0.3048', symbol: 'ft' },
     { unit: 'km', formula: 'value * 0.001', inverseFormula: 'value * 1000', symbol: 'km' },
     { unit: 'nm', formula: 'value * 0.000539957', inverseFormula: 'value * 1852', symbol: 'nm' },
     { unit: 'mi', formula: 'value * 0.000621371', inverseFormula: 'value * 1609.34', symbol: 'mi' },
-    { unit: 'fathom', formula: 'value * 0.546807', inverseFormula: 'value * 1.8288', symbol: 'fathom' }
+    {
+      unit: 'fathom',
+      formula: 'value * 0.546807',
+      inverseFormula: 'value * 1.8288',
+      symbol: 'fathom'
+    }
   ],
-  'rad': [
+  rad: [
     { unit: 'deg', formula: 'value * 57.2958', inverseFormula: 'value * 0.0174533', symbol: '°' }
   ],
-  'm3': [
+  m3: [
     { unit: 'L', formula: 'value * 1000', inverseFormula: 'value * 0.001', symbol: 'L' },
-    { unit: 'gal', formula: 'value * 264.172', inverseFormula: 'value * 0.00378541', symbol: 'gal' },
-    { unit: 'gal(UK)', formula: 'value * 219.969', inverseFormula: 'value * 0.00454609', symbol: 'gal(UK)' }
+    {
+      unit: 'gal',
+      formula: 'value * 264.172',
+      inverseFormula: 'value * 0.00378541',
+      symbol: 'gal'
+    },
+    {
+      unit: 'gal(UK)',
+      formula: 'value * 219.969',
+      inverseFormula: 'value * 0.00454609',
+      symbol: 'gal(UK)'
+    }
   ],
-  'V': [
-    { unit: 'mV', formula: 'value * 1000', inverseFormula: 'value * 0.001', symbol: 'mV' }
-  ],
-  'A': [
-    { unit: 'mA', formula: 'value * 1000', inverseFormula: 'value * 0.001', symbol: 'mA' }
-  ],
-  'W': [
+  V: [{ unit: 'mV', formula: 'value * 1000', inverseFormula: 'value * 0.001', symbol: 'mV' }],
+  A: [{ unit: 'mA', formula: 'value * 1000', inverseFormula: 'value * 0.001', symbol: 'mA' }],
+  W: [
     { unit: 'kW', formula: 'value * 0.001', inverseFormula: 'value * 1000', symbol: 'kW' },
     { unit: 'hp', formula: 'value * 0.00134102', inverseFormula: 'value * 745.7', symbol: 'hp' }
   ],
-  'Hz': [
-    { unit: 'rpm', formula: 'value * 60', inverseFormula: 'value / 60', symbol: 'rpm' }
-  ],
-  'ratio': [
-    { unit: 'percent', formula: 'value * 100', inverseFormula: 'value * 0.01', symbol: '%' }
-  ],
-  's': [
+  Hz: [{ unit: 'rpm', formula: 'value * 60', inverseFormula: 'value / 60', symbol: 'rpm' }],
+  ratio: [{ unit: 'percent', formula: 'value * 100', inverseFormula: 'value * 0.01', symbol: '%' }],
+  s: [
     { unit: 'min', formula: 'value / 60', inverseFormula: 'value * 60', symbol: 'min' },
     { unit: 'h', formula: 'value / 3600', inverseFormula: 'value * 3600', symbol: 'h' },
     { unit: 'days', formula: 'value / 86400', inverseFormula: 'value * 86400', symbol: 'd' }
   ],
-  'C': [
+  C: [
     { unit: 'Ah', formula: 'value / 3600', inverseFormula: 'value * 3600', symbol: 'Ah' },
     { unit: 'mAh', formula: 'value / 3.6', inverseFormula: 'value * 3.6', symbol: 'mAh' }
   ],
-  'deg': [
+  deg: [
     { unit: 'rad', formula: 'value * 0.0174533', inverseFormula: 'value * 57.2958', symbol: 'rad' }
   ]
 }
@@ -1772,13 +1890,17 @@ function handleBaseUnitChange() {
 
   if (select.value === 'custom') {
     customInput.style.display = 'block'
-    templateSelect.innerHTML = '<option value="">-- Select Conversion --</option><option value="custom">✏️ Custom Conversion...</option>'
+    templateSelect.innerHTML =
+      '<option value="">-- Select Conversion --</option><option value="custom">✏️ Custom Conversion...</option>'
   } else {
     customInput.style.display = 'none'
     // Populate conversion templates based on base unit
     const templates = conversionTemplates[select.value] || []
-    templateSelect.innerHTML = '<option value="">-- Select Conversion --</option>' +
-      templates.map((t, i) => `<option value="${i}">${select.value} → ${t.unit} (${t.symbol})</option>`).join('') +
+    templateSelect.innerHTML =
+      '<option value="">-- Select Conversion --</option>' +
+      templates
+        .map((t, i) => `<option value="${i}">${select.value} → ${t.unit} (${t.symbol})</option>`)
+        .join('') +
       '<option value="custom">✏️ Custom Conversion...</option>'
   }
 }
@@ -1855,12 +1977,16 @@ function renderConversionsList() {
     return
   }
 
-  container.innerHTML = Object.entries(currentMetadataConversions).map(([unit, conv]) => `
+  container.innerHTML = Object.entries(currentMetadataConversions)
+    .map(
+      ([unit, conv]) => `
     <div style="display: flex; gap: 10px; align-items: center; padding: 8px; background: #f8f9fa; border-radius: 4px; margin-bottom: 5px;">
       <span style="flex: 1;"><strong>${unit}</strong>: ${conv.formula} (${conv.symbol})</span>
       <button onclick="removeConversion('${unit}')" style="background: #e74c3c; color: white; border: none; padding: 4px 8px; border-radius: 3px; cursor: pointer;">Remove</button>
     </div>
-  `).join('')
+  `
+    )
+    .join('')
 }
 
 function addConversionToMetadata() {
@@ -1897,9 +2023,10 @@ function removeConversion(unit) {
 async function saveMetadata() {
   const path = document.getElementById('selectedMetadataPath').value
   const baseUnitSelect = document.getElementById('metadataBaseUnit').value
-  const baseUnit = baseUnitSelect === 'custom'
-    ? document.getElementById('metadataBaseUnitCustom').value.trim()
-    : baseUnitSelect.trim()
+  const baseUnit =
+    baseUnitSelect === 'custom'
+      ? document.getElementById('metadataBaseUnitCustom').value.trim()
+      : baseUnitSelect.trim()
   const category = document.getElementById('metadataCategory').value.trim()
 
   if (!path) {
@@ -2091,16 +2218,17 @@ function renderUnitDefinitions() {
     return
   }
 
-  container.innerHTML = defs.map(([baseUnit, def]) => {
-    console.log(`Rendering baseUnit: ${baseUnit}, category: ${def.category}`)
-    const conversions = Object.entries(def.conversions || {})
-    const isCustom = def.isCustom === true
-    const badge = isCustom
-      ? '<span style="background: #667eea; color: white; padding: 2px 8px; border-radius: 3px; font-size: 11px; margin-left: 8px;">CUSTOM</span>'
-      : '<span style="background: #6c757d; color: white; padding: 2px 8px; border-radius: 3px; font-size: 11px; margin-left: 8px;">CORE</span>'
-    const safeBaseUnit = sanitizeIdSegment(baseUnit)
+  container.innerHTML = defs
+    .map(([baseUnit, def]) => {
+      console.log(`Rendering baseUnit: ${baseUnit}, category: ${def.category}`)
+      const conversions = Object.entries(def.conversions || {})
+      const isCustom = def.isCustom === true
+      const badge = isCustom
+        ? '<span style="background: #667eea; color: white; padding: 2px 8px; border-radius: 3px; font-size: 11px; margin-left: 8px;">CUSTOM</span>'
+        : '<span style="background: #6c757d; color: white; padding: 2px 8px; border-radius: 3px; font-size: 11px; margin-left: 8px;">CORE</span>'
+      const safeBaseUnit = sanitizeIdSegment(baseUnit)
 
-    return `
+      return `
       <div class="unit-definition-item" style="padding: 12px 16px; background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 6px; margin-bottom: 8px;">
         <div class="collapsible-header" onclick="toggleUnitItem('${baseUnit}')" style="cursor: pointer;">
           <div style="display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0;">
@@ -2116,7 +2244,9 @@ function renderUnitDefinitions() {
         </div>
         <div class="collapsible-content collapsed" id="unit-content-${safeBaseUnit}">
           <div id="unit-view-${safeBaseUnit}">
-            ${conversions.length > 0 ? `
+            ${
+              conversions.length > 0
+                ? `
               <div style="background: white; padding: 15px; border-radius: 4px;">
                 <h4 style="margin: 0 0 10px 0;">Available Conversions</h4>
                 <table style="width: 100%; border-collapse: collapse;">
@@ -2130,8 +2260,9 @@ function renderUnitDefinitions() {
                     </tr>
                   </thead>
                   <tbody id="conversions-tbody-${safeBaseUnit}">
-                    ${conversions.map(([target, conv]) => {
-                      return `
+                    ${conversions
+                      .map(([target, conv]) => {
+                        return `
                       <tr id="${buildConversionId('conversion-row', baseUnit, target)}" style="border-bottom: 1px solid #f0f0f0;">
                         <td style="padding: 8px; font-family: monospace;">${target}</td>
                         <td style="padding: 8px; font-family: monospace; font-size: 12px;">${conv.formula}</td>
@@ -2142,11 +2273,14 @@ function renderUnitDefinitions() {
                           <button class="btn-danger btn-delete" onclick="deleteConversion('${baseUnit}', '${target}')">Delete</button>
                         </td>
                       </tr>`
-                    }).join('')}
+                      })
+                      .join('')}
                   </tbody>
                 </table>
               </div>
-            ` : '<p style="color: #7f8c8d; font-style: italic;">No conversions defined yet</p>'}
+            `
+                : '<p style="color: #7f8c8d; font-style: italic;">No conversions defined yet</p>'
+            }
           </div>
           <div id="unit-edit-${safeBaseUnit}" style="display: none;">
             <!-- Edit form will be inserted here -->
@@ -2154,7 +2288,8 @@ function renderUnitDefinitions() {
         </div>
       </div>
     `
-  }).join('')
+    })
+    .join('')
 }
 
 // Delete a base unit
@@ -2493,9 +2628,13 @@ function initializeUnitDefinitionsDropdowns() {
   container.innerHTML = `
     <select id="conversionBaseUnit">
       <option value="">-- Select Base Unit --</option>
-      ${baseUnits.map(unit => `
+      ${baseUnits
+        .map(
+          unit => `
         <option value="${unit.value}">${unit.label}</option>
-      `).join('')}
+      `
+        )
+        .join('')}
     </select>
   `
 }
@@ -2503,9 +2642,6 @@ function initializeUnitDefinitionsDropdowns() {
 // ============================================================================
 // PATH OVERRIDES TAB
 // ============================================================================
-
-// Path overrides list
-let pathOverrides = {}
 
 // Add a path override
 async function addPathOverride() {
@@ -2571,16 +2707,17 @@ function renderPathOverrides() {
     return
   }
 
-  container.innerHTML = overrides.map(override => {
-    const conversionUrl = `${API_BASE}/conversion/${override.path}`
-    const currentValue = getCurrentValue(override.path) || 0
-    const convertUrl = `${API_BASE}/convert/${override.path}/${currentValue}`
-    const baseUnit = override.baseUnit || 'auto'
-    const targetUnit = override.targetUnit || 'none'
-    const displayFormat = override.displayFormat || '0.0'
-    const safePath = override.path.replace(/\./g, '-')
+  container.innerHTML = overrides
+    .map(override => {
+      const conversionUrl = `${API_BASE}/conversion/${override.path}`
+      const currentValue = getCurrentValue(override.path) || 0
+      const convertUrl = `${API_BASE}/convert/${override.path}/${currentValue}`
+      const baseUnit = override.baseUnit || 'auto'
+      const targetUnit = override.targetUnit || 'none'
+      const displayFormat = override.displayFormat || '0.0'
+      const safePath = override.path.replace(/\./g, '-')
 
-    return `
+      return `
       <div class="override-item" style="padding: 12px 16px; background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 6px; margin-bottom: 8px;">
         <div id="override-view-${safePath}" style="display: flex; align-items: center; justify-content: space-between; gap: 16px;">
           <div style="display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0;">
@@ -2599,7 +2736,8 @@ function renderPathOverrides() {
         <div id="override-edit-${safePath}" style="display: none;"></div>
       </div>
     `
-  }).join('')
+    })
+    .join('')
 }
 
 // Edit path override
@@ -2658,13 +2796,27 @@ async function editPathOverride(path) {
   `
 
   // Populate dropdowns
-  document.getElementById(`${baseSelectId}-container`).innerHTML = createBaseUnitDropdown(baseSelectId, baseUnit, false)
-  document.getElementById(`${targetSelectId}-container`).innerHTML = createTargetUnitDropdown(targetSelectId, baseUnit, targetUnit, false)
+  document.getElementById(`${baseSelectId}-container`).innerHTML = createBaseUnitDropdown(
+    baseSelectId,
+    baseUnit,
+    false
+  )
+  document.getElementById(`${targetSelectId}-container`).innerHTML = createTargetUnitDropdown(
+    targetSelectId,
+    baseUnit,
+    targetUnit,
+    false
+  )
 
   // Handle base unit change to update target units
-  document.getElementById(baseSelectId).addEventListener('change', (e) => {
+  document.getElementById(baseSelectId).addEventListener('change', e => {
     const newBaseUnit = e.target.value
-    document.getElementById(`${targetSelectId}-container`).innerHTML = createTargetUnitDropdown(targetSelectId, newBaseUnit, '', false)
+    document.getElementById(`${targetSelectId}-container`).innerHTML = createTargetUnitDropdown(
+      targetSelectId,
+      newBaseUnit,
+      '',
+      false
+    )
   })
 
   // Show edit form, hide view
@@ -2762,10 +2914,15 @@ function initializePathOverridesDropdowns() {
     baseContainer.innerHTML = createBaseUnitDropdown('overrideBaseUnit', '', false)
 
     // Handle base unit change
-    document.getElementById('overrideBaseUnit').addEventListener('change', function() {
+    document.getElementById('overrideBaseUnit').addEventListener('change', function () {
       const targetContainer = document.getElementById('overrideTargetUnitContainer')
       if (this.value) {
-        targetContainer.innerHTML = createTargetUnitDropdown('overrideTargetUnit', this.value, '', false)
+        targetContainer.innerHTML = createTargetUnitDropdown(
+          'overrideTargetUnit',
+          this.value,
+          '',
+          false
+        )
       } else {
         targetContainer.innerHTML = `
           <select id="overrideTargetUnit" disabled>
