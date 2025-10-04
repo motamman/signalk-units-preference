@@ -205,6 +205,7 @@ export const categoryToBaseUnit: Record<string, string> = {
   distance: 'm',
   depth: 'm',
   angle: 'rad',
+  angularVelocity: 'rad/s',
   volume: 'm3',
   voltage: 'V',
   current: 'A',
@@ -212,5 +213,8 @@ export const categoryToBaseUnit: Record<string, string> = {
   percentage: 'ratio',
   frequency: 'Hz',
   time: 's',
+  charge: 'C',
+  volumeRate: 'm3/s',
+  length: 'm',
   dateTime: 'RFC 3339 (UTC)'
 }

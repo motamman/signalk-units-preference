@@ -443,10 +443,12 @@ function renderCategories() {
   container.innerHTML = unitSchema.categories
     .map(category => {
       const pref = preferences?.categories?.[category] || { targetUnit: '', displayFormat: '0.0' }
-      const baseUnit = unitSchema.categoryToBaseUnit[category]
+      const schemaBaseUnit = unitSchema.categoryToBaseUnit[category] || ''
+      const prefBaseUnit = pref.baseUnit
+      const isCustom = prefBaseUnit !== undefined && prefBaseUnit !== schemaBaseUnit && prefBaseUnit !== ''
+      const baseUnit = isCustom ? prefBaseUnit : schemaBaseUnit
       const targetUnit = pref.targetUnit || 'none'
       const displayFormat = pref.displayFormat || '0.0'
-      const isCustom = pref.baseUnit !== undefined
       const badge = isCustom
         ? '<span style="background: #667eea; color: white; padding: 2px 8px; border-radius: 3px; font-size: 11px; margin-left: 8px;">CUSTOM</span>'
         : '<span style="background: #6c757d; color: white; padding: 2px 8px; border-radius: 3px; font-size: 11px; margin-left: 8px;">CORE</span>'
@@ -1215,11 +1217,12 @@ async function applyUnitPreset(presetType) {
 // Edit custom category
 function editCategory(category) {
   const pref = preferences?.categories?.[category] || {}
-  // For core categories, use schema base unit; for custom, use pref.baseUnit
-  const baseUnit = pref.baseUnit || unitSchema.categoryToBaseUnit[category] || ''
+  const schemaBaseUnit = unitSchema.categoryToBaseUnit[category] || ''
+  const prefBaseUnit = pref.baseUnit
+  const isCustom = prefBaseUnit !== undefined && prefBaseUnit !== schemaBaseUnit && prefBaseUnit !== ''
+  const baseUnit = isCustom ? prefBaseUnit : schemaBaseUnit
   const targetUnit = pref.targetUnit || ''
   const displayFormat = pref.displayFormat || '0.0'
-  const isCustom = pref.baseUnit !== undefined
 
   const viewDiv = document.getElementById(`category-view-${category}`)
   const editDiv = document.getElementById(`category-edit-${category}`)
@@ -1288,23 +1291,21 @@ async function saveEditCategory(category) {
   const targetUnit = document.getElementById(targetSelectId).value
   const displayFormat = document.getElementById(formatInputId).value
 
+  const schemaBaseUnit = unitSchema.categoryToBaseUnit[category] || ''
+  const newIsCustom = baseUnit && baseUnit !== '' && baseUnit !== schemaBaseUnit
+
   if (!targetUnit || !displayFormat) {
     showStatus('Please fill in all fields', 'error')
     return
   }
 
   try {
-    // Check if this is a custom category (has baseUnit in preferences)
-    const pref = preferences?.categories?.[category] || {}
-    const isCustom = pref.baseUnit !== undefined
-
     const categoryPref = {
       targetUnit,
       displayFormat
     }
 
-    // Only include baseUnit for custom categories
-    if (isCustom && baseUnit) {
+    if (newIsCustom) {
       categoryPref.baseUnit = baseUnit
     }
 
@@ -1329,8 +1330,7 @@ async function saveEditCategory(category) {
     renderCurrentPreset()
     renderCategories()
 
-    // Only reload schema if this is a custom category (in case baseUnit changed)
-    if (isCustom) {
+    if (newIsCustom) {
       await loadSchema()
       initializePatternDropdowns()
       initializeCustomCategoryDropdowns()

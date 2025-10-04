@@ -525,11 +525,19 @@ export class UnitsManager {
                   displayFormat: castSettings.displayFormat || existing.displayFormat || '0.0'
                 }
               } else {
-                this.preferences.categories[category] = {
+                const schemaBaseUnit = categoryToBaseUnit[category]
+                const presetBaseUnit = castSettings.baseUnit
+
+                const newCategoryPref: CategoryPreference = {
                   targetUnit: castSettings.targetUnit || '',
-                  displayFormat: castSettings.displayFormat || '0.0',
-                  ...(castSettings.baseUnit ? { baseUnit: castSettings.baseUnit } : {})
+                  displayFormat: castSettings.displayFormat || '0.0'
                 }
+
+                if (presetBaseUnit && (!schemaBaseUnit || schemaBaseUnit !== presetBaseUnit)) {
+                  newCategoryPref.baseUnit = presetBaseUnit
+                }
+
+                this.preferences.categories[category] = newCategoryPref
               }
             }
 
