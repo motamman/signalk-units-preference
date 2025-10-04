@@ -517,36 +517,39 @@ export class UnitsManager {
         const data = fs.readFileSync(this.preferencesPath, 'utf-8')
         this.preferences = JSON.parse(data)
         this.app.debug('Loaded units preferences from file')
+
+        let preferencesChanged = false
+
+        if (!this.preferences.categories) {
+          this.preferences.categories = {}
+          preferencesChanged = true
+        }
+
+        if (!this.preferences.pathOverrides) {
+          this.preferences.pathOverrides = {}
+          preferencesChanged = true
+        }
+
+        if (!this.preferences.pathPatterns) {
+          this.preferences.pathPatterns = []
+          preferencesChanged = true
+        }
+
+        preferencesChanged = this.ensureCategoryDefaults() || preferencesChanged
+        preferencesChanged = this.ensureDefaultPathPatterns() || preferencesChanged
+
+        if (preferencesChanged) {
+          await this.savePreferences()
+        }
       } else {
         this.preferences = {
           categories: {},
           pathOverrides: {},
-          pathPatterns: [
-            {
-              pattern: '*.temperature',
-              category: 'temperature',
-              targetUnit: 'celsius',
-              displayFormat: '0',
-              priority: 100
-            },
-            {
-              pattern: '*.pressure',
-              category: 'pressure',
-              targetUnit: 'hPa',
-              displayFormat: '0',
-              priority: 100
-            },
-            {
-              pattern: '*.speed*',
-              category: 'speed',
-              targetUnit: 'knots',
-              displayFormat: '0.0',
-              priority: 90
-            }
-          ]
+          pathPatterns: DEFAULT_PATH_PATTERNS.map(rule => ({ ...rule }))
         }
 
         this.ensureCategoryDefaults()
+        this.ensureDefaultPathPatterns()
 
         // Apply Imperial US preset by default on virgin install
         try {
@@ -601,6 +604,7 @@ export class UnitsManager {
         }
 
         this.ensureCategoryDefaults()
+        this.ensureDefaultPathPatterns()
         await this.savePreferences()
         this.app.debug('Created default units preferences file')
       }
@@ -610,21 +614,91 @@ export class UnitsManager {
     }
   }
 
-  private ensureCategoryDefaults(): void {
+  private ensureCategoryDefaults(): boolean {
+    let updated = false
+
     if (!this.preferences.categories) {
       this.preferences.categories = {}
+      updated = true
     }
 
     for (const [category, defaults] of Object.entries(DEFAULT_CATEGORY_PREFERENCES)) {
-      if (!this.preferences.categories[category]) {
-        const { targetUnit, displayFormat, baseUnit } = defaults
+      const existing = this.preferences.categories[category]
+      const { targetUnit, displayFormat, baseUnit } = defaults
+
+      if (!existing) {
         this.preferences.categories[category] = {
           targetUnit,
           displayFormat,
           ...(baseUnit ? { baseUnit } : {})
         }
+        updated = true
+        continue
+      }
+
+      if (baseUnit && !existing.baseUnit) {
+        existing.baseUnit = baseUnit
+        updated = true
+      }
+
+      if (!existing.targetUnit && targetUnit) {
+        existing.targetUnit = targetUnit
+        updated = true
+      }
+
+      if (!existing.displayFormat && displayFormat) {
+        existing.displayFormat = displayFormat
+        updated = true
       }
     }
+
+    return updated
+  }
+
+  private ensureDefaultPathPatterns(): boolean {
+    let updated = false
+
+    if (!this.preferences.pathPatterns) {
+      this.preferences.pathPatterns = []
+      updated = true
+    }
+
+    for (const defaultRule of DEFAULT_PATH_PATTERNS) {
+      let existing = this.preferences.pathPatterns.find(rule => rule.pattern === defaultRule.pattern)
+
+      if (!existing) {
+        this.preferences.pathPatterns.push({ ...defaultRule })
+        updated = true
+        continue
+      }
+
+      if (defaultRule.category && !existing.category) {
+        existing.category = defaultRule.category
+        updated = true
+      }
+
+      if (defaultRule.baseUnit && !existing.baseUnit) {
+        existing.baseUnit = defaultRule.baseUnit
+        updated = true
+      }
+
+      if (defaultRule.targetUnit && !existing.targetUnit) {
+        existing.targetUnit = defaultRule.targetUnit
+        updated = true
+      }
+
+      if (defaultRule.displayFormat && !existing.displayFormat) {
+        existing.displayFormat = defaultRule.displayFormat
+        updated = true
+      }
+
+      if (defaultRule.priority !== undefined && existing.priority === undefined) {
+        existing.priority = defaultRule.priority
+        updated = true
+      }
+    }
+
+    return updated
   }
 
   /**
@@ -1091,9 +1165,9 @@ export class UnitsManager {
     }
 
     // Try to find default conversions for this base unit
-    const defaultsForBaseUnit = Object.values(comprehensiveDefaultUnits).find(
-      (meta) => meta.baseUnit === baseUnit
-    )
+    const defaultsForBaseUnit =
+      Object.values(comprehensiveDefaultUnits).find((meta) => meta.baseUnit === baseUnit)
+      || Object.values(defaultUnitsMetadata).find((meta) => meta.baseUnit === baseUnit)
 
     if (!defaultsForBaseUnit) {
       this.app.debug(`No default conversions found for base unit: ${baseUnit}`)

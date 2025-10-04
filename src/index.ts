@@ -501,15 +501,29 @@ module.exports = (app: ServerAPI): Plugin => {
 
       router.get('/convert/:path(*)', (req: Request, res: Response) => {
         try {
-          const pathStr = req.params.path
-          const valueParam = Array.isArray(req.query.value) ? req.query.value[0] : req.query.value
+          const rawPathParam = req.params.path
           const typeParam = Array.isArray(req.query.type) ? req.query.type[0] : req.query.type
+
+          let resolvedPath = rawPathParam
+          let valueParam = Array.isArray(req.query.value) ? req.query.value[0] : req.query.value
+
+          if (valueParam === undefined && typeof rawPathParam === 'string') {
+            const firstSlashIndex = rawPathParam.indexOf('/')
+            if (firstSlashIndex !== -1) {
+              resolvedPath = rawPathParam.substring(0, firstSlashIndex)
+              valueParam = rawPathParam.substring(firstSlashIndex + 1)
+            }
+          }
+
+          if (!resolvedPath) {
+            throw createBadRequestError('Missing path parameter')
+          }
 
           if (valueParam === undefined) {
             throw createBadRequestError('Missing value query parameter')
           }
 
-          const result = buildDeltaResponse(pathStr, valueParam, {
+          const result = buildDeltaResponse(resolvedPath, valueParam, {
             typeHint: typeof typeParam === 'string' ? toSupportedValueType(typeParam) : undefined
           })
           res.json(result)

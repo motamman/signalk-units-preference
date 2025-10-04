@@ -4,3 +4,4 @@ data/
 presets/custom/
 *.log
 .DS_Store
+TEST_LINKS.md

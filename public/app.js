@@ -864,25 +864,33 @@ function renderMetadataTable(pathInfo) {
     }
   }
 
-    const sourceLine = details?.source || info.signalkSource
-    const timestampLine = details?.timestamp || info.signalkTimestamp
-    const metadataLine = sourceLine || timestampLine
-      ? `<div style="margin-top: 4px; font-size: 10px; color: #6c757d;">
-          ${sourceLine ? `<span style="margin-right: 8px;">$source: ${sourceLine}</span>` : ''}
-          ${timestampLine ? `<span>timestamp: ${new Date(timestampLine).toLocaleString()}</span>` : ''}
-        </div>`
-      : ''
+  const canUseGetLink =
+    currentValue !== undefined &&
+    currentValue !== null &&
+    typeof currentValue !== 'object'
 
-    return `
+  const encodedCurrentValue =
+    canUseGetLink ? encodeURIComponent(String(currentValue)) : null
+
+  const getLink = canUseGetLink
+    ? `<a href="${API_BASE}/convert/${info.path}/${encodedCurrentValue}" target="_blank" title="Open GET conversion endpoint" style="color: #e67e22; margin-left: 4px; text-decoration: none; font-size: 14px;">🔗</a>`
+    : ''
+
+  const sourceLine = details?.source || info.signalkSource
+  const timestampLine = details?.timestamp || info.signalkTimestamp
+  const metadataLine = sourceLine || timestampLine
+    ? `<div style="margin-top: 4px; font-size: 10px; color: #6c757d;">
+        ${sourceLine ? `<span style="margin-right: 8px;">$source: ${sourceLine}</span>` : ''}
+        ${timestampLine ? `<span>timestamp: ${new Date(timestampLine).toLocaleString()}</span>` : ''}
+      </div>`
+    : ''
+
+  return `
       <tr style="border-bottom: 1px solid ${metadataLine ? '#dee2e6' : '#f1f3f5'}; background: ${info.color};">
         <td style="padding: 8px; font-family: monospace; font-size: 11px; word-break: break-all; text-align: left;">
           ${info.path}
           <a href="${conversionUrl}" target="_blank" title="View conversion info" style="color: #3498db; margin-left: 6px; text-decoration: none; font-size: 14px;">🔧</a>
-          ${currentValue !== undefined && currentValue !== null ? `<a href="${API_BASE}/convert/${info.path}?value=${encodeURIComponent(
-            typeof currentValue === 'object'
-              ? JSON.stringify(currentValue)
-              : String(currentValue)
-          )}${info.valueType ? `&type=${encodeURIComponent(info.valueType)}` : ''}" target="_blank" title="Open GET conversion endpoint" style="color: #e67e22; margin-left: 4px; text-decoration: none; font-size: 14px;">🔗</a>` : ''}
+          ${getLink}
           ${testLink}
           ${metadataLine}
         </td>
