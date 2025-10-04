@@ -171,6 +171,26 @@ export const defaultUnitsMetadata: UnitsMetadataStore = {
       'epoch-seconds': { formula: 'value', inverseFormula: 'value', symbol: '', dateFormat: 'epoch-seconds' }
     }
   },
+  'navigation.datetime.epoch': {
+    baseUnit: 'Epoch Seconds',
+    category: 'epoch',
+    conversions: {
+      'short-date': { formula: 'value', inverseFormula: 'value', symbol: '', dateFormat: 'short-date' },
+      'short-date-local': { formula: 'value', inverseFormula: 'value', symbol: '', dateFormat: 'short-date', useLocalTime: true },
+      'long-date': { formula: 'value', inverseFormula: 'value', symbol: '', dateFormat: 'long-date' },
+      'long-date-local': { formula: 'value', inverseFormula: 'value', symbol: '', dateFormat: 'long-date', useLocalTime: true },
+      'dd/mm/yyyy': { formula: 'value', inverseFormula: 'value', symbol: '', dateFormat: 'dd/mm/yyyy' },
+      'dd/mm/yyyy-local': { formula: 'value', inverseFormula: 'value', symbol: '', dateFormat: 'dd/mm/yyyy', useLocalTime: true },
+      'mm/dd/yyyy': { formula: 'value', inverseFormula: 'value', symbol: '', dateFormat: 'mm/dd/yyyy' },
+      'mm/dd/yyyy-local': { formula: 'value', inverseFormula: 'value', symbol: '', dateFormat: 'mm/dd/yyyy', useLocalTime: true },
+      'mm/yyyy': { formula: 'value', inverseFormula: 'value', symbol: '', dateFormat: 'mm/yyyy' },
+      'mm/yyyy-local': { formula: 'value', inverseFormula: 'value', symbol: '', dateFormat: 'mm/yyyy', useLocalTime: true },
+      'time-24hrs': { formula: 'value', inverseFormula: 'value', symbol: '', dateFormat: 'time-24hrs' },
+      'time-24hrs-local': { formula: 'value', inverseFormula: 'value', symbol: '', dateFormat: 'time-24hrs', useLocalTime: true },
+      'time-am/pm': { formula: 'value', inverseFormula: 'value', symbol: '', dateFormat: 'time-am/pm' },
+      'time-am/pm-local': { formula: 'value', inverseFormula: 'value', symbol: '', dateFormat: 'time-am/pm', useLocalTime: true }
+    }
+  },
 
   // WIND SPEED
   'environment.wind.speedApparent': {
@@ -216,5 +236,6 @@ export const categoryToBaseUnit: Record<string, string> = {
   charge: 'C',
   volumeRate: 'm3/s',
   length: 'm',
-  dateTime: 'RFC 3339 (UTC)'
+  dateTime: 'RFC 3339 (UTC)',
+  epoch: 'Epoch Seconds'
 }

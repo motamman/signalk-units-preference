@@ -31,6 +31,59 @@ const WEEKDAY_NAMES_LONG = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursda
 
 const pad2 = (value: number): string => value.toString().padStart(2, '0')
 
+const DEFAULT_CATEGORY_PREFERENCES: Record<string, CategoryPreference & { baseUnit?: string }> = {
+  speed: { targetUnit: 'knots', displayFormat: '0.0' },
+  temperature: { targetUnit: 'celsius', displayFormat: '0' },
+  pressure: { targetUnit: 'hPa', displayFormat: '0' },
+  distance: { targetUnit: 'nm', displayFormat: '0.0' },
+  depth: { targetUnit: 'm', displayFormat: '0.0' },
+  angle: { targetUnit: 'deg', displayFormat: '0' },
+  percentage: { targetUnit: 'percent', displayFormat: '0' },
+  dateTime: { targetUnit: 'time-am/pm-local', displayFormat: 'time-am/pm' },
+  epoch: { targetUnit: 'time-am/pm-local', displayFormat: 'time-am/pm', baseUnit: 'Epoch Seconds' },
+  volume: { targetUnit: 'gal', displayFormat: '0.0' },
+  length: { targetUnit: 'ft', displayFormat: '0.0' },
+  angularVelocity: { targetUnit: 'deg/s', displayFormat: '0.0' },
+  voltage: { targetUnit: 'V', displayFormat: '0.00' },
+  current: { targetUnit: 'A', displayFormat: '0.00' },
+  power: { targetUnit: 'W', displayFormat: '0.00' },
+  frequency: { targetUnit: 'rpm', displayFormat: '0.0' },
+  time: { targetUnit: 's', displayFormat: '0.0' },
+  charge: { targetUnit: 'Ah', displayFormat: '0.0' },
+  volumeRate: { targetUnit: 'gal/h', displayFormat: '0.0' }
+}
+
+const DEFAULT_PATH_PATTERNS: PathPatternRule[] = [
+  {
+    pattern: '*.temperature',
+    category: 'temperature',
+    targetUnit: 'celsius',
+    displayFormat: '0',
+    priority: 100
+  },
+  {
+    pattern: '*.pressure',
+    category: 'pressure',
+    targetUnit: 'hPa',
+    displayFormat: '0',
+    priority: 100
+  },
+  {
+    pattern: '*.speed*',
+    category: 'speed',
+    targetUnit: 'knots',
+    displayFormat: '0.0',
+    priority: 90
+  },
+  {
+    pattern: '**.timeEpoch',
+    category: 'epoch',
+    targetUnit: 'time-am/pm-local',
+    priority: 100,
+    baseUnit: 'Epoch Seconds'
+  }
+]
+
 export class UnitsManager {
   private metadata: UnitsMetadataStore
   private preferences: UnitsPreferences
@@ -465,18 +518,8 @@ export class UnitsManager {
         this.preferences = JSON.parse(data)
         this.app.debug('Loaded units preferences from file')
       } else {
-        // Set some sensible defaults - start with basic structure
         this.preferences = {
-          categories: {
-            speed: { targetUnit: 'knots', displayFormat: '0.0' },
-            temperature: { targetUnit: 'celsius', displayFormat: '0' },
-            pressure: { targetUnit: 'hPa', displayFormat: '0' },
-            distance: { targetUnit: 'nm', displayFormat: '0.0' },
-            depth: { targetUnit: 'm', displayFormat: '0.0' },
-            angle: { targetUnit: 'deg', displayFormat: '0' },
-            percentage: { targetUnit: 'percent', displayFormat: '0' },
-            dateTime: { targetUnit: 'short-date', displayFormat: 'short-date' }
-          },
+          categories: {},
           pathOverrides: {},
           pathPatterns: [
             {
@@ -502,6 +545,8 @@ export class UnitsManager {
             }
           ]
         }
+
+        this.ensureCategoryDefaults()
 
         // Apply Imperial US preset by default on virgin install
         try {
@@ -555,12 +600,30 @@ export class UnitsManager {
           this.app.error(`Failed to apply default preset: ${error}`)
         }
 
+        this.ensureCategoryDefaults()
         await this.savePreferences()
         this.app.debug('Created default units preferences file')
       }
     } catch (error) {
       this.app.error(`Failed to load preferences: ${error}`)
       throw error
+    }
+  }
+
+  private ensureCategoryDefaults(): void {
+    if (!this.preferences.categories) {
+      this.preferences.categories = {}
+    }
+
+    for (const [category, defaults] of Object.entries(DEFAULT_CATEGORY_PREFERENCES)) {
+      if (!this.preferences.categories[category]) {
+        const { targetUnit, displayFormat, baseUnit } = defaults
+        this.preferences.categories[category] = {
+          targetUnit,
+          displayFormat,
+          ...(baseUnit ? { baseUnit } : {})
+        }
+      }
     }
   }
 
@@ -724,7 +787,14 @@ export class UnitsManager {
     const skMeta = this.signalKMetadata[pathStr]
     const valueType = this.detectValueType(skMeta?.units || metadata.baseUnit || undefined, skMeta?.value)
 
-    const displayFormat = conversion.dateFormat || preference.displayFormat || targetUnit
+    const isDateCategory = metadata.category === 'dateTime' || metadata.category === 'epoch'
+    const displayFormat = isDateCategory
+      ? (conversion.dateFormat || preference.displayFormat || 'ISO-8601')
+      : (preference.displayFormat || targetUnit || '')
+
+    const dateFormatValue = isDateCategory
+      ? (conversion.dateFormat || preference.displayFormat || 'ISO-8601')
+      : (conversion.dateFormat || undefined)
 
     return {
       path: pathStr,
@@ -736,7 +806,7 @@ export class UnitsManager {
       symbol: conversion.symbol,
       category: metadata.category,
       valueType,
-      dateFormat: conversion.dateFormat || displayFormat,
+      dateFormat: dateFormatValue,
       useLocalTime: conversion.useLocalTime,
       supportsPut: skMeta?.supportsPut,
       signalkTimestamp: skMeta?.timestamp,
@@ -889,15 +959,30 @@ export class UnitsManager {
       throw new UnitConversionError(`No conversion defined from ${baseUnit} to ${targetUnit}`)
     }
 
-    const isDateConversion = baseUnit === 'RFC 3339 (UTC)' || !!conversion.dateFormat
+    const normalizedBaseUnit = (baseUnit || '').toLowerCase()
+    const isDateConversion =
+      normalizedBaseUnit.includes('rfc 3339') ||
+      normalizedBaseUnit.includes('epoch') ||
+      !!conversion.dateFormat
 
     if (isDateConversion) {
-      if (typeof rawValue !== 'string') {
-        throw new UnitConversionError('Date conversions require ISO-8601 string values')
+      let isoString: string
+
+      if (typeof rawValue === 'string') {
+        isoString = rawValue
+      } else if (typeof rawValue === 'number') {
+        const isEpochBase = (baseUnit || '').toLowerCase().includes('epoch')
+        const date = new Date(rawValue * (isEpochBase ? 1000 : 1))
+        if (Number.isNaN(date.getTime())) {
+          throw new UnitConversionError('Invalid epoch value supplied for date conversion')
+        }
+        isoString = date.toISOString()
+      } else {
+        throw new UnitConversionError('Date conversions require ISO-8601 string or epoch value')
       }
 
       const dateResult = this.formatDateValue(
-        rawValue,
+        isoString,
         targetUnit,
         conversion.dateFormat,
         options?.useLocalTime ?? conversion.useLocalTime

@@ -219,8 +219,9 @@ module.exports = (app: ServerAPI): Plugin => {
         let displayFormat = conversionInfo.displayFormat
         let symbol = conversionInfo.symbol || ''
 
+        const isDateCategory = conversionInfo.category === 'dateTime' || conversionInfo.category === 'epoch'
         let typeToUse = resolvedType
-        if (conversionInfo.dateFormat && typeof normalizedValue === 'string') {
+        if (conversionInfo.dateFormat || isDateCategory) {
           typeToUse = 'date'
         }
 
@@ -256,7 +257,21 @@ module.exports = (app: ServerAPI): Plugin => {
             break
           }
           case 'date': {
-            if (typeof normalizedValue !== 'string') {
+            let isoValue: string
+            if (typeof normalizedValue === 'string') {
+              isoValue = normalizedValue
+            } else if (typeof normalizedValue === 'number') {
+              const normalizedBase = (conversionInfo.baseUnit || '').toLowerCase()
+              const isEpochBase = normalizedBase.includes('epoch')
+              const date = new Date(normalizedValue * (isEpochBase ? 1000 : 1))
+              if (Number.isNaN(date.getTime())) {
+                throw createBadRequestError('Expected epoch seconds number for conversion', {
+                  received: normalizedValue,
+                  path: pathStr
+                })
+              }
+              isoValue = date.toISOString()
+            } else {
               throw createBadRequestError('Expected date value for conversion', {
                 received: normalizedValue,
                 path: pathStr
@@ -264,7 +279,7 @@ module.exports = (app: ServerAPI): Plugin => {
             }
             try {
               const formattedDate = unitsManager.formatDateValue(
-                normalizedValue,
+                isoValue,
                 conversionInfo.targetUnit || '',
                 conversionInfo.dateFormat,
                 conversionInfo.useLocalTime
