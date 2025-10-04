@@ -889,7 +889,7 @@ function renderMetadataTable(pathInfo) {
         <td style="padding: 8px; text-align: center; font-size: 11px;">${info.status}</td>
         <td style="padding: 8px; text-align: center; font-size: 11px;">${info.valueType}</td>
         <td style="padding: 8px; text-align: center;">
-          ${info.supportsPut ? '<span style="color: #2ecc71;">✓</span>' : '<span style="color: #6c757d;">—</span>'}
+          <span class="${info.supportsPut ? 'supports-put-true' : 'supports-put-false'}">${info.supportsPut ? '✓' : ''}</span>
         </td>
         <td style="padding: 8px;">${info.baseUnit}</td>
         <td style="padding: 8px;">${info.category}</td>
