@@ -518,10 +518,18 @@ export class UnitsManager {
                 baseUnit?: string
               }
 
-              this.preferences.categories[category] = {
-                targetUnit: castSettings.targetUnit || '',
-                displayFormat: castSettings.displayFormat || '0.0',
-                ...(castSettings.baseUnit ? { baseUnit: castSettings.baseUnit } : {})
+              const existing = this.preferences.categories[category]
+              if (existing) {
+                this.preferences.categories[category] = {
+                  targetUnit: castSettings.targetUnit || existing.targetUnit || '',
+                  displayFormat: castSettings.displayFormat || existing.displayFormat || '0.0'
+                }
+              } else {
+                this.preferences.categories[category] = {
+                  targetUnit: castSettings.targetUnit || '',
+                  displayFormat: castSettings.displayFormat || '0.0',
+                  ...(castSettings.baseUnit ? { baseUnit: castSettings.baseUnit } : {})
+                }
               }
             }
 
