@@ -11,13 +11,7 @@ const PLUGIN_NAME = 'Units Preference Manager'
 module.exports = (app: ServerAPI): Plugin => {
   const DEFAULT_PLUGIN_SCHEMA = {
     type: 'object',
-    properties: {
-      debug: {
-        type: 'boolean',
-        title: 'Enable debug logging',
-        default: false
-      }
-    }
+    properties: {}
   }
 
   let unitsManager: UnitsManager
@@ -721,7 +715,22 @@ module.exports = (app: ServerAPI): Plugin => {
       router.get('/categories', (req: Request, res: Response) => {
         try {
           const preferences = unitsManager.getPreferences()
-          res.json(preferences.categories || {})
+          const schema = unitsManager.getUnitSchema()
+          const categories = preferences.categories || {}
+
+          // Enhance each category with category name and base unit
+          const enhancedCategories: Record<string, any> = {}
+          for (const [categoryName, categoryPref] of Object.entries(categories)) {
+            const baseUnit =
+              categoryPref.baseUnit || schema.categoryToBaseUnit[categoryName] || null
+            enhancedCategories[categoryName] = {
+              category: categoryName,
+              baseUnit,
+              ...categoryPref
+            }
+          }
+
+          res.json(enhancedCategories)
         } catch (error) {
           app.error(`Error getting categories: ${error}`)
           res.status(500).json({ error: 'Internal server error' })
@@ -743,7 +752,15 @@ module.exports = (app: ServerAPI): Plugin => {
             })
           }
 
-          res.json(categoryPref)
+          // Get base unit for this category
+          const schema = unitsManager.getUnitSchema()
+          const baseUnit = categoryPref.baseUnit || schema.categoryToBaseUnit[category] || null
+
+          res.json({
+            category,
+            baseUnit,
+            ...categoryPref
+          })
         } catch (error) {
           app.error(`Error getting category: ${error}`)
           res.status(500).json({ error: 'Internal server error' })
