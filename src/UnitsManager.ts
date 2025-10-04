@@ -363,22 +363,21 @@ export class UnitsManager {
     // Path override takes precedence when specifying a base unit
     if (pathOverridePref?.baseUnit) {
       const baseUnit = pathOverridePref.baseUnit
-      const unitDef =
-        this.unitDefinitions[baseUnit] ||
-        Object.values(comprehensiveDefaultUnits).find(meta => meta.baseUnit === baseUnit)
+      const builtInDef = Object.values(comprehensiveDefaultUnits).find(
+        meta => meta.baseUnit === baseUnit
+      )
+      const customDef = this.unitDefinitions[baseUnit]
 
-      if (unitDef) {
-        metadata = {
-          baseUnit,
-          category: unitDef.category,
-          conversions: unitDef.conversions
-        }
-      } else {
-        metadata = {
-          baseUnit,
-          category: this.getCategoryFromBaseUnit(baseUnit) || 'custom',
-          conversions: {}
-        }
+      // Merge built-in and custom conversions
+      const conversions = {
+        ...(builtInDef?.conversions || {}),
+        ...(customDef?.conversions || {})
+      }
+
+      metadata = {
+        baseUnit,
+        category: customDef?.category || builtInDef?.category || this.getCategoryFromBaseUnit(baseUnit) || 'custom',
+        conversions
       }
     }
 
@@ -403,14 +402,21 @@ export class UnitsManager {
           metadata = inferred
         } else {
           const baseUnit = skMetadata.units
-          const unitDef =
-            this.unitDefinitions[baseUnit] ||
-            Object.values(comprehensiveDefaultUnits).find(meta => meta.baseUnit === baseUnit)
+          const builtInDef = Object.values(comprehensiveDefaultUnits).find(
+            meta => meta.baseUnit === baseUnit
+          )
+          const customDef = this.unitDefinitions[baseUnit]
+
+          // Merge built-in and custom conversions
+          const conversions = {
+            ...(builtInDef?.conversions || {}),
+            ...(customDef?.conversions || {})
+          }
 
           metadata = {
             baseUnit,
-            category: unitDef?.category || this.getCategoryFromBaseUnit(baseUnit) || 'custom',
-            conversions: unitDef?.conversions || {}
+            category: customDef?.category || builtInDef?.category || this.getCategoryFromBaseUnit(baseUnit) || 'custom',
+            conversions
           }
         }
       }
@@ -822,17 +828,29 @@ export class UnitsManager {
       }
     }
 
-    // Add custom units with isCustom flag
-    const customUnitsWithFlag: Record<string, UnitMetadata & { isCustom?: boolean }> = {}
-    for (const [baseUnit, def] of Object.entries(this.unitDefinitions)) {
-      customUnitsWithFlag[baseUnit] = {
-        ...def,
-        isCustom: true
+    // Merge custom units with built-in units
+    for (const [baseUnit, customDef] of Object.entries(this.unitDefinitions)) {
+      if (baseUnitDefs[baseUnit]) {
+        // This is an extension of a built-in base unit - merge conversions
+        baseUnitDefs[baseUnit] = {
+          baseUnit,
+          category: baseUnitDefs[baseUnit].category,
+          conversions: {
+            ...baseUnitDefs[baseUnit].conversions,
+            ...customDef.conversions
+          },
+          isCustom: false // Mark as not custom since it's extending a built-in
+        }
+      } else {
+        // This is a purely custom base unit
+        baseUnitDefs[baseUnit] = {
+          ...customDef,
+          isCustom: true
+        }
       }
     }
 
-    // Merge built-in units with custom units (custom units override built-in)
-    return { ...baseUnitDefs, ...customUnitsWithFlag }
+    return baseUnitDefs
   }
 
   /**
@@ -859,12 +877,27 @@ export class UnitsManager {
     targetUnit: string,
     conversion: ConversionDefinition
   ): Promise<void> {
+    // If this base unit doesn't exist in custom definitions, create it
     if (!this.unitDefinitions[baseUnit]) {
-      throw new Error(`Cannot add conversion to built-in base unit "${baseUnit}". Only custom base units can be modified.`)
+      // Check if it exists in built-in definitions
+      const builtInDef = Object.values(comprehensiveDefaultUnits).find(meta => meta.baseUnit === baseUnit)
+
+      if (builtInDef) {
+        // Create a custom extension for this built-in base unit
+        this.unitDefinitions[baseUnit] = {
+          baseUnit: baseUnit,
+          category: builtInDef.category,
+          conversions: {}
+        }
+      } else {
+        throw new Error(`Base unit "${baseUnit}" not found`)
+      }
     }
+
     if (!this.unitDefinitions[baseUnit].conversions) {
       this.unitDefinitions[baseUnit].conversions = {}
     }
+
     this.unitDefinitions[baseUnit].conversions[targetUnit] = conversion
     await this.saveUnitDefinitions()
   }
@@ -1444,6 +1477,13 @@ export class UnitsManager {
       this.app.error(`Error getting all paths info: ${error}`)
       return []
     }
+  }
+
+  /**
+   * Get resolved metadata for a specific path (includes all conversions)
+   */
+  getMetadataForPath(pathStr: string): UnitMetadata | null {
+    return this.resolveMetadataForPath(pathStr)
   }
 
   /**

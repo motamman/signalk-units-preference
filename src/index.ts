@@ -348,7 +348,7 @@ module.exports = (app: ServerAPI): Plugin => {
       })
 
       // GET /plugins/signalk-units-preference/conversion/:path
-      // Get conversion info for a specific path
+      // Get conversion info for a specific path (shows currently selected conversion)
       router.get('/conversion/:path(*)', (req: Request, res: Response) => {
         try {
           const pathStr = req.params.path
@@ -677,7 +677,9 @@ module.exports = (app: ServerAPI): Plugin => {
             res.json({ success: true, baseUnit, targetUnit })
           } catch (error) {
             app.error(`Error adding conversion: ${error}`)
-            res.status(400).json({ error: error instanceof Error ? error.message : 'Internal server error' })
+            res.status(400).json({
+              error: error instanceof Error ? error.message : 'Failed to add conversion'
+            })
           }
         }
       )

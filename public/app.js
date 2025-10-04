@@ -2157,7 +2157,7 @@ async function addConversion() {
   }
 
   try {
-    const res = await fetch(`${API_BASE}/unit-definitions/${baseUnit}/conversions`, {
+    const res = await fetch(`${API_BASE}/unit-definitions/${encodeURIComponent(baseUnit)}/conversions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -2168,7 +2168,10 @@ async function addConversion() {
       })
     })
 
-    if (!res.ok) throw new Error('Failed to add conversion')
+    if (!res.ok) {
+      const errorData = await res.json()
+      throw new Error(errorData.error || 'Failed to add conversion')
+    }
 
     showStatus(`Added conversion: ${baseUnit} → ${targetUnit}`, 'success')
 
@@ -2311,7 +2314,7 @@ Are you sure you want to continue?`
   if (!confirm(warningMessage)) return
 
   try {
-    const res = await fetch(`${API_BASE}/unit-definitions/${baseUnit}`, {
+    const res = await fetch(`${API_BASE}/unit-definitions/${encodeURIComponent(baseUnit)}`, {
       method: 'DELETE'
     })
 
@@ -2339,9 +2342,12 @@ async function deleteConversion(baseUnit, targetUnit) {
   if (!confirm(`Delete conversion ${baseUnit} → ${targetUnit}?`)) return
 
   try {
-    const res = await fetch(`${API_BASE}/unit-definitions/${baseUnit}/conversions/${targetUnit}`, {
-      method: 'DELETE'
-    })
+    const res = await fetch(
+      `${API_BASE}/unit-definitions/${encodeURIComponent(baseUnit)}/conversions/${encodeURIComponent(targetUnit)}`,
+      {
+        method: 'DELETE'
+      }
+    )
 
     if (!res.ok) throw new Error('Failed to delete')
 
@@ -2576,7 +2582,7 @@ async function saveEditConversion(baseUnit, targetUnit) {
 
   try {
     // Use POST to overwrite the existing conversion
-    const res = await fetch(`${API_BASE}/unit-definitions/${baseUnit}/conversions`, {
+    const res = await fetch(`${API_BASE}/unit-definitions/${encodeURIComponent(baseUnit)}/conversions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
