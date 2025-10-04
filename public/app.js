@@ -1373,10 +1373,12 @@ function renderPatterns() {
     return
   }
 
-  // Sort by priority
-  const sorted = [...preferences.pathPatterns].sort((a, b) => (b.priority || 0) - (a.priority || 0))
+  // Sort by priority while keeping the original array index for editing/deleting
+  const sorted = preferences.pathPatterns
+    .map((pattern, originalIndex) => ({ pattern, originalIndex }))
+    .sort((a, b) => (b.pattern.priority || 0) - (a.pattern.priority || 0))
 
-  container.innerHTML = sorted.map((pattern, index) => {
+  container.innerHTML = sorted.map(({ pattern, originalIndex }) => {
     // Derive base unit: use pattern's baseUnit if present, otherwise from category
     const baseUnit = pattern.baseUnit || unitSchema.categoryToBaseUnit[pattern.category] || '(derived from category)'
 
@@ -1387,7 +1389,7 @@ function renderPatterns() {
 
     return `
     <div class="pattern-item" style="padding: 12px 16px; background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 6px; margin-bottom: 8px;">
-      <div id="pattern-view-${index}" style="display: flex; align-items: center; justify-content: space-between; gap: 16px;">
+      <div id="pattern-view-${originalIndex}" style="display: flex; align-items: center; justify-content: space-between; gap: 16px;">
         <div style="display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0;">
           <span style="font-weight: 500; flex-shrink: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${pattern.pattern}</span>
           <span style="color: #7f8c8d; font-size: 13px; white-space: nowrap;">→</span>
@@ -1396,11 +1398,11 @@ function renderPatterns() {
           <span style="color: #7f8c8d; font-size: 12px; white-space: nowrap;">Priority: ${pattern.priority || 0}</span>
         </div>
         <div style="display: flex; gap: 8px;">
-          <button class="btn-primary btn-edit" onclick="editPattern(${index})">Edit</button>
-          <button class="btn-danger btn-delete" onclick="deletePattern(${index})">Delete</button>
+          <button class="btn-primary btn-edit" onclick="editPattern(${originalIndex})">Edit</button>
+          <button class="btn-danger btn-delete" onclick="deletePattern(${originalIndex})">Delete</button>
         </div>
       </div>
-      <div id="pattern-edit-${index}" style="display: none;"></div>
+      <div id="pattern-edit-${originalIndex}" style="display: none;"></div>
     </div>
   `}).join('')
 }
