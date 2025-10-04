@@ -551,5 +551,12 @@ export const comprehensiveDefaultUnits: UnitsMetadataStore = {
       },
       kelvin: { formula: 'value * 1', inverseFormula: 'value * 1', symbol: 'K' }
     }
+  },
+
+  // SPECIAL - TABULA RASA (blank slate for custom transformations)
+  'tabula-rasa': {
+    baseUnit: 'tr',
+    category: 'unitless',
+    conversions: {}
   }
 }

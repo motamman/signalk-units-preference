@@ -4,6 +4,8 @@ import { UnitsManager } from './UnitsManager'
 import { ConversionDeltaValue, DeltaResponse, DeltaValueEntry } from './types'
 import * as path from 'path'
 import * as fs from 'fs'
+import archiver from 'archiver'
+import AdmZip from 'adm-zip'
 
 const PLUGIN_ID = 'signalk-units-preference'
 const PLUGIN_NAME = 'Units Preference Manager'
@@ -1203,6 +1205,130 @@ module.exports = (app: ServerAPI): Plugin => {
           })
         } catch (error) {
           app.error(`Error deleting custom preset: ${error}`)
+          res
+            .status(500)
+            .json({ error: error instanceof Error ? error.message : 'Internal server error' })
+        }
+      })
+
+      // GET /plugins/signalk-units-preference/backup
+      // Download a complete backup of all configuration files
+      router.get('/backup', async (req: Request, res: Response) => {
+        try {
+          const dataDir = app.getDataDirPath()
+          const archive = archiver('zip', { zlib: { level: 9 } })
+
+          res.setHeader('Content-Type', 'application/zip')
+          res.setHeader(
+            'Content-Disposition',
+            `attachment; filename=signalk-units-backup-${Date.now()}.zip`
+          )
+
+          archive.pipe(res)
+
+          // Add preset files
+          const presetsDir = path.join(__dirname, '..', 'presets')
+          if (fs.existsSync(presetsDir)) {
+            archive.file(path.join(presetsDir, 'imperial-us.json'), {
+              name: 'presets/imperial-us.json'
+            })
+            archive.file(path.join(presetsDir, 'imperial-uk.json'), {
+              name: 'presets/imperial-uk.json'
+            })
+            archive.file(path.join(presetsDir, 'metric.json'), { name: 'presets/metric.json' })
+
+            // Add custom presets
+            const customPresetsDir = path.join(presetsDir, 'custom')
+            if (fs.existsSync(customPresetsDir)) {
+              const customFiles = fs.readdirSync(customPresetsDir)
+              for (const file of customFiles) {
+                if (file.endsWith('.json')) {
+                  archive.file(path.join(customPresetsDir, file), {
+                    name: `presets/custom/${file}`
+                  })
+                }
+              }
+            }
+          }
+
+          // Add runtime data files
+          const preferencesPath = path.join(dataDir, 'units-preferences.json')
+          if (fs.existsSync(preferencesPath)) {
+            archive.file(preferencesPath, { name: 'units-preferences.json' })
+          }
+
+          const definitionsPath = path.join(dataDir, 'units-definitions.json')
+          if (fs.existsSync(definitionsPath)) {
+            archive.file(definitionsPath, { name: 'units-definitions.json' })
+          }
+
+          await archive.finalize()
+          app.debug('Backup created successfully')
+        } catch (error) {
+          app.error(`Error creating backup: ${error}`)
+          res
+            .status(500)
+            .json({ error: error instanceof Error ? error.message : 'Internal server error' })
+        }
+      })
+
+      // POST /plugins/signalk-units-preference/restore
+      // Restore configuration from a backup zip file
+      router.post('/restore', async (req: Request, res: Response) => {
+        try {
+          if (!req.body || !req.body.zipData) {
+            return res.status(400).json({ error: 'No zip data provided' })
+          }
+
+          const dataDir = app.getDataDirPath()
+          const zipBuffer = Buffer.from(req.body.zipData, 'base64')
+          const zip = new AdmZip(zipBuffer)
+
+          const restoredFiles: string[] = []
+
+          // Extract and restore each file
+          for (const entry of zip.getEntries()) {
+            if (entry.isDirectory) continue
+
+            const entryName = entry.entryName
+            let targetPath: string
+
+            if (entryName.startsWith('presets/')) {
+              // Restore preset files
+              targetPath = path.join(__dirname, '..', entryName)
+            } else if (
+              entryName === 'units-preferences.json' ||
+              entryName === 'units-definitions.json'
+            ) {
+              // Restore runtime data files
+              targetPath = path.join(dataDir, entryName)
+            } else {
+              continue // Skip unknown files
+            }
+
+            // Create directory if it doesn't exist
+            const targetDir = path.dirname(targetPath)
+            if (!fs.existsSync(targetDir)) {
+              fs.mkdirSync(targetDir, { recursive: true })
+            }
+
+            // Write the file
+            fs.writeFileSync(targetPath, entry.getData())
+            restoredFiles.push(entryName)
+          }
+
+          // Reload the units manager
+          await unitsManager.initialize()
+
+          res.json({
+            success: true,
+            message: 'Backup restored successfully',
+            restoredFiles
+          })
+
+          app.debug(`Backup restored: ${restoredFiles.join(', ')}`)
+        } catch (error) {
+          app.error(`Error restoring backup: ${error}`)
           res
             .status(500)
             .json({ error: error instanceof Error ? error.message : 'Internal server error' })
