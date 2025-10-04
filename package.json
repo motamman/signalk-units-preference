@@ -1,7 +1,7 @@
 {
   "name": "signalk-units-preference",
   "version": "0.5.0-beta.1",
-  "description": "SignalK webapp for managing unit conversions and display preferences",
+  "description": "SignalK webapp/utility for managing path value/unit conversions and display preferences",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
@@ -29,7 +29,7 @@
   "signalk": {
     "appSupport": "webapp",
     "compatibility": ">=2.13.0",
-    "displayName": "Units Preference",
+    "displayName": "Units Display Selector",
     "appIcon": "units.png"
   },
   "dependencies": {

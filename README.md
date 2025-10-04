@@ -2,6 +2,8 @@
 
 A comprehensive SignalK server plugin for managing unit conversions and display preferences across all data paths. Convert any SignalK data point to your preferred units with flexible pattern matching, custom formulas, and a full-featured web interface.
 
+> **Important:** This plugin only changes how conversions are managed inside the tool and its REST endpoints. It doesn’t modify existing SignalK applications yet—we’re trialing it as a possible built-in conversion manager for future apps.
+
 ## Overview
 
 This plugin provides a complete unit conversion system for SignalK, allowing you to:
