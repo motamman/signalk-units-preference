@@ -1068,6 +1068,22 @@
                 </div>
             </div>
 
+            <div class="section">
+                <h2>Backup & Restore</h2>
+                <p style="color: #7f8c8d; margin-bottom: 20px;">
+                    Download a complete backup of your configuration or restore from a previous backup. Includes all presets, preferences, and custom unit definitions.
+                </p>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; margin-top: 20px;">
+                    <button class="btn-primary" onclick="downloadBackup()" style="padding: 20px; font-size: 16px;">
+                        📥 Download Backup
+                    </button>
+                    <button class="btn-primary" onclick="document.getElementById('restoreBackupInput').click()" style="padding: 20px; font-size: 16px;">
+                        📤 Restore Backup
+                    </button>
+                    <input type="file" id="restoreBackupInput" accept=".zip" style="display: none;" onchange="restoreBackup(event)">
+                </div>
+                <div id="backupStatus" style="margin-top: 15px;"></div>
+            </div>
 
         </div>
     </div>

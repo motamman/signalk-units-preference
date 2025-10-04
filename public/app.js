@@ -2213,7 +2213,9 @@ async function loadUnitDefinitions() {
 function renderUnitDefinitions() {
   const container = document.getElementById('unitDefinitionsList')
 
-  const defs = Object.entries(unitDefinitions)
+  const defs = Object.entries(unitDefinitions).sort((a, b) =>
+    a[0].toLowerCase().localeCompare(b[0].toLowerCase())
+  )
   console.log('Rendering unit definitions, count:', defs.length)
 
   if (defs.length === 0) {
@@ -2224,7 +2226,9 @@ function renderUnitDefinitions() {
   container.innerHTML = defs
     .map(([baseUnit, def]) => {
       console.log(`Rendering baseUnit: ${baseUnit}, category: ${def.category}`)
-      const conversions = Object.entries(def.conversions || {})
+      const conversions = Object.entries(def.conversions || {}).sort((a, b) =>
+        a[0].toLowerCase().localeCompare(b[0].toLowerCase())
+      )
       const isCustom = def.isCustom === true
       const badge = isCustom
         ? '<span style="background: #667eea; color: white; padding: 2px 8px; border-radius: 3px; font-size: 11px; margin-left: 8px;">CUSTOM</span>'
@@ -3127,5 +3131,90 @@ function initializePathAutocomplete() {
         item.classList.remove('selected')
       }
     })
+  }
+}
+
+// Backup and Restore Functions
+async function downloadBackup() {
+  const statusEl = document.getElementById('backupStatus')
+  try {
+    statusEl.innerHTML =
+      '<div style="color: #667eea; padding: 10px; background: #f0f4ff; border-radius: 4px;">Creating backup...</div>'
+
+    const res = await fetch(`${API_BASE}/backup`)
+    if (!res.ok) throw new Error('Failed to create backup')
+
+    const blob = await res.blob()
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `signalk-units-backup-${Date.now()}.zip`
+    document.body.appendChild(a)
+    a.click()
+    window.URL.revokeObjectURL(url)
+    document.body.removeChild(a)
+
+    statusEl.innerHTML =
+      '<div style="color: #27ae60; padding: 10px; background: #e8f5e9; border-radius: 4px;">✓ Backup downloaded successfully!</div>'
+    setTimeout(() => {
+      statusEl.innerHTML = ''
+    }, 5000)
+  } catch (error) {
+    console.error('Backup error:', error)
+    statusEl.innerHTML =
+      '<div style="color: #e74c3c; padding: 10px; background: #ffebee; border-radius: 4px;">✗ Failed to create backup</div>'
+  }
+}
+
+async function restoreBackup(event) {
+  const file = event.target.files[0]
+  if (!file) return
+
+  const statusEl = document.getElementById('backupStatus')
+
+  if (
+    !confirm(
+      '⚠️ WARNING: This will restore all configuration files from the backup.\n\nThis will overwrite:\n• All presets\n• Current preferences\n• Custom unit definitions\n\nAre you sure you want to continue?'
+    )
+  ) {
+    event.target.value = '' // Reset file input
+    return
+  }
+
+  try {
+    statusEl.innerHTML =
+      '<div style="color: #667eea; padding: 10px; background: #f0f4ff; border-radius: 4px;">Restoring backup...</div>'
+
+    const arrayBuffer = await file.arrayBuffer()
+    const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)))
+
+    const res = await fetch(`${API_BASE}/restore`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ zipData: base64 })
+    })
+
+    if (!res.ok) {
+      const errorData = await res.json()
+      throw new Error(errorData.error || 'Failed to restore backup')
+    }
+
+    const result = await res.json()
+
+    statusEl.innerHTML = `<div style="color: #27ae60; padding: 10px; background: #e8f5e9; border-radius: 4px;">
+      ✓ Backup restored successfully!<br>
+      <small>Restored files: ${result.restoredFiles.join(', ')}</small><br>
+      <small>Reloading in 2 seconds...</small>
+    </div>`
+
+    // Reload data and page after restore
+    setTimeout(() => {
+      window.location.reload()
+    }, 2000)
+  } catch (error) {
+    console.error('Restore error:', error)
+    statusEl.innerHTML = `<div style="color: #e74c3c; padding: 10px; background: #ffebee; border-radius: 4px;">✗ Failed to restore backup: ${error.message}</div>`
+  } finally {
+    event.target.value = '' // Reset file input
   }
 }

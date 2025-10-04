@@ -36,6 +36,10 @@
     "appIcon": "units.png"
   },
   "dependencies": {
+    "@types/adm-zip": "^0.5.7",
+    "@types/archiver": "^6.0.3",
+    "adm-zip": "^0.5.16",
+    "archiver": "^7.0.1",
     "express": "^4.18.2"
   },
   "devDependencies": {

@@ -1742,7 +1742,7 @@ export class UnitsManager {
     }
 
     // Convert sets to arrays and create labeled base units
-    const baseUnitsArray = Array.from(baseUnitsSet).sort()
+    const baseUnitsArray = Array.from(baseUnitsSet).sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()))
     const baseUnits = baseUnitsArray.map(unit => ({
       value: unit,
       label: this.getBaseUnitLabel(unit)
@@ -1750,12 +1750,12 @@ export class UnitsManager {
 
     const targetUnitsMap: Record<string, string[]> = {}
     for (const [baseUnit, units] of Object.entries(targetUnitsByBase)) {
-      targetUnitsMap[baseUnit] = Array.from(units).sort()
+      targetUnitsMap[baseUnit] = Array.from(units).sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()))
     }
 
     return {
       baseUnits,
-      categories: Array.from(categoriesSet).sort(),
+      categories: Array.from(categoriesSet).sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase())),
       targetUnitsByBase: targetUnitsMap,
       categoryToBaseUnit: categoryToBaseUnitMap
     }
@@ -1781,7 +1781,8 @@ export class UnitsManager {
       C: 'C (charge)',
       deg: 'deg (latitude/longitude)',
       'm3/s': 'm³/s (volume rate)',
-      'RFC 3339 (UTC)': 'RFC 3339 (UTC) (date/time)'
+      'RFC 3339 (UTC)': 'RFC 3339 (UTC) (date/time)',
+      tr: 'tr (tabula rasa - blank slate for custom transformations)'
     }
     return labels[unit] || unit
   }
