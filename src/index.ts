@@ -36,7 +36,7 @@ module.exports = (app: ServerAPI): Plugin => {
     description:
       'Manages unit conversions and display preferences for SignalK data paths',
 
-    schema: () => openApiSpec,
+    schema: () => DEFAULT_PLUGIN_SCHEMA,
 
     start: async (config: PluginConfig) => {
       pluginConfig = config
