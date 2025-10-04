@@ -7,6 +7,9 @@ let pathTree = {}
 let signalKValues = {}
 let signalKValueDetails = {}
 
+const BUILT_IN_PRESETS = ['metric', 'imperial-us', 'imperial-uk']
+let lastAppliedPresetId = ''
+
 // Unit schema data (loaded from server)
 let unitSchema = {
   baseUnits: [],
@@ -290,6 +293,13 @@ async function loadData() {
     }
     metadata = await metaRes.json()
 
+    const presetType = preferences.currentPreset?.type
+    if (presetType && !BUILT_IN_PRESETS.includes(presetType.toLowerCase())) {
+      lastAppliedPresetId = presetType
+    } else {
+      lastAppliedPresetId = ''
+    }
+
     // Save original preset state BEFORE rendering (so dirty check works correctly)
     saveOriginalPresetState()
 
@@ -413,6 +423,11 @@ function renderCurrentPreset() {
   }
 
   container.innerHTML = html
+
+  const backupInput = document.getElementById('backupPresetName')
+  if (backupInput) {
+    backupInput.value = lastAppliedPresetId || ''
+  }
 }
 
 function renderCategories() {
@@ -1012,8 +1027,7 @@ async function saveCustomPreset() {
   }
 
   // Prevent overwriting built-in presets
-  const builtInPresets = ['metric', 'imperial-us', 'imperial-uk']
-  if (builtInPresets.includes(presetName.toLowerCase())) {
+  if (BUILT_IN_PRESETS.includes(presetName.toLowerCase())) {
     showStatus('Cannot overwrite built-in presets. Please choose a different name.', 'error')
     return
   }
@@ -1036,12 +1050,26 @@ async function saveCustomPreset() {
       throw new Error(error.error || 'Failed to save preset')
     }
 
-    showStatus(`Custom preset "${presetName}" saved successfully!`, 'success')
+    const result = await res.json()
 
-    // Clear the input (but keep dirty state - user hasn't applied the new preset yet)
-    if (nameInput) nameInput.value = ''
+    if (result?.version) {
+      showStatus(`Custom preset "${presetName}" saved successfully (version ${result.version}).`, 'success')
+    } else {
+      showStatus(`Custom preset "${presetName}" saved successfully!`, 'success')
+    }
 
-    // Reload custom presets in settings tab
+    lastAppliedPresetId = presetName
+
+    // Reload data so dirty state resets and current preset reflects saved version if applicable
+    await loadData()
+
+    // Restore input with preset name
+    const backupInput = document.getElementById('backupPresetName')
+    if (backupInput) {
+      backupInput.value = presetName
+    }
+
+    // Reload custom presets in settings tab to refresh metadata/version
     await loadCustomPresets()
   } catch (error) {
     showStatus('Failed to save preset: ' + error.message, 'error')
@@ -1080,6 +1108,12 @@ async function applyCustomPreset(presetId, presetName) {
     // Reload data to show updated preferences and reset dirty state
     await loadData()
     saveOriginalPresetState() // Reset the original state after applying preset
+
+    lastAppliedPresetId = presetId
+    const backupInput = document.getElementById('backupPresetName')
+    if (backupInput) {
+      backupInput.value = presetId
+    }
   } catch (error) {
     showStatus('Failed to apply custom preset: ' + error.message, 'error')
   }
@@ -1167,6 +1201,12 @@ async function applyUnitPreset(presetType) {
     // Reload data to show updated preferences and reset dirty state
     await loadData()
     saveOriginalPresetState() // Reset the original state after applying preset
+
+    lastAppliedPresetId = ''
+    const backupInput = document.getElementById('backupPresetName')
+    if (backupInput) {
+      backupInput.value = ''
+    }
   } catch (error) {
     showStatus('Failed to apply preset: ' + error.message, 'error')
   }

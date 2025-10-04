@@ -988,23 +988,57 @@ module.exports = (app: ServerAPI): Plugin => {
             fs.mkdirSync(customPresetsDir, { recursive: true })
           }
 
-          // Create preset data
+          const presetPath = path.join(customPresetsDir, `${presetName}.json`)
+
+          const computeNextVersion = (current?: unknown): string => {
+            const numeric = Number(current)
+            if (!Number.isNaN(numeric)) {
+              return (numeric + 0.01).toFixed(2)
+            }
+            return '1.00'
+          }
+
+          let version = '1.00'
+          let existingDescription = 'Custom user preset'
+          let existingDisplayName = name || presetName
+
+          if (fs.existsSync(presetPath)) {
+            try {
+              const existingPreset = JSON.parse(fs.readFileSync(presetPath, 'utf-8'))
+              version = computeNextVersion(existingPreset.version)
+              if (!name && typeof existingPreset.name === 'string') {
+                existingDisplayName = existingPreset.name
+              }
+              if (existingPreset.description) {
+                existingDescription = existingPreset.description
+              }
+            } catch (error) {
+              app.error(`Failed to read existing preset for version bump: ${error}`)
+              version = '1.00'
+            }
+          }
+
           const presetData = {
-            version: '1.0.0',
+            version,
             date: new Date().toISOString().split('T')[0],
-            name: name || presetName,
-            description: 'Custom user preset',
+            name: name || existingDisplayName,
+            description: existingDescription,
             categories
           }
 
-          // Save to file
-          const presetPath = path.join(customPresetsDir, `${presetName}.json`)
           fs.writeFileSync(presetPath, JSON.stringify(presetData, null, 2), 'utf-8')
+
+          const currentPreferences = unitsManager.getPreferences()
+          if (currentPreferences.currentPreset?.type === presetName) {
+            await unitsManager.updateCurrentPreset(presetName, presetData.name, presetData.version)
+          }
 
           res.json({
             success: true,
             presetName,
-            path: presetPath
+            path: presetPath,
+            version: presetData.version,
+            date: presetData.date
           })
         } catch (error) {
           app.error(`Error saving custom preset: ${error}`)

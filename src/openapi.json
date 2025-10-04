@@ -2,8 +2,8 @@
   "openapi": "3.0.0",
   "info": {
     "title": "SignalK Units Preference API",
-    "version": "1.0.0",
-    "description": "API for managing unit conversions and display preferences for SignalK data paths"
+    "version": "1.1.0",
+    "description": "REST endpoints exposed by the signalk-units-preference plugin"
   },
   "servers": [
     {
@@ -11,10 +11,42 @@
     }
   ],
   "paths": {
+    "/signalk-metadata": {
+      "post": {
+        "summary": "Register SignalK metadata snapshot",
+        "description": "Used by the frontend to push the server's metadata tree so the plugin can enrich conversions.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SignalKMetadataMap"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Metadata accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/conversion/{path}": {
       "get": {
-        "summary": "Get conversion information for a path",
-        "description": "Returns the conversion configuration for a specific SignalK path based on user preferences",
+        "summary": "Get conversion configuration for a SignalK path",
         "parameters": [
           {
             "name": "path",
@@ -23,33 +55,250 @@
             "schema": {
               "type": "string"
             },
-            "description": "SignalK path (e.g., navigation.speedOverGround)"
+            "description": "SignalK path (wildcards and dots allowed)",
+            "style": "simple"
           }
         ],
         "responses": {
           "200": {
-            "description": "Conversion information",
+            "description": "Active conversion mapping for the path",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ConversionResponse"
+                  "$ref": "#/components/schemas/ConversionByPathResponse"
                 }
               }
             }
           },
           "404": {
-            "description": "No conversion found for path"
+            "description": "No conversion found"
+          }
+        }
+      }
+    },
+    "/convert/{path}/{value}": {
+      "get": {
+        "summary": "Convert a value for a SignalK path (GET variant)",
+        "parameters": [
+          {
+            "name": "path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "style": "simple"
+          },
+          {
+            "name": "value",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["number", "boolean", "string", "date", "object"]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "SignalK delta envelope containing the converted value",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeltaResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input"
+          }
+        }
+      }
+    },
+    "/convert/{path}": {
+      "get": {
+        "summary": "Convert a value for a SignalK path (query variant)",
+        "parameters": [
+          {
+            "name": "path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "style": "simple"
+          },
+          {
+            "name": "value",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["number", "boolean", "string", "date", "object"]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "SignalK delta envelope containing the converted value",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeltaResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing value or invalid input"
+          }
+        }
+      }
+    },
+    "/convert": {
+      "post": {
+        "summary": "Convert a value for a SignalK path",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConvertRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "SignalK delta envelope containing the converted value",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeltaResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request body"
+          }
+        }
+      }
+    },
+    "/unit-convert": {
+      "get": {
+        "summary": "Convert a value by base and target unit (query)",
+        "parameters": [
+          {
+            "name": "baseUnit",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "targetUnit",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "value",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Value to convert (stringified if not numeric)"
+          },
+          {
+            "name": "displayFormat",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "useLocalTime",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Converted value",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnitConvertResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid parameters"
+          }
+        }
+      },
+      "post": {
+        "summary": "Convert a value by base and target unit",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UnitConvertRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Converted value",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnitConvertResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
           }
         }
       }
     },
     "/metadata": {
       "get": {
-        "summary": "Get all unit metadata",
-        "description": "Returns all unit metadata definitions",
+        "summary": "List all captured SignalK metadata",
         "responses": {
           "200": {
-            "description": "All metadata",
+            "description": "Map of path metadata",
             "content": {
               "application/json": {
                 "schema": {
@@ -64,156 +313,87 @@
         }
       }
     },
-    "/metadata/{path}": {
+    "/paths": {
       "get": {
-        "summary": "Get metadata for a specific path",
-        "parameters": [
-          {
-            "name": "path",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "summary": "List all discovered paths with conversion metadata",
         "responses": {
           "200": {
-            "description": "Path metadata",
+            "description": "Map of path conversion metadata",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/UnitMetadata"
+                  "$ref": "#/components/schemas/ConversionByPathResponse"
                 }
               }
             }
-          },
-          "404": {
-            "description": "No metadata found for path"
+          }
+        }
+      }
+    },
+    "/schema": {
+      "get": {
+        "summary": "Get unit schema (base units, categories, targets)",
+        "responses": {
+          "200": {
+            "description": "Schema information",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnitSchema"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/unit-definitions": {
+      "get": {
+        "summary": "List unit definitions",
+        "responses": {
+          "200": {
+            "description": "Map of base unit definitions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "$ref": "#/components/schemas/UnitDefinition"
+                  }
+                }
+              }
+            }
           }
         }
       },
       "post": {
-        "summary": "Create or update metadata for a path",
-        "parameters": [
-          {
-            "name": "path",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "summary": "Create or replace a unit definition",
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/UnitMetadata"
+                "$ref": "#/components/schemas/UnitDefinition"
               }
             }
           }
         },
         "responses": {
           "200": {
-            "description": "Metadata updated successfully"
+            "description": "Definition saved"
           },
           "400": {
-            "description": "Invalid metadata format"
+            "description": "Missing base unit"
           }
         }
       }
     },
-    "/preferences": {
-      "get": {
-        "summary": "Get all preferences",
-        "description": "Returns all category and path-specific preferences",
-        "responses": {
-          "200": {
-            "description": "All preferences",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnitsPreferences"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/preferences/category/{category}": {
-      "put": {
-        "summary": "Update category preference",
-        "parameters": [
-          {
-            "name": "category",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            },
-            "description": "Category name (e.g., speed, temperature)"
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CategoryPreference"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Preference updated successfully"
-          },
-          "400": {
-            "description": "Invalid preference format"
-          }
-        }
-      }
-    },
-    "/preferences/path/{path}": {
-      "put": {
-        "summary": "Update path-specific preference override",
-        "parameters": [
-          {
-            "name": "path",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CategoryPreference"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Override updated successfully"
-          },
-          "400": {
-            "description": "Invalid preference format"
-          }
-        }
-      },
+    "/unit-definitions/{baseUnit}": {
       "delete": {
-        "summary": "Delete path-specific preference override",
+        "summary": "Remove a custom unit definition",
         "parameters": [
           {
-            "name": "path",
+            "name": "baseUnit",
             "in": "path",
             "required": true,
             "schema": {
@@ -223,31 +403,22 @@
         ],
         "responses": {
           "200": {
-            "description": "Override deleted successfully"
+            "description": "Definition removed"
           }
         }
       }
     },
-    "/conversion/{path}/{unit}": {
+    "/unit-definitions/{baseUnit}/conversions": {
       "post": {
-        "summary": "Add custom conversion to a path",
+        "summary": "Create or replace a conversion for a base unit",
         "parameters": [
           {
-            "name": "path",
+            "name": "baseUnit",
             "in": "path",
             "required": true,
             "schema": {
               "type": "string"
             }
-          },
-          {
-            "name": "unit",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            },
-            "description": "Unit name (e.g., knots, mph)"
           }
         ],
         "requestBody": {
@@ -262,10 +433,515 @@
         },
         "responses": {
           "200": {
-            "description": "Conversion added successfully"
+            "description": "Conversion stored"
+          }
+        }
+      }
+    },
+    "/unit-definitions/{baseUnit}/conversions/{targetUnit}": {
+      "delete": {
+        "summary": "Delete a conversion for a base unit",
+        "parameters": [
+          {
+            "name": "baseUnit",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "targetUnit",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Conversion removed"
+          }
+        }
+      }
+    },
+    "/current-preset": {
+      "get": {
+        "summary": "Get metadata about the currently applied preset",
+        "responses": {
+          "200": {
+            "description": "Preset information or null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/PresetInfo"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/categories": {
+      "get": {
+        "summary": "List category preferences",
+        "responses": {
+          "200": {
+            "description": "Map of category preferences",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "$ref": "#/components/schemas/CategoryPreference"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/categories/{category}": {
+      "get": {
+        "summary": "Get a category preference",
+        "parameters": [
+          {
+            "name": "category",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Category preference",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryPreference"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Category not found"
+          }
+        }
+      },
+      "put": {
+        "summary": "Update a category preference",
+        "parameters": [
+          {
+            "name": "category",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CategoryPreference"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Preference stored"
           },
           "400": {
-            "description": "Invalid conversion format"
+            "description": "Validation error"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete a custom category preference",
+        "parameters": [
+          {
+            "name": "category",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Preference removed"
+          }
+        }
+      }
+    },
+    "/overrides": {
+      "get": {
+        "summary": "List path overrides",
+        "responses": {
+          "200": {
+            "description": "Map of path overrides",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "$ref": "#/components/schemas/PathOverride"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/overrides/{path}": {
+      "get": {
+        "summary": "Get a specific path override",
+        "parameters": [
+          {
+            "name": "path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "style": "simple"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Override",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PathOverride"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Override not found"
+          }
+        }
+      },
+      "put": {
+        "summary": "Create or update a path override",
+        "parameters": [
+          {
+            "name": "path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "style": "simple"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PathOverride"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Override saved"
+          },
+          "400": {
+            "description": "Invalid override data"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Remove a path override",
+        "parameters": [
+          {
+            "name": "path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "style": "simple"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Override removed"
+          }
+        }
+      }
+    },
+    "/patterns": {
+      "get": {
+        "summary": "List path patterns",
+        "responses": {
+          "200": {
+            "description": "Array of path pattern rules",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PathPattern"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a path pattern",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PathPattern"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Pattern saved"
+          },
+          "400": {
+            "description": "Validation error"
+          }
+        }
+      }
+    },
+    "/patterns/{index}": {
+      "get": {
+        "summary": "Get a path pattern",
+        "parameters": [
+          {
+            "name": "index",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Pattern rule",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PathPattern"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Pattern not found"
+          }
+        }
+      },
+      "put": {
+        "summary": "Update a path pattern",
+        "parameters": [
+          {
+            "name": "index",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PathPattern"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Pattern updated"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete a path pattern",
+        "parameters": [
+          {
+            "name": "index",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Pattern deleted"
+          }
+        }
+      }
+    },
+    "/presets/{presetType}": {
+      "post": {
+        "summary": "Apply a built-in preset",
+        "parameters": [
+          {
+            "name": "presetType",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": ["metric", "imperial-us", "imperial-uk"]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Preset applied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetApplySummary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Unknown preset"
+          }
+        }
+      }
+    },
+    "/presets/custom": {
+      "get": {
+        "summary": "List available custom presets",
+        "responses": {
+          "200": {
+            "description": "Array of preset summaries",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CustomPresetSummary"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/presets/custom/{name}": {
+      "post": {
+        "summary": "Save the current categories as a custom preset",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveCustomPresetRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Preset saved"
+          },
+          "400": {
+            "description": "Invalid preset name or data"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete a custom preset",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Preset deleted"
+          },
+          "404": {
+            "description": "Preset not found"
+          }
+        }
+      }
+    },
+    "/presets/custom/{name}/apply": {
+      "post": {
+        "summary": "Apply a custom preset",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Preset applied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetApplySummary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Preset not found"
           }
         }
       }
@@ -273,63 +949,83 @@
   },
   "components": {
     "schemas": {
-      "ConversionResponse": {
+      "SignalKMetadataMap": {
         "type": "object",
-        "required": ["path", "baseUnit", "category", "conversions"],
+        "additionalProperties": {
+          "type": "object",
+          "description": "Arbitrary SignalK metadata blob"
+        }
+      },
+      "ConversionDefinition": {
+        "type": "object",
+        "required": ["formula", "inverseFormula"],
         "properties": {
-          "path": {
+          "formula": {
             "type": "string",
-            "description": "SignalK path"
+            "description": "JavaScript expression converting from the base unit"
           },
-          "baseUnit": {
+          "inverseFormula": {
             "type": "string",
-            "nullable": true,
-            "description": "Base unit (SI or custom)"
+            "description": "Expression converting back to the base unit"
+          },
+          "symbol": {
+            "type": "string",
+            "description": "Display symbol"
+          },
+          "dateFormat": {
+            "type": "string",
+            "description": "Named date/time format"
+          },
+          "useLocalTime": {
+            "type": "boolean",
+            "description": "Whether the conversion uses local time"
+          }
+        }
+      },
+      "UnitDefinition": {
+        "type": "object",
+        "required": ["baseUnit"],
+        "properties": {
+          "baseUnit": {
+            "type": "string"
           },
           "category": {
-            "type": "string",
-            "description": "Measurement category"
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
           },
           "conversions": {
             "type": "object",
-            "description": "Selected conversion definition(s)",
             "additionalProperties": {
-              "type": "object",
-              "required": ["formula", "inverseFormula", "symbol"],
-              "properties": {
-                "formula": {
-                  "type": "string",
-                  "description": "Conversion formula"
-                },
-                "inverseFormula": {
-                  "type": "string",
-                  "description": "Inverse conversion formula"
-                },
-                "symbol": {
-                  "type": "string",
-                  "description": "Unit symbol"
-                }
-              }
+              "$ref": "#/components/schemas/ConversionDefinition"
             }
-          },
-          "valueType": {
-            "type": "string",
-            "description": "Detected SignalK value type"
-          },
-          "displayFormat": {
-            "type": "string",
-            "description": "Preferred display format"
-          },
-          "signalk_timestamp": {
-            "type": "string",
-            "nullable": true,
-            "description": "Latest SignalK timestamp associated with the path"
-          },
-          "$source": {
-            "type": "string",
-            "nullable": true,
-            "description": "SignalK source identifier ($source)"
           }
+        }
+      },
+      "PathConversionEntry": {
+        "type": "object",
+        "required": ["baseUnit", "category", "conversions"],
+        "properties": {
+          "baseUnit": {
+            "type": "string",
+            "nullable": true
+          },
+          "category": {
+            "type": "string"
+          },
+          "conversions": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ConversionDefinition"
+            }
+          }
+        }
+      },
+      "ConversionByPathResponse": {
+        "type": "object",
+        "additionalProperties": {
+          "$ref": "#/components/schemas/PathConversionEntry"
         }
       },
       "UnitMetadata": {
@@ -337,12 +1033,10 @@
         "properties": {
           "baseUnit": {
             "type": "string",
-            "nullable": true,
-            "description": "Base unit (SI or custom)"
+            "nullable": true
           },
           "category": {
-            "type": "string",
-            "description": "Category of measurement"
+            "type": "string"
           },
           "conversions": {
             "type": "object",
@@ -356,52 +1050,334 @@
           }
         }
       },
-      "ConversionDefinition": {
-        "type": "object",
-        "required": ["factor", "symbol"],
-        "properties": {
-          "factor": {
-            "type": "number",
-            "description": "Multiplication factor from base to target"
-          },
-          "symbol": {
-            "type": "string",
-            "description": "Unit symbol"
-          },
-          "inverseFactor": {
-            "type": "number",
-            "description": "Inverse factor (optional, calculated if not provided)"
-          }
-        }
-      },
       "CategoryPreference": {
         "type": "object",
         "required": ["targetUnit", "displayFormat"],
         "properties": {
           "targetUnit": {
-            "type": "string",
-            "description": "Target unit to display"
+            "type": "string"
           },
           "displayFormat": {
-            "type": "string",
-            "description": "Display format (e.g., 0.0, 0.00)"
+            "type": "string"
           }
         }
       },
-      "UnitsPreferences": {
+      "PathOverride": {
+        "type": "object",
+        "required": ["targetUnit", "displayFormat"],
+        "properties": {
+          "targetUnit": {
+            "type": "string"
+          },
+          "displayFormat": {
+            "type": "string"
+          },
+          "baseUnit": {
+            "type": "string"
+          }
+        }
+      },
+      "PathPattern": {
+        "type": "object",
+        "required": ["pattern", "category"],
+        "properties": {
+          "pattern": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "baseUnit": {
+            "type": "string"
+          },
+          "targetUnit": {
+            "type": "string"
+          },
+          "displayFormat": {
+            "type": "string"
+          },
+          "priority": {
+            "type": "integer",
+            "default": 100
+          }
+        }
+      },
+      "PresetInfo": {
+        "type": "object",
+        "required": ["type", "name", "version", "appliedDate"],
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "appliedDate": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "PresetApplySummary": {
         "type": "object",
         "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "presetType": {
+            "type": "string"
+          },
+          "presetName": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "categoriesUpdated": {
+            "type": "integer"
+          }
+        }
+      },
+      "CustomPresetSummary": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "date": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "categoriesCount": {
+            "type": "integer"
+          }
+        }
+      },
+      "SaveCustomPresetRequest": {
+        "type": "object",
+        "required": ["categories"],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
           "categories": {
             "type": "object",
             "additionalProperties": {
               "$ref": "#/components/schemas/CategoryPreference"
             }
+          }
+        }
+      },
+      "ConvertRequest": {
+        "type": "object",
+        "required": ["path", "value"],
+        "properties": {
+          "path": {
+            "type": "string"
           },
-          "pathOverrides": {
+          "value": {
+            "oneOf": [
+              { "type": "string" },
+              { "type": "number" },
+              { "type": "boolean" },
+              { "type": "object" },
+              { "type": "array" }
+            ]
+          },
+          "type": {
+            "type": "string",
+            "enum": ["number", "boolean", "string", "date", "object"]
+          }
+        }
+      },
+      "UnitConvertRequest": {
+        "type": "object",
+        "required": ["baseUnit", "targetUnit", "value"],
+        "properties": {
+          "baseUnit": {
+            "type": "string"
+          },
+          "targetUnit": {
+            "type": "string"
+          },
+          "value": {
+            "oneOf": [
+              { "type": "string" },
+              { "type": "number" }
+            ]
+          },
+          "displayFormat": {
+            "type": "string"
+          },
+          "useLocalTime": {
+            "type": "boolean"
+          }
+        }
+      },
+      "UnitConvertResponse": {
+        "type": "object",
+        "properties": {
+          "baseUnit": {
+            "type": "string"
+          },
+          "targetUnit": {
+            "type": "string"
+          },
+          "original": {
+            "type": "string",
+            "description": "Original value as received"
+          },
+          "result": {
+            "$ref": "#/components/schemas/UnitConversionResult"
+          }
+        }
+      },
+      "UnitConversionResult": {
+        "type": "object",
+        "properties": {
+          "convertedValue": {
+            "oneOf": [
+              { "type": "number" },
+              { "type": "string" },
+              { "type": "boolean" },
+              { "type": "object" }
+            ]
+          },
+          "formatted": {
+            "type": "string"
+          },
+          "symbol": {
+            "type": "string"
+          },
+          "displayFormat": {
+            "type": "string"
+          },
+          "valueType": {
+            "type": "string"
+          },
+          "dateFormat": {
+            "type": "string"
+          },
+          "useLocalTime": {
+            "type": "boolean"
+          }
+        }
+      },
+      "UnitSchema": {
+        "type": "object",
+        "properties": {
+          "baseUnits": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "value": { "type": "string" },
+                "label": { "type": "string" }
+              }
+            }
+          },
+          "categories": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "targetUnitsByBase": {
             "type": "object",
             "additionalProperties": {
-              "$ref": "#/components/schemas/CategoryPreference"
+              "type": "array",
+              "items": { "type": "string" }
             }
+          },
+          "categoryToBaseUnit": {
+            "type": "object",
+            "additionalProperties": { "type": "string" }
+          }
+        }
+      },
+      "DeltaResponse": {
+        "type": "object",
+        "required": ["updates"],
+        "properties": {
+          "context": {
+            "type": "string"
+          },
+          "updates": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DeltaUpdate"
+            }
+          }
+        }
+      },
+      "DeltaUpdate": {
+        "type": "object",
+        "required": ["values"],
+        "properties": {
+          "$source": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "values": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DeltaValueEntry"
+            }
+          }
+        }
+      },
+      "DeltaValueEntry": {
+        "type": "object",
+        "required": ["path", "value"],
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "value": {
+            "$ref": "#/components/schemas/ConversionDeltaValue"
+          }
+        }
+      },
+      "ConversionDeltaValue": {
+        "type": "object",
+        "required": ["value", "formatted", "displayFormat", "original"],
+        "properties": {
+          "value": {
+            "oneOf": [
+              { "type": "number" },
+              { "type": "string" },
+              { "type": "boolean" },
+              { "type": "object" }
+            ]
+          },
+          "formatted": {
+            "type": "string"
+          },
+          "symbol": {
+            "type": "string"
+          },
+          "displayFormat": {
+            "type": "string"
+          },
+          "original": {
+            "oneOf": [
+              { "type": "number" },
+              { "type": "string" },
+              { "type": "boolean" },
+              { "type": "object" }
+            ]
           }
         }
       }

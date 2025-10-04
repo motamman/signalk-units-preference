@@ -79,6 +79,11 @@
       "targetUnit": "h",
       "displayFormat": "0.0"
     },
+    "dateTime": {
+      "baseUnit": "RFC 3339 (UTC)",
+      "targetUnit": "short-date",
+      "displayFormat": "short-date"
+    },
     "charge": {
       "baseUnit": "C",
       "targetUnit": "Ah",
