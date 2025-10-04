@@ -86,108 +86,6 @@ module.exports = (app: ServerAPI): Plugin => {
         return error
       }
 
-      const MONTH_NAMES_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-      const MONTH_NAMES_LONG = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
-      const WEEKDAY_NAMES_LONG = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
-
-      const pad2 = (value: number): string => value.toString().padStart(2, '0')
-
-      const getDateParts = (date: Date, useLocal: boolean) => ({
-        year: useLocal ? date.getFullYear() : date.getUTCFullYear(),
-        monthIndex: useLocal ? date.getMonth() : date.getUTCMonth(),
-        day: useLocal ? date.getDate() : date.getUTCDate(),
-        hours: useLocal ? date.getHours() : date.getUTCHours(),
-        minutes: useLocal ? date.getMinutes() : date.getUTCMinutes(),
-        seconds: useLocal ? date.getSeconds() : date.getUTCSeconds(),
-        weekday: useLocal ? date.getDay() : date.getUTCDay()
-      })
-
-      const formatDateConversion = (
-        isoValue: string,
-        conversionInfo: ConversionResponse,
-        pathStr: string
-      ): { convertedValue: any; formatted: string; displayFormat: string } => {
-        const date = new Date(isoValue)
-        if (Number.isNaN(date.getTime())) {
-          throw createBadRequestError('Invalid ISO-8601 date value', {
-            received: isoValue,
-            path: pathStr
-          })
-        }
-
-        const targetUnit = conversionInfo.targetUnit || ''
-        const normalizedTarget = targetUnit.endsWith('-local') ? targetUnit.replace(/-local$/, '') : targetUnit
-        const useLocal = conversionInfo.useLocalTime ?? targetUnit.endsWith('-local')
-        const formatKey = (conversionInfo.dateFormat || normalizedTarget || '').toLowerCase()
-        const parts = getDateParts(date, useLocal)
-
-        const monthShort = MONTH_NAMES_SHORT[parts.monthIndex] || ''
-        const monthLong = MONTH_NAMES_LONG[parts.monthIndex] || ''
-        const weekdayLong = WEEKDAY_NAMES_LONG[parts.weekday] || ''
-
-        let formatted: string
-        let convertedValue: any
-
-        switch (formatKey) {
-          case 'short-date': {
-            formatted = `${monthShort} ${parts.day}, ${parts.year}`
-            convertedValue = formatted
-            break
-          }
-          case 'long-date': {
-            formatted = `${weekdayLong}, ${monthLong} ${parts.day}, ${parts.year}`
-            convertedValue = formatted
-            break
-          }
-          case 'dd/mm/yyyy': {
-            formatted = `${pad2(parts.day)}/${pad2(parts.monthIndex + 1)}/${parts.year}`
-            convertedValue = formatted
-            break
-          }
-          case 'mm/dd/yyyy': {
-            formatted = `${pad2(parts.monthIndex + 1)}/${pad2(parts.day)}/${parts.year}`
-            convertedValue = formatted
-            break
-          }
-          case 'mm/yyyy': {
-            formatted = `${pad2(parts.monthIndex + 1)}/${parts.year}`
-            convertedValue = formatted
-            break
-          }
-          case 'time-24hrs': {
-            formatted = `${pad2(parts.hours)}:${pad2(parts.minutes)}:${pad2(parts.seconds)}`
-            convertedValue = formatted
-            break
-          }
-          case 'time-am/pm': {
-            const hours12 = parts.hours % 12 || 12
-            const suffix = parts.hours >= 12 ? 'PM' : 'AM'
-            formatted = `${pad2(hours12)}:${pad2(parts.minutes)}:${pad2(parts.seconds)} ${suffix}`
-            convertedValue = formatted
-            break
-          }
-          case 'epoch-seconds': {
-            const epochSeconds = Math.floor(date.getTime() / 1000)
-            convertedValue = epochSeconds
-            formatted = String(epochSeconds)
-            break
-          }
-          default: {
-            formatted = isoValue
-            convertedValue = isoValue
-            break
-          }
-        }
-
-        const displayFormat = conversionInfo.displayFormat || formatKey || 'ISO-8601'
-
-        return {
-          convertedValue,
-          formatted,
-          displayFormat
-        }
-      }
-
       const normalizeValueForConversion = (
         rawValue: unknown,
         expectedType: string,
@@ -353,11 +251,26 @@ module.exports = (app: ServerAPI): Plugin => {
                 path: pathStr
               })
             }
-            const formattedDate = formatDateConversion(normalizedValue, conversionInfo, pathStr)
-            convertedValue = formattedDate.convertedValue
-            formatted = formattedDate.formatted
-            displayFormat = formattedDate.displayFormat
-            symbol = ''
+            try {
+              const formattedDate = unitsManager.formatDateValue(
+                normalizedValue,
+                conversionInfo.targetUnit || '',
+                conversionInfo.dateFormat,
+                conversionInfo.useLocalTime
+              )
+              convertedValue = formattedDate.convertedValue
+              formatted = formattedDate.formatted
+              displayFormat = formattedDate.displayFormat
+              symbol = conversionInfo.symbol || ''
+            } catch (err) {
+              if ((err as any).name === 'UnitConversionError') {
+                throw createBadRequestError((err as Error).message, {
+                  received: normalizedValue,
+                  path: pathStr
+                })
+              }
+              throw err
+            }
             break
           }
           case 'string': {
@@ -476,6 +389,87 @@ module.exports = (app: ServerAPI): Plugin => {
           }
           app.error(`Error converting value: ${error}`)
           res.status(500).json({ error: 'Internal server error' })
+        }
+      })
+
+      // POST /plugins/signalk-units-preference/unit-convert
+      // Convert a value using base unit and target unit directly
+      router.post('/unit-convert', (req: Request, res: Response) => {
+        try {
+          const { baseUnit, targetUnit, value, displayFormat, useLocalTime } = req.body || {}
+
+          if (!baseUnit || typeof baseUnit !== 'string') {
+            throw createBadRequestError('baseUnit is required')
+          }
+          if (!targetUnit || typeof targetUnit !== 'string') {
+            throw createBadRequestError('targetUnit is required')
+          }
+          if (value === undefined || value === null) {
+            throw createBadRequestError('value is required')
+          }
+
+          const result = unitsManager.convertUnitValue(baseUnit, targetUnit, value, {
+            displayFormat: typeof displayFormat === 'string' ? displayFormat : undefined,
+            useLocalTime: typeof useLocalTime === 'boolean' ? useLocalTime : undefined
+          })
+
+          res.json({
+            baseUnit,
+            targetUnit,
+            original: value,
+            result
+          })
+        } catch (error) {
+          const err = error as Error & { status?: number; details?: unknown }
+          if (err.status === 400) {
+            res.status(400).json({ error: err.message, details: err.details })
+            return
+          }
+          res.status(400).json({ error: err.message })
+        }
+      })
+
+      // GET /plugins/signalk-units-preference/unit-convert
+      router.get('/unit-convert', (req: Request, res: Response) => {
+        try {
+          const baseUnitParam = Array.isArray(req.query.baseUnit) ? req.query.baseUnit[0] : req.query.baseUnit
+          const targetUnitParam = Array.isArray(req.query.targetUnit) ? req.query.targetUnit[0] : req.query.targetUnit
+          const valueParam = Array.isArray(req.query.value) ? req.query.value[0] : req.query.value
+          const displayFormatParam = Array.isArray(req.query.displayFormat) ? req.query.displayFormat[0] : req.query.displayFormat
+          const useLocalParam = Array.isArray(req.query.useLocalTime) ? req.query.useLocalTime[0] : req.query.useLocalTime
+
+          if (!baseUnitParam || typeof baseUnitParam !== 'string') {
+            throw createBadRequestError('baseUnit query parameter is required')
+          }
+          if (!targetUnitParam || typeof targetUnitParam !== 'string') {
+            throw createBadRequestError('targetUnit query parameter is required')
+          }
+          if (valueParam === undefined || valueParam === null || valueParam === '') {
+            throw createBadRequestError('value query parameter is required')
+          }
+
+          const useLocalTime = typeof useLocalParam === 'string'
+            ? ['true', '1', 'yes', 'y', 'on'].includes(useLocalParam.toLowerCase())
+            : undefined
+
+          const result = unitsManager.convertUnitValue(baseUnitParam, targetUnitParam, valueParam, {
+            displayFormat: typeof displayFormatParam === 'string' ? displayFormatParam : undefined,
+            useLocalTime
+          })
+
+          res.json({
+            baseUnit: baseUnitParam,
+            targetUnit: targetUnitParam,
+            original: valueParam,
+            result
+          })
+        } catch (error) {
+          const err = error as Error & { status?: number; details?: unknown }
+          if (err.status === 400) {
+            res.status(400).json({ error: err.message, details: err.details })
+            return
+          }
+          res.status(400).json({ error: err.message })
         }
       })
 

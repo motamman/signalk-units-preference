@@ -18,6 +18,19 @@ import { defaultUnitsMetadata, categoryToBaseUnit } from './defaultUnits'
 import { comprehensiveDefaultUnits } from './comprehensiveDefaults'
 import { evaluateFormula, formatNumber } from './formulaEvaluator'
 
+class UnitConversionError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'UnitConversionError'
+  }
+}
+
+const MONTH_NAMES_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+const MONTH_NAMES_LONG = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+const WEEKDAY_NAMES_LONG = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+
+const pad2 = (value: number): string => value.toString().padStart(2, '0')
+
 export class UnitsManager {
   private metadata: UnitsMetadataStore
   private preferences: UnitsPreferences
@@ -40,6 +53,112 @@ export class UnitsManager {
     }
     this.unitDefinitions = {}
     this.signalKMetadata = {}
+  }
+
+  private getDateParts(date: Date, useLocal: boolean) {
+    return {
+      year: useLocal ? date.getFullYear() : date.getUTCFullYear(),
+      monthIndex: useLocal ? date.getMonth() : date.getUTCMonth(),
+      day: useLocal ? date.getDate() : date.getUTCDate(),
+      hours: useLocal ? date.getHours() : date.getUTCHours(),
+      minutes: useLocal ? date.getMinutes() : date.getUTCMinutes(),
+      seconds: useLocal ? date.getSeconds() : date.getUTCSeconds(),
+      weekday: useLocal ? date.getDay() : date.getUTCDay()
+    }
+  }
+
+  formatDateValue(
+    isoValue: string,
+    targetUnit: string,
+    dateFormat?: string,
+    useLocalOverride?: boolean
+  ): {
+    convertedValue: any
+    formatted: string
+    displayFormat: string
+    useLocalTime: boolean
+    dateFormat: string
+  } {
+    const date = new Date(isoValue)
+    if (Number.isNaN(date.getTime())) {
+      throw new UnitConversionError('Invalid ISO-8601 date value')
+    }
+
+    const normalizedTarget = targetUnit.endsWith('-local')
+      ? targetUnit.replace(/-local$/, '')
+      : targetUnit
+
+    const formatKey = (dateFormat || normalizedTarget || '').toLowerCase()
+    const useLocalTime = useLocalOverride ?? targetUnit.endsWith('-local')
+
+    const parts = this.getDateParts(date, useLocalTime)
+    const monthShort = MONTH_NAMES_SHORT[parts.monthIndex] || ''
+    const monthLong = MONTH_NAMES_LONG[parts.monthIndex] || ''
+    const weekdayLong = WEEKDAY_NAMES_LONG[parts.weekday] || ''
+
+    let formatted: string
+    let convertedValue: any
+
+    switch (formatKey) {
+      case 'short-date': {
+        formatted = `${monthShort} ${parts.day}, ${parts.year}`
+        convertedValue = formatted
+        break
+      }
+      case 'long-date': {
+        formatted = `${weekdayLong}, ${monthLong} ${parts.day}, ${parts.year}`
+        convertedValue = formatted
+        break
+      }
+      case 'dd/mm/yyyy': {
+        formatted = `${pad2(parts.day)}/${pad2(parts.monthIndex + 1)}/${parts.year}`
+        convertedValue = formatted
+        break
+      }
+      case 'mm/dd/yyyy': {
+        formatted = `${pad2(parts.monthIndex + 1)}/${pad2(parts.day)}/${parts.year}`
+        convertedValue = formatted
+        break
+      }
+      case 'mm/yyyy': {
+        formatted = `${pad2(parts.monthIndex + 1)}/${parts.year}`
+        convertedValue = formatted
+        break
+      }
+      case 'time-24hrs': {
+        formatted = `${pad2(parts.hours)}:${pad2(parts.minutes)}:${pad2(parts.seconds)}`
+        convertedValue = formatted
+        break
+      }
+      case 'time-am/pm': {
+        const hours12 = parts.hours % 12 || 12
+        const suffix = parts.hours >= 12 ? 'PM' : 'AM'
+        formatted = `${pad2(hours12)}:${pad2(parts.minutes)}:${pad2(parts.seconds)} ${suffix}`
+        convertedValue = formatted
+        break
+      }
+      case 'epoch-seconds': {
+        const epochSeconds = Math.floor(date.getTime() / 1000)
+        convertedValue = epochSeconds
+        formatted = String(epochSeconds)
+        break
+      }
+      default: {
+        formatted = isoValue
+        convertedValue = isoValue
+        break
+      }
+    }
+
+    const displayFormat = dateFormat || formatKey || 'ISO-8601'
+
+    return {
+      convertedValue,
+      formatted,
+      displayFormat,
+      useLocalTime,
+      dateFormat: displayFormat
+    }
   }
 
   /**
@@ -693,6 +812,114 @@ export class UnitsManager {
         signalkTimestamp: skMeta?.timestamp,
         signalkSource: skMeta?.$source || skMeta?.source
       }
+    }
+  }
+
+  private findUnitDefinition(baseUnit: string): UnitMetadata | null {
+    if (!baseUnit) {
+      return null
+    }
+
+    const customDef = this.unitDefinitions[baseUnit]
+    if (customDef) {
+      return this.cloneMetadata(customDef)
+    }
+
+    const metadataDef = Object.values(this.metadata).find(meta => meta.baseUnit === baseUnit)
+    if (metadataDef) {
+      return this.cloneMetadata(metadataDef)
+    }
+
+    const comprehensiveDef = Object.values(comprehensiveDefaultUnits).find(meta => meta.baseUnit === baseUnit)
+    if (comprehensiveDef) {
+      return this.cloneMetadata(comprehensiveDef)
+    }
+
+    const defaultDef = Object.values(defaultUnitsMetadata).find(meta => meta.baseUnit === baseUnit)
+    if (defaultDef) {
+      return this.cloneMetadata(defaultDef)
+    }
+
+    return null
+  }
+
+  convertUnitValue(
+    baseUnit: string,
+    targetUnit: string,
+    rawValue: unknown,
+    options?: { displayFormat?: string; useLocalTime?: boolean }
+  ): {
+    convertedValue: any
+    formatted: string
+    symbol: string
+    displayFormat: string
+    valueType: PathValueType
+    dateFormat?: string
+    useLocalTime?: boolean
+  } {
+    const definition = this.findUnitDefinition(baseUnit)
+
+    if (!definition) {
+      throw new UnitConversionError(`Unknown base unit: ${baseUnit}`)
+    }
+
+    const conversion = definition.conversions?.[targetUnit]
+    if (!conversion) {
+      throw new UnitConversionError(`No conversion defined from ${baseUnit} to ${targetUnit}`)
+    }
+
+    const isDateConversion = baseUnit === 'RFC 3339 (UTC)' || !!conversion.dateFormat
+
+    if (isDateConversion) {
+      if (typeof rawValue !== 'string') {
+        throw new UnitConversionError('Date conversions require ISO-8601 string values')
+      }
+
+      const dateResult = this.formatDateValue(
+        rawValue,
+        targetUnit,
+        conversion.dateFormat,
+        options?.useLocalTime ?? conversion.useLocalTime
+      )
+
+      return {
+        convertedValue: dateResult.convertedValue,
+        formatted: dateResult.formatted,
+        symbol: conversion.symbol || '',
+        displayFormat: dateResult.displayFormat,
+        valueType: 'date',
+        dateFormat: dateResult.dateFormat,
+        useLocalTime: dateResult.useLocalTime
+      }
+    }
+
+    let numericValue: number
+
+    if (typeof rawValue === 'number') {
+      numericValue = rawValue
+    } else if (typeof rawValue === 'string' && rawValue.trim() !== '') {
+      const parsed = Number(rawValue)
+      if (Number.isNaN(parsed)) {
+        throw new UnitConversionError('Value must be numeric for this conversion')
+      }
+      numericValue = parsed
+    } else {
+      throw new UnitConversionError('Value must be numeric for this conversion')
+    }
+
+    const convertedValue = evaluateFormula(conversion.formula, numericValue)
+
+    const displayFormat = options?.displayFormat || '0.0'
+    const formattedNumber = formatNumber(convertedValue, displayFormat)
+    const symbol = conversion.symbol || ''
+    const formatted = symbol ? `${formattedNumber} ${symbol}`.trim() : formattedNumber
+
+    return {
+      convertedValue,
+      formatted,
+      symbol,
+      displayFormat,
+      valueType: 'number'
     }
   }
 

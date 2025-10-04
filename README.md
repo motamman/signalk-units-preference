@@ -362,6 +362,79 @@ Converts any value type (number, boolean, string, date). Accepts both JSON and f
 }
 ```
 
+#### Convert by Base Unit
+```http
+POST /plugins/signalk-units-preference/unit-convert
+```
+
+Convert a single value directly from a base unit to a target unit without referencing a SignalK path.
+
+**Request Body:**
+```json
+{
+  "baseUnit": "m/s",
+  "targetUnit": "knots",
+  "value": 5.14
+}
+```
+
+**Example Response:**
+```json
+{
+  "baseUnit": "m/s",
+  "targetUnit": "knots",
+  "original": 5.14,
+  "result": {
+    "convertedValue": 9.999, 
+    "formatted": "10.0 kn",
+    "symbol": "kn",
+    "displayFormat": "0.0",
+    "valueType": "number"
+  }
+}
+```
+
+Date/time conversions use ISO-8601 strings and support the same formats as the `dateTime` category:
+```json
+{
+  "baseUnit": "RFC 3339 (UTC)",
+  "targetUnit": "time-am/pm-local",
+  "value": "2025-10-04T00:17:48.000Z"
+}
+```
+
+```json
+{
+  "baseUnit": "RFC 3339 (UTC)",
+  "targetUnit": "time-am/pm-local",
+  "original": "2025-10-04T00:17:48.000Z",
+  "result": {
+    "convertedValue": "07:17:48 PM",
+    "formatted": "07:17:48 PM",
+    "symbol": "",
+    "displayFormat": "time-am/pm",
+    "valueType": "date",
+    "dateFormat": "time-am/pm",
+    "useLocalTime": true
+  }
+}
+```
+
+If the base unit, target unit, or value is invalid, the API responds with a `400` error describing the mismatch.
+
+```http
+GET /plugins/signalk-units-preference/unit-convert?baseUnit=m/s&targetUnit=knots&value=5.14
+```
+
+The GET variant accepts the same parameters via query string. Optional parameters:
+
+- `displayFormat` – override numeric formatting (e.g., `0.00`)
+- `useLocalTime` – optional override for date/time conversions (defaults to the target unit suffix, e.g. `*-local`)
+
+```bash
+curl "http://localhost:3000/plugins/signalk-units-preference/unit-convert?baseUnit=RFC%203339%20(UTC)&targetUnit=time-am/pm-local&value=2025-10-04T00:17:48.000Z"
+```
+
 ### Schema & Metadata
 
 #### Get Unit Schema
