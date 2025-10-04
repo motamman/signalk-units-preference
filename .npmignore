@@ -1,0 +1,19 @@
+# Source files
+src/
+tsconfig.json
+
+# Build artifacts not needed in package
+*.tsbuildinfo
+
+# Tests and configs
+.github/
+.gitignore
+*.log
+
+# Local data not meant for package
+node_modules/
+data/
+presets/custom/
+
+# Misc
+.DS_Store

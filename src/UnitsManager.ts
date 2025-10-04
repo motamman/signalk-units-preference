@@ -510,13 +510,18 @@ export class UnitsManager {
             const presetData = JSON.parse(fs.readFileSync(presetPath, 'utf-8'))
             const preset = presetData.categories
 
-            // Apply preset categories
+            // Apply preset categories (create missing categories automatically)
             for (const [category, settings] of Object.entries(preset)) {
-              if (this.preferences.categories[category]) {
-                this.preferences.categories[category] = {
-                  targetUnit: (settings as any).targetUnit,
-                  displayFormat: (settings as any).displayFormat
-                }
+              const castSettings = settings as {
+                targetUnit?: string
+                displayFormat?: string
+                baseUnit?: string
+              }
+
+              this.preferences.categories[category] = {
+                targetUnit: castSettings.targetUnit || '',
+                displayFormat: castSettings.displayFormat || '0.0',
+                ...(castSettings.baseUnit ? { baseUnit: castSettings.baseUnit } : {})
               }
             }
 
