@@ -41,5 +41,5 @@
     "@types/node": "^20.0.0",
     "typescript": "^5.3.0"
   },
-  "signalk-plugin-enabled-by-default": false
+  "signalk-plugin-enabled-by-default": true
 }
