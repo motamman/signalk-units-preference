@@ -17,7 +17,8 @@ let unitSchema = {
   baseUnits: [],
   categories: [],
   targetUnitsByBase: {},
-  categoryToBaseUnit: {}
+  categoryToBaseUnit: {},
+  coreCategories: []
 }
 
 function sanitizeIdSegment(value) {
@@ -354,6 +355,28 @@ function checkPresetDirty() {
     return false
   }
 
+  const currentCategories = Object.keys(preferences.categories)
+  const originalCategories = Object.keys(originalPresetState)
+
+  // Check if any categories were added or removed
+  if (currentCategories.length !== originalCategories.length) {
+    return true
+  }
+
+  // Check if a category exists in current but not in original (added)
+  for (const category of currentCategories) {
+    if (!originalPresetState[category]) {
+      return true
+    }
+  }
+
+  // Check if a category exists in original but not in current (removed)
+  for (const category of originalCategories) {
+    if (!preferences.categories[category]) {
+      return true
+    }
+  }
+
   // Compare current categories with original state
   for (const [category, current] of Object.entries(preferences.categories)) {
     const original = originalPresetState[category]
@@ -456,9 +479,9 @@ function renderCategories() {
       const pref = preferences?.categories?.[category] || { targetUnit: '', displayFormat: '0.0' }
       const schemaBaseUnit = unitSchema.categoryToBaseUnit[category] || ''
       const prefBaseUnit = pref.baseUnit
-      const isCustom =
-        prefBaseUnit !== undefined && prefBaseUnit !== schemaBaseUnit && prefBaseUnit !== ''
-      const baseUnit = isCustom ? prefBaseUnit : schemaBaseUnit
+      // A category is core if it's in the coreCategories list from the backend
+      const isCustom = !unitSchema.coreCategories?.includes(category)
+      const baseUnit = prefBaseUnit || schemaBaseUnit
       const targetUnit = pref.targetUnit || 'none'
       const displayFormat = pref.displayFormat || '0.0'
       const badge = isCustom
@@ -1052,13 +1075,22 @@ async function addCustomCategory() {
 
     showStatus(`Created custom category: ${categoryName}`, 'success')
 
+    // Update local preferences (don't reload data to preserve dirty state)
+    if (!preferences.categories) {
+      preferences.categories = {}
+    }
+    preferences.categories[categoryName] = categoryPref
+
     // Clear form
     document.getElementById('newCategoryName').value = ''
     document.getElementById('newCategoryFormat').value = '0.0'
 
-    // Reload schema and data to pick up new category
+    // Reload schema to pick up new category
     await loadSchema()
-    await loadData()
+
+    // Re-render UI with updated state (without resetting dirty tracking)
+    renderCategories()
+    renderCurrentPreset()
 
     // Reinitialize dropdowns to include new category
     initializePatternDropdowns()
@@ -1083,9 +1115,17 @@ async function deleteCategory(category) {
 
     showStatus(`Deleted category: ${category}`, 'success')
 
-    // Reload schema and data to remove deleted category
+    // Remove from local preferences (don't reload data to preserve dirty state)
+    if (preferences.categories && preferences.categories[category]) {
+      delete preferences.categories[category]
+    }
+
+    // Reload schema to remove deleted category
     await loadSchema()
-    await loadData()
+
+    // Re-render UI with updated state (without resetting dirty tracking)
+    renderCategories()
+    renderCurrentPreset()
 
     // Reinitialize dropdowns to remove deleted category
     initializePatternDropdowns()
@@ -1317,9 +1357,9 @@ function editCategory(category) {
   const pref = preferences?.categories?.[category] || {}
   const schemaBaseUnit = unitSchema.categoryToBaseUnit[category] || ''
   const prefBaseUnit = pref.baseUnit
-  const isCustom =
-    prefBaseUnit !== undefined && prefBaseUnit !== schemaBaseUnit && prefBaseUnit !== ''
-  const baseUnit = isCustom ? prefBaseUnit : schemaBaseUnit
+  // A category is core if it's in the coreCategories list from the backend
+  const isCustom = !unitSchema.coreCategories?.includes(category)
+  const baseUnit = prefBaseUnit || schemaBaseUnit
   const targetUnit = pref.targetUnit || ''
   const displayFormat = pref.displayFormat || '0.0'
 
