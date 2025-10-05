@@ -1473,6 +1473,47 @@ Apache-2.0
 
 ## Changelog
 
+### [0.5.0-beta.3] - 2025-10-05
+
+#### Added
+- **Unitless Category**: New core category for dimensionless values
+  - Base unit: `tr` (tabula rasa)
+  - Default target unit: `tr` with symbol 'tr'
+  - Identity conversion (tr → tr) for unitless/dimensionless data
+  - Available in all category and pattern dropdowns
+- **Core Categories List**: Schema API now includes `coreCategories` array
+  - Distinguishes core categories from custom user-created categories
+  - Frontend uses this list for proper CORE vs CUSTOM badge display
+  - Prevents misidentification of custom categories as core
+
+#### Fixed
+- **Custom Category Detection Bug**: Custom categories were incorrectly showing as CORE
+  - Fixed frontend detection logic to use `coreCategories` list from backend
+  - Custom categories now properly show CUSTOM badge with Edit and Delete buttons
+  - Core categories correctly show CORE badge with Edit button only
+- **Dirty State Tracking**: Adding or deleting custom categories now marks preset as modified
+  - `checkPresetDirty()` now detects when categories are added
+  - `checkPresetDirty()` now detects when categories are removed
+  - `addCustomCategory()` preserves dirty state instead of resetting it
+  - `deleteCategory()` preserves dirty state instead of resetting it
+  - Orange "Modified" banner correctly appears after category changes
+- **Backend Category Pollution**: Core categories no longer get `baseUnit` saved to preferences
+  - `ensureCategoryDefaults()` only adds `baseUnit` to custom categories
+  - Core categories rely on static `categoryToBaseUnit` map
+  - Prevents confusion between core and custom categories in preferences file
+
+#### Changed
+- **Category Detection Logic**: Simplified to check against static core categories list
+  - Removed complex baseUnit comparison logic
+  - More reliable and maintainable
+  - Consistent behavior across frontend and backend
+
+#### Technical Changes
+- Added `coreCategories` field to `getUnitSchema()` return type
+- Enhanced `ensureCategoryDefaults()` with core category check
+- Updated frontend `unitSchema` initialization to include `coreCategories` array
+- Improved dirty state detection in category add/delete operations
+
 ### [0.5.0-beta.2] - 2025-10-05
 
 #### Added

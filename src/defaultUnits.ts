@@ -380,7 +380,7 @@ export const defaultUnitsMetadata: UnitsMetadataStore = {
     baseUnit: 'tr',
     category: 'unitless',
     conversions: {
-      tr: { formula: 'value * 1', inverseFormula: 'value * 1', symbol: '' }
+      tr: { formula: 'value * 1', inverseFormula: 'value * 1', symbol: 'tr' }
     }
   }
 }

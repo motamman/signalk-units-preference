@@ -557,6 +557,8 @@ export const comprehensiveDefaultUnits: UnitsMetadataStore = {
   'tabula-rasa': {
     baseUnit: 'tr',
     category: 'unitless',
-    conversions: {}
+    conversions: {
+      tr: { formula: 'value * 1', inverseFormula: 'value * 1', symbol: 'tr' }
+    }
   }
 }
