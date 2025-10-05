@@ -1033,11 +1033,96 @@
 
         <div id="metadata" class="tab-content">
             <div class="section">
-                <h2>All Paths - Metadata Reference</h2>
-                <p style="color: #7f8c8d; margin-bottom: 20px;">
-                    View all unit definitions and available conversions.
-                </p>
-                <div id="metadataList" class="loader">Loading...</div>
+                <div class="collapsible-header" onclick="toggleCollapsible('metadataTableContent')">
+                    <h2>All Paths - Metadata Reference</h2>
+                    <span class="collapse-icon">▼</span>
+                </div>
+                <div id="metadataTableContent" class="collapsible-content">
+                    <p style="color: #7f8c8d; margin-bottom: 20px;">
+                        View all unit definitions and available conversions.
+                    </p>
+                    <div id="metadataList" class="loader">Loading...</div>
+                </div>
+            </div>
+
+            <div class="section">
+                <div class="collapsible-header" onclick="toggleCollapsible('apiEndpointsContent')">
+                    <h2>Universal API Endpoints</h2>
+                    <span class="collapse-icon collapsed">▼</span>
+                </div>
+                <div id="apiEndpointsContent" class="collapsible-content collapsed">
+                    <p style="color: #7f8c8d; margin-bottom: 20px;">
+                        REST API endpoints for integrating with other applications. All endpoints are prefixed with <code style="background: #f8f9fa; padding: 2px 6px; border-radius: 3px;">/plugins/signalk-units-preference</code>
+                    </p>
+
+                    <div style="display: grid; gap: 20px;">
+                        <!-- Conversion Endpoints -->
+                        <div style="background: #f8f9fa; padding: 15px; border-radius: 6px; border-left: 4px solid #667eea;">
+                            <h3 style="margin: 0 0 10px 0; color: #667eea; font-size: 1.1rem;">Conversion Endpoints</h3>
+                            <ul class="api-test-list">
+                                <li><a href="/plugins/signalk-units-preference/conversion/navigation.speedOverGround" target="_blank">/conversion/:path</a> - Get conversion metadata for a path</li>
+                                <li><a href="/plugins/signalk-units-preference/convert/navigation.speedOverGround/5.14" target="_blank">/convert/:path/:value</a> - Convert a value (simple types)</li>
+                                <li><a href="/plugins/signalk-units-preference/unit-convert?baseUnit=m/s&targetUnit=knots&value=5.14" target="_blank">/unit-convert?baseUnit=...&targetUnit=...&value=...</a> - Convert by base unit</li>
+                            </ul>
+                        </div>
+
+                        <!-- Schema & Metadata -->
+                        <div style="background: #f8f9fa; padding: 15px; border-radius: 6px; border-left: 4px solid #2ecc71;">
+                            <h3 style="margin: 0 0 10px 0; color: #2ecc71; font-size: 1.1rem;">Schema & Metadata</h3>
+                            <ul class="api-test-list">
+                                <li><a href="/plugins/signalk-units-preference/schema" target="_blank">/schema</a> - Get available base units, categories, and target units</li>
+                                <li><a href="/plugins/signalk-units-preference/metadata" target="_blank">/metadata</a> - Get all path metadata (built-in defaults)</li>
+                                <li><a href="/plugins/signalk-units-preference/paths" target="_blank">/paths</a> - Get all paths with configuration</li>
+                            </ul>
+                        </div>
+
+                        <!-- Category Preferences -->
+                        <div style="background: #f8f9fa; padding: 15px; border-radius: 6px; border-left: 4px solid #e67e22;">
+                            <h3 style="margin: 0 0 10px 0; color: #e67e22; font-size: 1.1rem;">Category Preferences</h3>
+                            <ul class="api-test-list">
+                                <li><a href="/plugins/signalk-units-preference/categories" target="_blank">/categories</a> - Get all categories</li>
+                                <li><a href="/plugins/signalk-units-preference/categories/speed" target="_blank">/categories/:category</a> - Get specific category</li>
+                            </ul>
+                        </div>
+
+                        <!-- Path Overrides -->
+                        <div style="background: #f8f9fa; padding: 15px; border-radius: 6px; border-left: 4px solid #3498db;">
+                            <h3 style="margin: 0 0 10px 0; color: #3498db; font-size: 1.1rem;">Path Overrides</h3>
+                            <ul class="api-test-list">
+                                <li><a href="/plugins/signalk-units-preference/overrides" target="_blank">/overrides</a> - Get all path overrides</li>
+                            </ul>
+                        </div>
+
+                        <!-- Path Patterns -->
+                        <div style="background: #f8f9fa; padding: 15px; border-radius: 6px; border-left: 4px solid #9b59b6;">
+                            <h3 style="margin: 0 0 10px 0; color: #9b59b6; font-size: 1.1rem;">Path Patterns</h3>
+                            <ul class="api-test-list">
+                                <li><a href="/plugins/signalk-units-preference/patterns" target="_blank">/patterns</a> - Get all patterns</li>
+                            </ul>
+                        </div>
+
+                        <!-- Presets -->
+                        <div style="background: #f8f9fa; padding: 15px; border-radius: 6px; border-left: 4px solid #e74c3c;">
+                            <h3 style="margin: 0 0 10px 0; color: #e74c3c; font-size: 1.1rem;">Presets</h3>
+                            <ul class="api-test-list">
+                                <li><a href="/plugins/signalk-units-preference/current-preset" target="_blank">/current-preset</a> - Get currently applied preset</li>
+                                <li><a href="/plugins/signalk-units-preference/presets/custom" target="_blank">/presets/custom</a> - List custom presets</li>
+                            </ul>
+                        </div>
+
+                        <!-- Unit Definitions -->
+                        <div style="background: #f8f9fa; padding: 15px; border-radius: 6px; border-left: 4px solid #1abc9c;">
+                            <h3 style="margin: 0 0 10px 0; color: #1abc9c; font-size: 1.1rem;">Unit Definitions</h3>
+                            <ul class="api-test-list">
+                                <li><a href="/plugins/signalk-units-preference/unit-definitions" target="_blank">/unit-definitions</a> - Get all unit definitions</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <p style="color: #7f8c8d; margin-top: 20px; font-size: 13px;">
+                        💡 <strong>Tip:</strong> Click any link to test the endpoints in your browser. For full API documentation, see the README.
+                    </p>
+                </div>
             </div>
         </div>
 

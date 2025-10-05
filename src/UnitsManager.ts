@@ -1081,26 +1081,44 @@ export class UnitsManager {
       return null
     }
 
-    const customDef = this.unitDefinitions[baseUnit]
-    if (customDef) {
-      return this.cloneMetadata(customDef)
-    }
-
-    const metadataDef = Object.values(this.metadata).find(meta => meta.baseUnit === baseUnit)
-    if (metadataDef) {
-      return this.cloneMetadata(metadataDef)
-    }
-
-    const comprehensiveDef = Object.values(comprehensiveDefaultUnits).find(
-      meta => meta.baseUnit === baseUnit
-    )
-    if (comprehensiveDef) {
-      return this.cloneMetadata(comprehensiveDef)
-    }
+    // Search static defaults (these have complete conversion sets)
+    let builtInDef: UnitMetadata | undefined
 
     const defaultDef = Object.values(defaultUnitsMetadata).find(meta => meta.baseUnit === baseUnit)
     if (defaultDef) {
-      return this.cloneMetadata(defaultDef)
+      builtInDef = defaultDef
+    }
+
+    if (!builtInDef) {
+      const comprehensiveDef = Object.values(comprehensiveDefaultUnits).find(
+        meta => meta.baseUnit === baseUnit
+      )
+      if (comprehensiveDef) {
+        builtInDef = comprehensiveDef
+      }
+    }
+
+    // Merge with custom definitions if they exist
+    const customDef = this.unitDefinitions[baseUnit]
+    if (builtInDef && customDef) {
+      // Merge conversions from built-in and custom (custom conversions take priority)
+      return this.cloneMetadata({
+        baseUnit,
+        category: builtInDef.category,
+        conversions: {
+          ...builtInDef.conversions,
+          ...customDef.conversions
+        }
+      })
+    }
+
+    // Return built-in or custom (whichever exists)
+    if (builtInDef) {
+      return this.cloneMetadata(builtInDef)
+    }
+
+    if (customDef) {
+      return this.cloneMetadata(customDef)
     }
 
     return null
