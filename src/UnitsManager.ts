@@ -1435,13 +1435,27 @@ export class UnitsManager {
           targetUnit = matchingPattern.targetUnit || categoryPref?.targetUnit
           displayUnit = targetUnit || baseUnit || '-'
         } else if (skMetadata?.units) {
-          status = 'signalk'
-          source = 'SignalK Metadata'
+          // Try to auto-assign category from SignalK base unit
           baseUnit = skMetadata.units
           category =
             metadataEntry?.category || this.getCategoryFromBaseUnit(skMetadata.units) || '-'
-          displayUnit = baseUnit
-          targetUnit = undefined
+
+          // Check if this category has a preference (auto-assign to category)
+          const categoryPref = category !== '-' ? this.preferences.categories?.[category] : null
+
+          if (categoryPref && categoryPref.targetUnit) {
+            // Category has preferences - use them (auto-category assignment)
+            status = 'auto'
+            source = 'SignalK Auto'
+            targetUnit = categoryPref.targetUnit
+            displayUnit = targetUnit || baseUnit
+          } else {
+            // No category preference - SignalK only (pass-through)
+            status = 'signalk'
+            source = 'SignalK Only'
+            displayUnit = baseUnit
+            targetUnit = undefined
+          }
         } else {
           status = 'none'
           source = 'None'

@@ -646,12 +646,29 @@ async function renderMetadata() {
       const categoryTarget = preferences?.categories?.[matchingPattern.category]?.targetUnit
       displayUnit = matchingPattern.targetUnit || categoryTarget || baseUnit || '-'
     } else if (hasSignalKMetadata) {
-      // Blue: Has only SignalK metadata
-      color = '#cfe2ff'
-      status = 'SignalK Only'
+      // Try to auto-assign category from SignalK base unit
       baseUnit = skMeta.units
-      category = '-'
-      displayUnit = baseUnit
+
+      // Find category for this base unit
+      category = unitSchema?.categoryToBaseUnit
+        ? Object.entries(unitSchema.categoryToBaseUnit).find(([, unit]) => unit === baseUnit)?.[0]
+        : null
+
+      // Check if this category has a preference
+      const categoryPref = category ? preferences?.categories?.[category] : null
+
+      if (categoryPref && categoryPref.targetUnit) {
+        // Darker blue: Auto-assigned to category
+        color = '#b3d9ff'
+        status = 'SignalK Auto'
+        displayUnit = categoryPref.targetUnit
+      } else {
+        // Light blue: Has only SignalK metadata (no category mapping)
+        color = '#cfe2ff'
+        status = 'SignalK Only'
+        category = '-'
+        displayUnit = baseUnit
+      }
     } else {
       // Gray: Has neither
       color = '#f8f9fa'
@@ -846,6 +863,7 @@ function renderMetadataTable(pathInfo) {
         <div style="display: flex; gap: 20px; font-size: 13px; flex-wrap: wrap;">
           <div><span style="display: inline-block; width: 15px; height: 15px; background: #d4edda; border: 1px solid #c3e6cb; margin-right: 5px;"></span> Path Override (<span id="overrideCount">${window.metadataPathInfo.filter(p => p.status === 'Path Override').length}</span>)</div>
           <div><span style="display: inline-block; width: 15px; height: 15px; background: #fff3cd; border: 1px solid #ffc107; margin-right: 5px;"></span> Pattern Match (<span id="patternCount">${window.metadataPathInfo.filter(p => p.status.startsWith('Pattern:')).length}</span>)</div>
+          <div><span style="display: inline-block; width: 15px; height: 15px; background: #b3d9ff; border: 1px solid #9ec5fe; margin-right: 5px;"></span> SignalK Auto (<span id="autoCount">${window.metadataPathInfo.filter(p => p.status === 'SignalK Auto').length}</span>)</div>
           <div><span style="display: inline-block; width: 15px; height: 15px; background: #cfe2ff; border: 1px solid #9ec5fe; margin-right: 5px;"></span> SignalK Only (<span id="signalkCount">${window.metadataPathInfo.filter(p => p.status === 'SignalK Only').length}</span>)</div>
           <div><span style="display: inline-block; width: 15px; height: 15px; background: #f8f9fa; border: 1px solid #dee2e6; margin-right: 5px;"></span> No Metadata (<span id="noneCount">${window.metadataPathInfo.filter(p => p.status === 'None').length}</span>)</div>
         </div>
@@ -910,9 +928,10 @@ function renderMetadataTable(pathInfo) {
         ? `<a href="${API_BASE}/convert/${info.path}/${encodedCurrentValue}" target="_blank" title="Open conversion in new tab - test GET endpoint with current value (${currentValue})" style="color: #e67e22; margin-left: 4px; text-decoration: none; font-size: 14px;">🔗</a>`
         : ''
 
-      // Add pattern icon if not already a pattern
+      // Add pattern icon if not already a pattern or auto-assigned
       const hasPattern = info.status.startsWith('Pattern:')
-      const patternIcon = !hasPattern
+      const hasAuto = info.status === 'SignalK Auto'
+      const patternIcon = !hasPattern && !hasAuto
         ? `<button onclick="createPatternFromPath('${info.path.replace(/'/g, "\\'")}', '${info.category}')" title="Create pattern rule - define a wildcard pattern based on this path to match similar paths" style="color: #f39c12; margin-left: 4px; background: none; border: none; cursor: pointer; font-size: 14px; padding: 0;">📋</button>`
         : ''
 
