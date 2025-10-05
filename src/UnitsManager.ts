@@ -74,7 +74,7 @@ const DEFAULT_CATEGORY_PREFERENCES: Record<string, CategoryPreference & { baseUn
   angle: { targetUnit: 'deg', displayFormat: '0' },
   percentage: { targetUnit: 'percent', displayFormat: '0' },
   dateTime: { targetUnit: 'time-am/pm-local', displayFormat: 'time-am/pm' },
-  epoch: { targetUnit: 'time-am/pm-local', displayFormat: 'time-am/pm', baseUnit: 'Epoch Seconds' },
+  epoch: { targetUnit: 'time-am/pm-local', displayFormat: 'time-am/pm' },
   volume: { targetUnit: 'gal', displayFormat: '0.0' },
   length: { targetUnit: 'ft', displayFormat: '0.0' },
   angularVelocity: { targetUnit: 'deg/s', displayFormat: '0.0' },
@@ -84,7 +84,8 @@ const DEFAULT_CATEGORY_PREFERENCES: Record<string, CategoryPreference & { baseUn
   frequency: { targetUnit: 'rpm', displayFormat: '0.0' },
   time: { targetUnit: 's', displayFormat: '0.0' },
   charge: { targetUnit: 'Ah', displayFormat: '0.0' },
-  volumeRate: { targetUnit: 'gal/h', displayFormat: '0.0' }
+  volumeRate: { targetUnit: 'gal/h', displayFormat: '0.0' },
+  unitless: { targetUnit: 'tr', displayFormat: '0.0' }
 }
 
 const DEFAULT_PATH_PATTERNS: PathPatternRule[] = [
@@ -691,7 +692,10 @@ export class UnitsManager {
         continue
       }
 
-      if (baseUnit && !existing.baseUnit) {
+      // Only add baseUnit if this is a custom category (not in the static schema)
+      // Core categories get their baseUnit from the categoryToBaseUnit map
+      const isCoreCategory = !!categoryToBaseUnit[category]
+      if (baseUnit && !existing.baseUnit && !isCoreCategory) {
         existing.baseUnit = baseUnit
         updated = true
       }
@@ -1682,6 +1686,7 @@ export class UnitsManager {
     categories: string[]
     targetUnitsByBase: Record<string, string[]>
     categoryToBaseUnit: Record<string, string>
+    coreCategories: string[]
   } {
     // Extract unique base units from comprehensive defaults
     const baseUnitsSet = new Set<string>()
@@ -1691,6 +1696,9 @@ export class UnitsManager {
     // Start with the static category-to-baseUnit mapping from defaultUnits
     // This ensures standard SignalK categories use the correct base units
     const categoryToBaseUnitMap: Record<string, string> = { ...categoryToBaseUnit }
+
+    // Track which categories are core (from the static schema)
+    const coreCategories = Object.keys(categoryToBaseUnit)
 
     // Scan custom categories from preferences
     for (const [category, pref] of Object.entries(this.preferences.categories || {})) {
@@ -1764,7 +1772,8 @@ export class UnitsManager {
       baseUnits,
       categories: Array.from(categoriesSet).sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase())),
       targetUnitsByBase: targetUnitsMap,
-      categoryToBaseUnit: categoryToBaseUnitMap
+      categoryToBaseUnit: categoryToBaseUnitMap,
+      coreCategories
     }
   }
 

@@ -373,6 +373,15 @@ export const defaultUnitsMetadata: UnitsMetadataStore = {
       percent: { formula: 'value * 100', inverseFormula: 'value * 0.01', symbol: '%' },
       ratio: { formula: 'value * 1', inverseFormula: 'value * 1', symbol: '' }
     }
+  },
+
+  // UNITLESS (tabula rasa - dimensionless values)
+  'performance.cpuUsage': {
+    baseUnit: 'tr',
+    category: 'unitless',
+    conversions: {
+      tr: { formula: 'value * 1', inverseFormula: 'value * 1', symbol: '' }
+    }
   }
 }
 
@@ -398,5 +407,6 @@ export const categoryToBaseUnit: Record<string, string> = {
   volumeRate: 'm3/s',
   length: 'm',
   dateTime: 'RFC 3339 (UTC)',
-  epoch: 'Epoch Seconds'
+  epoch: 'Epoch Seconds',
+  unitless: 'tr'
 }
