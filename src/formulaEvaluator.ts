@@ -15,7 +15,16 @@ export function evaluateFormula(formula: string, value: number): number {
   }
 
   // Additional check: only allow specific Math methods
-  const allowedMathFunctions = ['Math.pow', 'Math.sqrt', 'Math.abs', 'Math.round', 'Math.floor', 'Math.ceil', 'Math.min', 'Math.max']
+  const allowedMathFunctions = [
+    'Math.pow',
+    'Math.sqrt',
+    'Math.abs',
+    'Math.round',
+    'Math.floor',
+    'Math.ceil',
+    'Math.min',
+    'Math.max'
+  ]
   const hasMath = /Math\.\w+/.test(expression)
   if (hasMath) {
     const mathFunctions = expression.match(/Math\.\w+/g) || []

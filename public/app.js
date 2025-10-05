@@ -956,9 +956,10 @@ function renderMetadataTable(pathInfo) {
       // Add pattern icon if not already a pattern or auto-assigned
       const hasPattern = info.status.startsWith('Pattern:')
       const hasAuto = info.status === 'SignalK Auto'
-      const patternIcon = !hasPattern && !hasAuto
-        ? `<button onclick="createPatternFromPath('${info.path.replace(/'/g, "\\'")}', '${info.category}')" title="Create pattern rule - define a wildcard pattern based on this path to match similar paths" style="color: #f39c12; margin-left: 4px; background: none; border: none; cursor: pointer; font-size: 14px; padding: 0;">📋</button>`
-        : ''
+      const patternIcon =
+        !hasPattern && !hasAuto
+          ? `<button onclick="createPatternFromPath('${info.path.replace(/'/g, "\\'")}', '${info.category}')" title="Create pattern rule - define a wildcard pattern based on this path to match similar paths" style="color: #f39c12; margin-left: 4px; background: none; border: none; cursor: pointer; font-size: 14px; padding: 0;">📋</button>`
+          : ''
 
       // Add override icon if not already an override
       const hasOverride = info.status === 'Path Override'
@@ -2232,16 +2233,19 @@ async function addConversion() {
   }
 
   try {
-    const res = await fetch(`${API_BASE}/unit-definitions/${encodeURIComponent(baseUnit)}/conversions`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        targetUnit,
-        formula,
-        inverseFormula,
-        symbol
-      })
-    })
+    const res = await fetch(
+      `${API_BASE}/unit-definitions/${encodeURIComponent(baseUnit)}/conversions`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          targetUnit,
+          formula,
+          inverseFormula,
+          symbol
+        })
+      }
+    )
 
     if (!res.ok) {
       const errorData = await res.json()
@@ -2661,16 +2665,19 @@ async function saveEditConversion(baseUnit, targetUnit) {
 
   try {
     // Use POST to overwrite the existing conversion
-    const res = await fetch(`${API_BASE}/unit-definitions/${encodeURIComponent(baseUnit)}/conversions`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        targetUnit,
-        formula,
-        inverseFormula,
-        symbol
-      })
-    })
+    const res = await fetch(
+      `${API_BASE}/unit-definitions/${encodeURIComponent(baseUnit)}/conversions`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          targetUnit,
+          formula,
+          inverseFormula,
+          symbol
+        })
+      }
+    )
 
     if (!res.ok) throw new Error('Failed to update conversion')
 

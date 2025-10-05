@@ -377,7 +377,11 @@ export class UnitsManager {
 
       metadata = {
         baseUnit,
-        category: customDef?.category || builtInDef?.category || this.getCategoryFromBaseUnit(baseUnit) || 'custom',
+        category:
+          customDef?.category ||
+          builtInDef?.category ||
+          this.getCategoryFromBaseUnit(baseUnit) ||
+          'custom',
         conversions
       }
     }
@@ -416,7 +420,11 @@ export class UnitsManager {
 
           metadata = {
             baseUnit,
-            category: customDef?.category || builtInDef?.category || this.getCategoryFromBaseUnit(baseUnit) || 'custom',
+            category:
+              customDef?.category ||
+              builtInDef?.category ||
+              this.getCategoryFromBaseUnit(baseUnit) ||
+              'custom',
             conversions
           }
         }
@@ -884,7 +892,9 @@ export class UnitsManager {
     // If this base unit doesn't exist in custom definitions, create it
     if (!this.unitDefinitions[baseUnit]) {
       // Check if it exists in built-in definitions
-      const builtInDef = Object.values(comprehensiveDefaultUnits).find(meta => meta.baseUnit === baseUnit)
+      const builtInDef = Object.values(comprehensiveDefaultUnits).find(
+        meta => meta.baseUnit === baseUnit
+      )
 
       if (builtInDef) {
         // Create a custom extension for this built-in base unit
@@ -1757,7 +1767,9 @@ export class UnitsManager {
     }
 
     // Convert sets to arrays and create labeled base units
-    const baseUnitsArray = Array.from(baseUnitsSet).sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()))
+    const baseUnitsArray = Array.from(baseUnitsSet).sort((a, b) =>
+      a.toLowerCase().localeCompare(b.toLowerCase())
+    )
     const baseUnits = baseUnitsArray.map(unit => ({
       value: unit,
       label: this.getBaseUnitLabel(unit)
@@ -1765,12 +1777,16 @@ export class UnitsManager {
 
     const targetUnitsMap: Record<string, string[]> = {}
     for (const [baseUnit, units] of Object.entries(targetUnitsByBase)) {
-      targetUnitsMap[baseUnit] = Array.from(units).sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()))
+      targetUnitsMap[baseUnit] = Array.from(units).sort((a, b) =>
+        a.toLowerCase().localeCompare(b.toLowerCase())
+      )
     }
 
     return {
       baseUnits,
-      categories: Array.from(categoriesSet).sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase())),
+      categories: Array.from(categoriesSet).sort((a, b) =>
+        a.toLowerCase().localeCompare(b.toLowerCase())
+      ),
       targetUnitsByBase: targetUnitsMap,
       categoryToBaseUnit: categoryToBaseUnitMap,
       coreCategories
