@@ -670,8 +670,8 @@ async function renderMetadata() {
         displayUnit = baseUnit
       }
     } else {
-      // Gray: Has neither
-      color = '#f8f9fa'
+      // Light purple: Has neither
+      color = '#f3e8ff'
       status = 'None'
       baseUnit = '-'
       category = '-'
@@ -860,12 +860,14 @@ function renderMetadataTable(pathInfo) {
           <input type="text" id="metadataSearchFilter" placeholder="Search all columns..." style="padding: 6px 10px; flex: 1; min-width: 200px; border: 1px solid #dee2e6; border-radius: 4px;">
           <span id="metadataResultCount" style="padding: 6px 10px; font-size: 13px; color: #6c757d;">Showing ${totalPaths} paths</span>
         </div>
-        <div style="display: flex; gap: 20px; font-size: 13px; flex-wrap: wrap;">
-          <div><span style="display: inline-block; width: 15px; height: 15px; background: #d4edda; border: 1px solid #c3e6cb; margin-right: 5px;"></span> Path Override (<span id="overrideCount">${window.metadataPathInfo.filter(p => p.status === 'Path Override').length}</span>)</div>
-          <div><span style="display: inline-block; width: 15px; height: 15px; background: #fff3cd; border: 1px solid #ffc107; margin-right: 5px;"></span> Pattern Match (<span id="patternCount">${window.metadataPathInfo.filter(p => p.status.startsWith('Pattern:')).length}</span>)</div>
-          <div><span style="display: inline-block; width: 15px; height: 15px; background: #b3d9ff; border: 1px solid #9ec5fe; margin-right: 5px;"></span> SignalK Auto (<span id="autoCount">${window.metadataPathInfo.filter(p => p.status === 'SignalK Auto').length}</span>)</div>
-          <div><span style="display: inline-block; width: 15px; height: 15px; background: #cfe2ff; border: 1px solid #9ec5fe; margin-right: 5px;"></span> SignalK Only (<span id="signalkCount">${window.metadataPathInfo.filter(p => p.status === 'SignalK Only').length}</span>)</div>
-          <div><span style="display: inline-block; width: 15px; height: 15px; background: #f8f9fa; border: 1px solid #dee2e6; margin-right: 5px;"></span> No Metadata (<span id="noneCount">${window.metadataPathInfo.filter(p => p.status === 'None').length}</span>)</div>
+        <div style="display: flex; gap: 20px; font-size: 13px; flex-wrap: wrap; align-items: center;">
+          <div class="metadata-filter-label" onclick="filterMetadataByStatus('Path Override', event)" style="cursor: pointer; padding-bottom: 4px; border-bottom: 3px solid transparent;" title="Click to filter by Path Override"><span style="display: inline-block; width: 15px; height: 15px; background: #d4edda; border: 1px solid #c3e6cb; margin-right: 5px;"></span> Path Override (<span id="overrideCount">${window.metadataPathInfo.filter(p => p.status === 'Path Override').length}</span>)</div>
+          <div class="metadata-filter-label" onclick="filterMetadataByStatus('Pattern', event)" style="cursor: pointer; padding-bottom: 4px; border-bottom: 3px solid transparent;" title="Click to filter by Pattern"><span style="display: inline-block; width: 15px; height: 15px; background: #fff3cd; border: 1px solid #ffc107; margin-right: 5px;"></span> Pattern Match (<span id="patternCount">${window.metadataPathInfo.filter(p => p.status.startsWith('Pattern:')).length}</span>)</div>
+          <div class="metadata-filter-label" onclick="filterMetadataByStatus('SignalK Auto', event)" style="cursor: pointer; padding-bottom: 4px; border-bottom: 3px solid transparent;" title="Click to filter by SignalK Auto"><span style="display: inline-block; width: 15px; height: 15px; background: #b3d9ff; border: 1px solid #9ec5fe; margin-right: 5px;"></span> SignalK Auto (<span id="autoCount">${window.metadataPathInfo.filter(p => p.status === 'SignalK Auto').length}</span>)</div>
+          <div class="metadata-filter-label" onclick="filterMetadataByStatus('SignalK Only', event)" style="cursor: pointer; padding-bottom: 4px; border-bottom: 3px solid transparent;" title="Click to filter by SignalK Only"><span style="display: inline-block; width: 15px; height: 15px; background: #cfe2ff; border: 1px solid #9ec5fe; margin-right: 5px;"></span> SignalK Only (<span id="signalkCount">${window.metadataPathInfo.filter(p => p.status === 'SignalK Only').length}</span>)</div>
+          <div class="metadata-filter-label" onclick="filterMetadataByStatus('None', event)" style="cursor: pointer; padding-bottom: 4px; border-bottom: 3px solid transparent;" title="Click to filter by None"><span style="display: inline-block; width: 15px; height: 15px; background: #f3e8ff; border: 1px solid #e0ccff; margin-right: 5px;"></span> No Metadata (<span id="noneCount">${window.metadataPathInfo.filter(p => p.status === 'None').length}</span>)</div>
+          <div class="metadata-filter-label" onclick="filterMetadataByStatus('boolean', event)" style="cursor: pointer; padding-bottom: 4px; border-bottom: 3px solid transparent;" title="Click to filter by Boolean type"><span style="display: inline-block; width: 15px; height: 15px; background: #f3e8ff; border: 1px solid #e0ccff; margin-right: 5px;"></span> Boolean (<span id="booleanCount">${window.metadataPathInfo.filter(p => p.valueType === 'boolean').length}</span>)</div>
+          <button onclick="clearMetadataFilter()" style="padding: 4px 12px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; margin-left: 10px;">Clear</button>
         </div>
       </div>
       <div style="overflow-x: auto;">
@@ -3339,4 +3341,39 @@ function createOverrideFromPath(path) {
       pathInput.focus()
     }
   }, 100)
+}
+
+// Filter metadata table by status
+function filterMetadataByStatus(statusTerm, evt) {
+  const searchInput = document.getElementById('metadataSearchFilter')
+  if (searchInput) {
+    searchInput.value = statusTerm
+    searchInput.dispatchEvent(new Event('input'))
+    searchInput.focus()
+
+    // Update selected state on labels
+    document.querySelectorAll('.metadata-filter-label').forEach(label => {
+      label.style.borderBottomColor = 'transparent'
+      label.style.fontWeight = 'normal'
+    })
+    if (evt && evt.currentTarget) {
+      evt.currentTarget.style.borderBottomColor = '#667eea'
+      evt.currentTarget.style.fontWeight = '600'
+    }
+  }
+}
+
+// Clear metadata filter
+function clearMetadataFilter() {
+  const searchInput = document.getElementById('metadataSearchFilter')
+  if (searchInput) {
+    searchInput.value = ''
+    searchInput.dispatchEvent(new Event('input'))
+
+    // Remove selected state from all labels
+    document.querySelectorAll('.metadata-filter-label').forEach(label => {
+      label.style.borderBottomColor = 'transparent'
+      label.style.fontWeight = 'normal'
+    })
+  }
 }

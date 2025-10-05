@@ -1473,6 +1473,99 @@ Apache-2.0
 
 ## Changelog
 
+### [0.5.0-beta.2] - 2025-10-05
+
+#### Added
+- **SignalK Auto Category Assignment**: Automatic category and conversion assignment based on SignalK base units
+  - Paths with SignalK units (K, V, ratio, etc.) automatically map to categories (temperature, voltage, percentage)
+  - Category preferences automatically applied without manual pattern/override configuration
+  - New "SignalK Auto" status (darker blue) in metadata table
+  - Priority hierarchy: Path Override > Path Pattern > SignalK Auto > SignalK Only > None
+- **Tabula Rasa Base Unit**: Special unitless base unit (`tr`) designed for custom transformations
+  - Blank slate unit with no built-in conversions
+  - Perfect for creating completely custom transformation workflows
+  - Available in all base unit dropdowns
+- **Backup & Restore System**: Complete configuration backup and restore functionality
+  - **Download Backup**: Creates timestamped zip file with all configuration
+  - **Restore Backup**: Upload zip to restore complete system state
+  - **Backup Contents**: All presets (built-in + custom), preferences, and custom unit definitions
+  - **Disaster Recovery**: Protects against corrupted files by backing up base presets
+  - **Warning Dialog**: Confirms before overwriting existing configuration
+  - **Auto-Reload**: Page refreshes after restore to load new configuration
+- **Quick Action Icons in Metadata Tab**: Create patterns and overrides directly from metadata table
+  - **Pattern Icon (📋)**: Pre-populates pattern form with path and category
+  - **Override Icon (📌)**: Pre-populates override form with path
+  - Icons only shown when applicable (not shown if pattern/override already exists)
+  - Auto-expands collapsed forms and scrolls to input
+  - Tab switching with pre-filled data
+- **Enhanced Icon Tooltips**: Detailed explanations for all metadata table icons
+  - 🔧 Conversion Details: "View conversion details - shows base unit, target unit, formula, symbol, and metadata"
+  - 🔗 GET Endpoint: "Open conversion in new tab - test GET endpoint with current value"
+  - ▶️ Run Test: "Run conversion test - convert current value and see result in new tab"
+  - 📋 Create Pattern: "Create pattern rule - define a wildcard pattern based on this path to match similar paths"
+  - 📌 Create Override: "Create path override - set specific units for this exact path (highest priority)"
+- **Clickable Filter Labels**: Metadata legend labels now filter the table on click
+  - Click any status label to search for that status
+  - Click Boolean label to filter by boolean valueType
+  - Visual feedback on hover with tooltips
+- **Clear Filter Button**: Reset metadata table filter
+  - Removes search text
+  - Clears visual selection indicators
+  - Resets to show all paths
+- **Visual Selection Indicators**: Active filter shows visual feedback
+  - Blue underline on selected filter label
+  - Bold text for active filter
+  - Clear visual state management
+- **Alphabetical Sorting**: All dropdowns and lists sorted case-insensitive alphabetically
+  - Categories sorted alphabetically
+  - Base units sorted alphabetically
+  - Target units sorted alphabetically
+  - Unit definitions list sorted alphabetically
+  - Conversion lists within each unit sorted alphabetically
+- **Boolean Type Support**: Detection and filtering for boolean value types
+  - Boolean valueType detection (true/false flags)
+  - Purple filter label in metadata legend
+  - Count of boolean-type paths
+  - Proper handling without treating as unit category
+
+#### Changed
+- **Category Resolution in Pass-Through**: Pass-through conversions now resolve category from base unit
+  - K → temperature category (not 'none')
+  - V → voltage category (not 'none')
+  - ratio → percentage category (not 'none')
+  - Enables category preferences to work with SignalK metadata paths
+- **Consistent Fallback Categories**:
+  - Paths with no base unit → category: 'none'
+  - Paths with unknown base unit → category: 'custom'
+  - Removed inconsistent use of 'custom' for null base units
+- **Header Logo Alignment**: SignalK Units Display Selector logo and text now left-aligned
+  - Logo positioned on left with flexbox alignment
+  - Text vertically centered with image
+  - Cleaner visual hierarchy
+
+#### Fixed
+- **Category Resolution Bug**: Pass-through conversions were hardcoded to category: 'none'
+  - Now correctly resolves category from base unit using `getCategoryFromBaseUnit()`
+  - Fixes voltage (V), temperature (K), and other auto-assignments
+- **Metadata Endpoint Category Bug**: `/paths` endpoint showing inconsistent categories
+  - Changed fallback from 'custom' to 'none' for null base units
+  - Consistent with pass-through conversion behavior
+- **Formula Evaluator Math Functions**: Added support for Math functions in conversion formulas
+  - Whitelisted: Math.pow, Math.sqrt, Math.abs, Math.round, Math.floor, Math.ceil, Math.min, Math.max
+  - Fixes Beaufort wind speed conversions and other complex formulas
+- **Inference Logic**: Removed inference that returned empty conversions
+  - `inferMetadataFromSignalK()` now returns null instead of metadata with empty conversions
+  - Allows fallback code to properly merge conversions from comprehensiveDefaultUnits
+
+#### Technical Changes
+- Added archiver and adm-zip dependencies for backup/restore
+- Enhanced `resolveMetadataForPath()` to merge built-in and custom conversions
+- Improved metadata resolution hierarchy with auto-category assignment
+- Better error messages and user feedback in backup/restore operations
+- Added `filterMetadataByStatus()` and `clearMetadataFilter()` functions
+- Enhanced `createPatternFromPath()` and `createOverrideFromPath()` with form expansion
+- Pattern icon hidden for SignalK Auto paths (already have category assignment)
+
 ### [0.5.0-beta.1] - 2025-10-03
 
 #### Added
