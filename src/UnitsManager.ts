@@ -1017,7 +1017,7 @@ export class UnitsManager {
       inverseFormula: 'value',
       displayFormat: displayFormat,
       symbol: symbol,
-      category: 'none',
+      category: this.getCategoryFromBaseUnit(unit) || 'none',
       valueType: valueType,
       dateFormat: valueType === 'date' ? 'ISO-8601' : undefined,
       useLocalTime: valueType === 'date' ? false : undefined,
@@ -1339,12 +1339,8 @@ export class UnitsManager {
     )?.[0]
 
     if (!category) {
-      // Unknown unit, create custom metadata
-      return {
-        baseUnit: units,
-        category: 'custom',
-        conversions: {}
-      }
+      // Unknown unit - return null so fallback can handle it
+      return null
     }
 
     // Find a similar path in default metadata with same category
@@ -1365,12 +1361,9 @@ export class UnitsManager {
       return comprehensivePath[1]
     }
 
-    // Return basic metadata with baseUnit and category, no conversions
-    return {
-      baseUnit: units,
-      category: category,
-      conversions: {}
-    }
+    // Found category but no conversions - return null to let fallback code handle it
+    // This allows resolveMetadataForPath to merge conversions from comprehensiveDefaultUnits
+    return null
   }
 
   /**
