@@ -1532,7 +1532,7 @@ export class UnitsManager {
           const baseUnit = skMeta?.units || null
           result[path] = {
             baseUnit,
-            category: this.getCategoryFromBaseUnit(baseUnit) || 'custom',
+            category: this.getCategoryFromBaseUnit(baseUnit) || 'none',
             conversions: {}
           }
         }
