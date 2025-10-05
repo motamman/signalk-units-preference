@@ -835,19 +835,68 @@ function filterAndSortMetadata() {
 
   renderMetadataTable(filtered)
 
-  // Update counts
-  document.getElementById('overrideCount').textContent = filtered.filter(
-    p => p.status === 'Path Override'
-  ).length
-  document.getElementById('patternCount').textContent = filtered.filter(p =>
-    p.status.startsWith('Pattern:')
-  ).length
-  document.getElementById('signalkCount').textContent = filtered.filter(
-    p => p.status === 'SignalK Only'
-  ).length
-  document.getElementById('noneCount').textContent = filtered.filter(
-    p => p.status === 'None'
-  ).length
+  // Get current search term to determine active filter
+  const activeFilterTerm = document.getElementById('metadataSearchFilter')?.value || ''
+  const isFiltered = filtered.length < window.metadataPathInfo.length
+
+  // Calculate total counts (from all data)
+  const totalCounts = {
+    override: window.metadataPathInfo.filter(p => p.status === 'Path Override').length,
+    pattern: window.metadataPathInfo.filter(p => p.status.startsWith('Pattern:')).length,
+    auto: window.metadataPathInfo.filter(p => p.status === 'SignalK Auto').length,
+    signalk: window.metadataPathInfo.filter(p => p.status === 'SignalK Only').length,
+    none: window.metadataPathInfo.filter(p => p.status === 'None').length,
+    boolean: window.metadataPathInfo.filter(p => p.valueType === 'boolean').length
+  }
+
+  // Calculate visible counts (from filtered data)
+  const visibleCounts = {
+    override: filtered.filter(p => p.status === 'Path Override').length,
+    pattern: filtered.filter(p => p.status.startsWith('Pattern:')).length,
+    auto: filtered.filter(p => p.status === 'SignalK Auto').length,
+    signalk: filtered.filter(p => p.status === 'SignalK Only').length,
+    none: filtered.filter(p => p.status === 'None').length,
+    boolean: filtered.filter(p => p.valueType === 'boolean').length
+  }
+
+  // Update counts with "0 of X" format for unselected filters
+  const formatCount = (visible, total, isActive) => {
+    if (!isFiltered || isActive) {
+      return visible.toString()
+    }
+    return visible === 0 ? `0 of ${total}` : visible.toString()
+  }
+
+  document.getElementById('overrideCount').textContent = formatCount(
+    visibleCounts.override,
+    totalCounts.override,
+    activeFilterTerm === 'Path Override'
+  )
+  document.getElementById('patternCount').textContent = formatCount(
+    visibleCounts.pattern,
+    totalCounts.pattern,
+    activeFilterTerm === 'Pattern'
+  )
+  document.getElementById('autoCount').textContent = formatCount(
+    visibleCounts.auto,
+    totalCounts.auto,
+    activeFilterTerm === 'SignalK Auto'
+  )
+  document.getElementById('signalkCount').textContent = formatCount(
+    visibleCounts.signalk,
+    totalCounts.signalk,
+    activeFilterTerm === 'SignalK Only'
+  )
+  document.getElementById('noneCount').textContent = formatCount(
+    visibleCounts.none,
+    totalCounts.none,
+    activeFilterTerm === 'None'
+  )
+  document.getElementById('booleanCount').textContent = formatCount(
+    visibleCounts.boolean,
+    totalCounts.boolean,
+    activeFilterTerm === 'boolean'
+  )
 
   // Update result count
   const totalPaths = window.metadataPathInfo.length
