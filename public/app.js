@@ -882,7 +882,7 @@ function renderMetadataTable(pathInfo) {
       if (currentValue !== undefined && currentValue !== null) {
         if (info.valueType === 'number') {
           const convertUrl = `${API_BASE}/convert/${info.path}/${currentValue}`
-          testLink = `<a href="${convertUrl}" target="_blank" title="Test conversion with current value (${currentValue})" style="color: #2ecc71; margin-left: 4px; text-decoration: none; font-size: 14px;">▶️</a>`
+          testLink = `<a href="${convertUrl}" target="_blank" title="Run conversion test - convert current value (${currentValue}) and see result in new tab" style="color: #2ecc71; margin-left: 4px; text-decoration: none; font-size: 14px;">▶️</a>`
         } else {
           const formId = `convert-form-${info.path.replace(/\./g, '-')}`
           const serializedValue =
@@ -896,7 +896,7 @@ function renderMetadataTable(pathInfo) {
         <input type="hidden" name="path" value="${info.path}">
         <input type="hidden" name="value" value="${serializedValue.replace(/"/g, '&quot;')}">
         <input type="hidden" name="type" value="${info.valueType}">
-        <button type="submit" title="Test conversion with current value" style="color: #2ecc71; margin-left: 4px; background: none; border: none; cursor: pointer; font-size: 14px; padding: 0;">▶️</button>
+        <button type="submit" title="Run conversion test - convert current value and see result in new tab" style="color: #2ecc71; margin-left: 4px; background: none; border: none; cursor: pointer; font-size: 14px; padding: 0;">▶️</button>
       </form>`
         }
       }
@@ -907,7 +907,19 @@ function renderMetadataTable(pathInfo) {
       const encodedCurrentValue = canUseGetLink ? encodeURIComponent(String(currentValue)) : null
 
       const getLink = canUseGetLink
-        ? `<a href="${API_BASE}/convert/${info.path}/${encodedCurrentValue}" target="_blank" title="Open GET conversion endpoint" style="color: #e67e22; margin-left: 4px; text-decoration: none; font-size: 14px;">🔗</a>`
+        ? `<a href="${API_BASE}/convert/${info.path}/${encodedCurrentValue}" target="_blank" title="Open conversion in new tab - test GET endpoint with current value (${currentValue})" style="color: #e67e22; margin-left: 4px; text-decoration: none; font-size: 14px;">🔗</a>`
+        : ''
+
+      // Add pattern icon if not already a pattern
+      const hasPattern = info.status.startsWith('Pattern:')
+      const patternIcon = !hasPattern
+        ? `<button onclick="createPatternFromPath('${info.path.replace(/'/g, "\\'")}', '${info.category}')" title="Create pattern rule - define a wildcard pattern based on this path to match similar paths" style="color: #f39c12; margin-left: 4px; background: none; border: none; cursor: pointer; font-size: 14px; padding: 0;">📋</button>`
+        : ''
+
+      // Add override icon if not already an override
+      const hasOverride = info.status === 'Path Override'
+      const overrideIcon = !hasOverride
+        ? `<button onclick="createOverrideFromPath('${info.path.replace(/'/g, "\\'")}')" title="Create path override - set specific units for this exact path (highest priority)" style="color: #27ae60; margin-left: 4px; background: none; border: none; cursor: pointer; font-size: 14px; padding: 0;">📌</button>`
         : ''
 
       const sourceLine = details?.source || info.signalkSource
@@ -924,9 +936,11 @@ function renderMetadataTable(pathInfo) {
       <tr style="border-bottom: 1px solid ${metadataLine ? '#dee2e6' : '#f1f3f5'}; background: ${info.color};">
         <td style="padding: 8px; font-family: monospace; font-size: 11px; word-break: break-all; text-align: left;">
           ${info.path}
-          <a href="${conversionUrl}" target="_blank" title="View conversion info" style="color: #3498db; margin-left: 6px; text-decoration: none; font-size: 14px;">🔧</a>
+          <a href="${conversionUrl}" target="_blank" title="View conversion details - shows base unit, target unit, formula, symbol, and metadata" style="color: #3498db; margin-left: 6px; text-decoration: none; font-size: 14px;">🔧</a>
           ${getLink}
           ${testLink}
+          ${patternIcon}
+          ${overrideIcon}
           ${metadataLine}
         </td>
         <td style="padding: 8px; text-align: center; font-size: 11px;">${info.status}</td>
@@ -3217,4 +3231,93 @@ async function restoreBackup(event) {
   } finally {
     event.target.value = '' // Reset file input
   }
+}
+
+// Switch to a specific tab programmatically
+function switchTab(tabName) {
+  // Update active tab button
+  document.querySelectorAll('.tab').forEach(t => {
+    if (t.dataset.tab === tabName) {
+      t.classList.add('active')
+    } else {
+      t.classList.remove('active')
+    }
+  })
+
+  // Show content
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'))
+  document.getElementById(tabName).classList.add('active')
+}
+
+// Create pattern from metadata path
+function createPatternFromPath(path, category) {
+  // Switch to patterns tab
+  switchTab('patterns')
+
+  // Expand the "Add Path Pattern" section if it's collapsed
+  setTimeout(() => {
+    const addContent = document.getElementById('addPatternContent')
+    if (addContent && addContent.classList.contains('collapsed')) {
+      addContent.classList.remove('collapsed')
+      // Also update the icon
+      const header = addContent.previousElementSibling
+      const icon = header?.querySelector('.collapse-icon')
+      if (icon) {
+        icon.classList.remove('collapsed')
+      }
+    }
+
+    // Pre-populate the pattern input (note: ID is newPatternPattern, not newPatternPath)
+    const patternInput = document.getElementById('newPatternPattern')
+    if (patternInput) {
+      patternInput.value = path
+    }
+
+    // Pre-populate category if available
+    const categorySelect = document.getElementById('newPatternCategory')
+    if (categorySelect && category && category !== '-') {
+      categorySelect.value = category
+    }
+
+    // Scroll to the add pattern section
+    const addSection = patternInput?.closest('.section')
+    if (addSection) {
+      addSection.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      patternInput.focus()
+    }
+  }, 100)
+}
+
+// Create override from metadata path
+function createOverrideFromPath(path) {
+  // Switch to overrides tab
+  switchTab('overrides')
+
+  // Expand the "Add Path Override" section if it's collapsed
+  setTimeout(() => {
+    const addContent = document.getElementById('addPathOverrideContent')
+    if (addContent && addContent.classList.contains('collapsed')) {
+      addContent.classList.remove('collapsed')
+      // Also update the icon
+      const header = addContent.previousElementSibling
+      const icon = header?.querySelector('.collapse-icon')
+      if (icon) {
+        icon.classList.remove('collapsed')
+      }
+    }
+
+    // Pre-populate the path input
+    const pathInput = document.getElementById('overridePathInput')
+    if (pathInput) {
+      pathInput.value = path
+      pathInput.dispatchEvent(new Event('input'))
+    }
+
+    // Scroll to the add override section
+    const addSection = pathInput?.closest('.section')
+    if (addSection) {
+      addSection.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      pathInput.focus()
+    }
+  }, 100)
 }
