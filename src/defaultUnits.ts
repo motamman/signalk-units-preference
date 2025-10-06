@@ -252,6 +252,110 @@ export const defaultUnitsMetadata: UnitsMetadataStore = {
         dateFormat: 'time-am/pm',
         useLocalTime: true
       },
+      'short-date-24hrs': {
+        formula: 'value',
+        inverseFormula: 'value',
+        symbol: '',
+        dateFormat: 'short-date-24hrs'
+      },
+      'short-date-24hrs-local': {
+        formula: 'value',
+        inverseFormula: 'value',
+        symbol: '',
+        dateFormat: 'short-date-24hrs',
+        useLocalTime: true
+      },
+      'short-date-am/pm': {
+        formula: 'value',
+        inverseFormula: 'value',
+        symbol: '',
+        dateFormat: 'short-date-am/pm'
+      },
+      'short-date-am/pm-local': {
+        formula: 'value',
+        inverseFormula: 'value',
+        symbol: '',
+        dateFormat: 'short-date-am/pm',
+        useLocalTime: true
+      },
+      'long-date-24hrs': {
+        formula: 'value',
+        inverseFormula: 'value',
+        symbol: '',
+        dateFormat: 'long-date-24hrs'
+      },
+      'long-date-24hrs-local': {
+        formula: 'value',
+        inverseFormula: 'value',
+        symbol: '',
+        dateFormat: 'long-date-24hrs',
+        useLocalTime: true
+      },
+      'long-date-am/pm': {
+        formula: 'value',
+        inverseFormula: 'value',
+        symbol: '',
+        dateFormat: 'long-date-am/pm'
+      },
+      'long-date-am/pm-local': {
+        formula: 'value',
+        inverseFormula: 'value',
+        symbol: '',
+        dateFormat: 'long-date-am/pm',
+        useLocalTime: true
+      },
+      'dd/mm/yyyy-24hrs': {
+        formula: 'value',
+        inverseFormula: 'value',
+        symbol: '',
+        dateFormat: 'dd/mm/yyyy-24hrs'
+      },
+      'dd/mm/yyyy-24hrs-local': {
+        formula: 'value',
+        inverseFormula: 'value',
+        symbol: '',
+        dateFormat: 'dd/mm/yyyy-24hrs',
+        useLocalTime: true
+      },
+      'dd/mm/yyyy-am/pm': {
+        formula: 'value',
+        inverseFormula: 'value',
+        symbol: '',
+        dateFormat: 'dd/mm/yyyy-am/pm'
+      },
+      'dd/mm/yyyy-am/pm-local': {
+        formula: 'value',
+        inverseFormula: 'value',
+        symbol: '',
+        dateFormat: 'dd/mm/yyyy-am/pm',
+        useLocalTime: true
+      },
+      'mm/dd/yyyy-24hrs': {
+        formula: 'value',
+        inverseFormula: 'value',
+        symbol: '',
+        dateFormat: 'mm/dd/yyyy-24hrs'
+      },
+      'mm/dd/yyyy-24hrs-local': {
+        formula: 'value',
+        inverseFormula: 'value',
+        symbol: '',
+        dateFormat: 'mm/dd/yyyy-24hrs',
+        useLocalTime: true
+      },
+      'mm/dd/yyyy-am/pm': {
+        formula: 'value',
+        inverseFormula: 'value',
+        symbol: '',
+        dateFormat: 'mm/dd/yyyy-am/pm'
+      },
+      'mm/dd/yyyy-am/pm-local': {
+        formula: 'value',
+        inverseFormula: 'value',
+        symbol: '',
+        dateFormat: 'mm/dd/yyyy-am/pm',
+        useLocalTime: true
+      },
       'epoch-seconds': {
         formula: 'value',
         inverseFormula: 'value',
@@ -348,6 +452,110 @@ export const defaultUnitsMetadata: UnitsMetadataStore = {
         inverseFormula: 'value',
         symbol: '',
         dateFormat: 'time-am/pm',
+        useLocalTime: true
+      },
+      'short-date-24hrs': {
+        formula: 'value',
+        inverseFormula: 'value',
+        symbol: '',
+        dateFormat: 'short-date-24hrs'
+      },
+      'short-date-24hrs-local': {
+        formula: 'value',
+        inverseFormula: 'value',
+        symbol: '',
+        dateFormat: 'short-date-24hrs',
+        useLocalTime: true
+      },
+      'short-date-am/pm': {
+        formula: 'value',
+        inverseFormula: 'value',
+        symbol: '',
+        dateFormat: 'short-date-am/pm'
+      },
+      'short-date-am/pm-local': {
+        formula: 'value',
+        inverseFormula: 'value',
+        symbol: '',
+        dateFormat: 'short-date-am/pm',
+        useLocalTime: true
+      },
+      'long-date-24hrs': {
+        formula: 'value',
+        inverseFormula: 'value',
+        symbol: '',
+        dateFormat: 'long-date-24hrs'
+      },
+      'long-date-24hrs-local': {
+        formula: 'value',
+        inverseFormula: 'value',
+        symbol: '',
+        dateFormat: 'long-date-24hrs',
+        useLocalTime: true
+      },
+      'long-date-am/pm': {
+        formula: 'value',
+        inverseFormula: 'value',
+        symbol: '',
+        dateFormat: 'long-date-am/pm'
+      },
+      'long-date-am/pm-local': {
+        formula: 'value',
+        inverseFormula: 'value',
+        symbol: '',
+        dateFormat: 'long-date-am/pm',
+        useLocalTime: true
+      },
+      'dd/mm/yyyy-24hrs': {
+        formula: 'value',
+        inverseFormula: 'value',
+        symbol: '',
+        dateFormat: 'dd/mm/yyyy-24hrs'
+      },
+      'dd/mm/yyyy-24hrs-local': {
+        formula: 'value',
+        inverseFormula: 'value',
+        symbol: '',
+        dateFormat: 'dd/mm/yyyy-24hrs',
+        useLocalTime: true
+      },
+      'dd/mm/yyyy-am/pm': {
+        formula: 'value',
+        inverseFormula: 'value',
+        symbol: '',
+        dateFormat: 'dd/mm/yyyy-am/pm'
+      },
+      'dd/mm/yyyy-am/pm-local': {
+        formula: 'value',
+        inverseFormula: 'value',
+        symbol: '',
+        dateFormat: 'dd/mm/yyyy-am/pm',
+        useLocalTime: true
+      },
+      'mm/dd/yyyy-24hrs': {
+        formula: 'value',
+        inverseFormula: 'value',
+        symbol: '',
+        dateFormat: 'mm/dd/yyyy-24hrs'
+      },
+      'mm/dd/yyyy-24hrs-local': {
+        formula: 'value',
+        inverseFormula: 'value',
+        symbol: '',
+        dateFormat: 'mm/dd/yyyy-24hrs',
+        useLocalTime: true
+      },
+      'mm/dd/yyyy-am/pm': {
+        formula: 'value',
+        inverseFormula: 'value',
+        symbol: '',
+        dateFormat: 'mm/dd/yyyy-am/pm'
+      },
+      'mm/dd/yyyy-am/pm-local': {
+        formula: 'value',
+        inverseFormula: 'value',
+        symbol: '',
+        dateFormat: 'mm/dd/yyyy-am/pm',
         useLocalTime: true
       }
     }

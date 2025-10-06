@@ -1,0 +1,188 @@
+{
+  "formats": {
+    "short-date": {
+      "description": "Short date format",
+      "example": "Jan 6, 2025",
+      "builtIn": true
+    },
+    "short-date-local": {
+      "description": "Short date format (local time)",
+      "example": "Jan 6, 2025",
+      "builtIn": true,
+      "useLocalTime": true
+    },
+    "long-date": {
+      "description": "Long date format with day name",
+      "example": "Monday, January 6, 2025",
+      "builtIn": true
+    },
+    "long-date-local": {
+      "description": "Long date format with day name (local time)",
+      "example": "Monday, January 6, 2025",
+      "builtIn": true,
+      "useLocalTime": true
+    },
+    "dd/mm/yyyy": {
+      "description": "Day/Month/Year format",
+      "example": "06/01/2025",
+      "builtIn": true
+    },
+    "dd/mm/yyyy-local": {
+      "description": "Day/Month/Year format (local time)",
+      "example": "06/01/2025",
+      "builtIn": true,
+      "useLocalTime": true
+    },
+    "mm/dd/yyyy": {
+      "description": "Month/Day/Year format",
+      "example": "01/06/2025",
+      "builtIn": true
+    },
+    "mm/dd/yyyy-local": {
+      "description": "Month/Day/Year format (local time)",
+      "example": "01/06/2025",
+      "builtIn": true,
+      "useLocalTime": true
+    },
+    "mm/yyyy": {
+      "description": "Month/Year format",
+      "example": "01/2025",
+      "builtIn": true
+    },
+    "mm/yyyy-local": {
+      "description": "Month/Year format (local time)",
+      "example": "01/2025",
+      "builtIn": true,
+      "useLocalTime": true
+    },
+    "time-24hrs": {
+      "description": "24-hour time format",
+      "example": "14:30:45",
+      "builtIn": true
+    },
+    "time-24hrs-local": {
+      "description": "24-hour time format (local time)",
+      "example": "14:30:45",
+      "builtIn": true,
+      "useLocalTime": true
+    },
+    "time-am/pm": {
+      "description": "12-hour time format with AM/PM",
+      "example": "02:30:45 PM",
+      "builtIn": true
+    },
+    "time-am/pm-local": {
+      "description": "12-hour time format with AM/PM (local time)",
+      "example": "02:30:45 PM",
+      "builtIn": true,
+      "useLocalTime": true
+    },
+    "short-date-24hrs": {
+      "description": "Short date with 24-hour time",
+      "example": "Jan 6, 2025 14:30:45",
+      "builtIn": true
+    },
+    "short-date-24hrs-local": {
+      "description": "Short date with 24-hour time (local time)",
+      "example": "Jan 6, 2025 14:30:45",
+      "builtIn": true,
+      "useLocalTime": true
+    },
+    "short-date-am/pm": {
+      "description": "Short date with AM/PM time",
+      "example": "Jan 6, 2025 02:30:45 PM",
+      "builtIn": true
+    },
+    "short-date-am/pm-local": {
+      "description": "Short date with AM/PM time (local time)",
+      "example": "Jan 6, 2025 02:30:45 PM",
+      "builtIn": true,
+      "useLocalTime": true
+    },
+    "long-date-24hrs": {
+      "description": "Long date with 24-hour time",
+      "example": "Monday, January 6, 2025 14:30:45",
+      "builtIn": true
+    },
+    "long-date-24hrs-local": {
+      "description": "Long date with 24-hour time (local time)",
+      "example": "Monday, January 6, 2025 14:30:45",
+      "builtIn": true,
+      "useLocalTime": true
+    },
+    "long-date-am/pm": {
+      "description": "Long date with AM/PM time",
+      "example": "Monday, January 6, 2025 02:30:45 PM",
+      "builtIn": true
+    },
+    "long-date-am/pm-local": {
+      "description": "Long date with AM/PM time (local time)",
+      "example": "Monday, January 6, 2025 02:30:45 PM",
+      "builtIn": true,
+      "useLocalTime": true
+    },
+    "dd/mm/yyyy-24hrs": {
+      "description": "DD/MM/YYYY with 24-hour time",
+      "example": "06/01/2025 14:30:45",
+      "builtIn": true
+    },
+    "dd/mm/yyyy-24hrs-local": {
+      "description": "DD/MM/YYYY with 24-hour time (local time)",
+      "example": "06/01/2025 14:30:45",
+      "builtIn": true,
+      "useLocalTime": true
+    },
+    "dd/mm/yyyy-am/pm": {
+      "description": "DD/MM/YYYY with AM/PM time",
+      "example": "06/01/2025 02:30:45 PM",
+      "builtIn": true
+    },
+    "dd/mm/yyyy-am/pm-local": {
+      "description": "DD/MM/YYYY with AM/PM time (local time)",
+      "example": "06/01/2025 02:30:45 PM",
+      "builtIn": true,
+      "useLocalTime": true
+    },
+    "mm/dd/yyyy-24hrs": {
+      "description": "MM/DD/YYYY with 24-hour time",
+      "example": "01/06/2025 14:30:45",
+      "builtIn": true
+    },
+    "mm/dd/yyyy-24hrs-local": {
+      "description": "MM/DD/YYYY with 24-hour time (local time)",
+      "example": "01/06/2025 14:30:45",
+      "builtIn": true,
+      "useLocalTime": true
+    },
+    "mm/dd/yyyy-am/pm": {
+      "description": "MM/DD/YYYY with AM/PM time",
+      "example": "01/06/2025 02:30:45 PM",
+      "builtIn": true
+    },
+    "mm/dd/yyyy-am/pm-local": {
+      "description": "MM/DD/YYYY with AM/PM time (local time)",
+      "example": "01/06/2025 02:30:45 PM",
+      "builtIn": true,
+      "useLocalTime": true
+    },
+    "epoch-seconds": {
+      "description": "Unix epoch seconds",
+      "example": "1704549045",
+      "builtIn": true
+    }
+  },
+  "tokens": {
+    "year": "Four-digit year (e.g., 2025)",
+    "monthShort": "Short month name (e.g., Jan)",
+    "monthLong": "Full month name (e.g., January)",
+    "monthIndex": "Month number 0-11",
+    "day": "Day of month (1-31)",
+    "weekdayShort": "Short weekday name (e.g., Mon)",
+    "weekdayLong": "Full weekday name (e.g., Monday)",
+    "hours": "Hours (0-23)",
+    "hours12": "Hours (1-12)",
+    "minutes": "Minutes (0-59)",
+    "seconds": "Seconds (0-59)",
+    "ampm": "AM or PM"
+  }
+}

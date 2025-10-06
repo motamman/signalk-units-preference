@@ -126,6 +126,10 @@ export class UnitsManager {
   private signalKMetadata: Record<string, SignalKPathMetadata> // path -> full metadata
   private preferencesPath: string
   private definitionsPath: string
+  private conversionsData: Record<string, any> = {}
+  private categoriesData: any = {}
+  private dateFormatsData: any = {}
+  private definitionsDir: string
 
   constructor(
     private app: ServerAPI,
@@ -133,6 +137,7 @@ export class UnitsManager {
   ) {
     this.preferencesPath = path.join(dataDir, 'units-preferences.json')
     this.definitionsPath = path.join(dataDir, 'units-definitions.json')
+    this.definitionsDir = path.join(__dirname, '..', 'presets', 'definitions')
     // Use only built-in default metadata (no custom file loading)
     this.metadata = { ...defaultUnitsMetadata, ...comprehensiveDefaultUnits }
     this.preferences = {
@@ -225,6 +230,54 @@ export class UnitsManager {
         convertedValue = formatted
         break
       }
+      case 'short-date-24hrs': {
+        formatted = `${monthShort} ${parts.day}, ${parts.year} ${pad2(parts.hours)}:${pad2(parts.minutes)}:${pad2(parts.seconds)}`
+        convertedValue = formatted
+        break
+      }
+      case 'short-date-am/pm': {
+        const hours12 = parts.hours % 12 || 12
+        const suffix = parts.hours >= 12 ? 'PM' : 'AM'
+        formatted = `${monthShort} ${parts.day}, ${parts.year} ${pad2(hours12)}:${pad2(parts.minutes)}:${pad2(parts.seconds)} ${suffix}`
+        convertedValue = formatted
+        break
+      }
+      case 'long-date-24hrs': {
+        formatted = `${weekdayLong}, ${monthLong} ${parts.day}, ${parts.year} ${pad2(parts.hours)}:${pad2(parts.minutes)}:${pad2(parts.seconds)}`
+        convertedValue = formatted
+        break
+      }
+      case 'long-date-am/pm': {
+        const hours12 = parts.hours % 12 || 12
+        const suffix = parts.hours >= 12 ? 'PM' : 'AM'
+        formatted = `${weekdayLong}, ${monthLong} ${parts.day}, ${parts.year} ${pad2(hours12)}:${pad2(parts.minutes)}:${pad2(parts.seconds)} ${suffix}`
+        convertedValue = formatted
+        break
+      }
+      case 'dd/mm/yyyy-24hrs': {
+        formatted = `${pad2(parts.day)}/${pad2(parts.monthIndex + 1)}/${parts.year} ${pad2(parts.hours)}:${pad2(parts.minutes)}:${pad2(parts.seconds)}`
+        convertedValue = formatted
+        break
+      }
+      case 'dd/mm/yyyy-am/pm': {
+        const hours12 = parts.hours % 12 || 12
+        const suffix = parts.hours >= 12 ? 'PM' : 'AM'
+        formatted = `${pad2(parts.day)}/${pad2(parts.monthIndex + 1)}/${parts.year} ${pad2(hours12)}:${pad2(parts.minutes)}:${pad2(parts.seconds)} ${suffix}`
+        convertedValue = formatted
+        break
+      }
+      case 'mm/dd/yyyy-24hrs': {
+        formatted = `${pad2(parts.monthIndex + 1)}/${pad2(parts.day)}/${parts.year} ${pad2(parts.hours)}:${pad2(parts.minutes)}:${pad2(parts.seconds)}`
+        convertedValue = formatted
+        break
+      }
+      case 'mm/dd/yyyy-am/pm': {
+        const hours12 = parts.hours % 12 || 12
+        const suffix = parts.hours >= 12 ? 'PM' : 'AM'
+        formatted = `${pad2(parts.monthIndex + 1)}/${pad2(parts.day)}/${parts.year} ${pad2(hours12)}:${pad2(parts.minutes)}:${pad2(parts.seconds)} ${suffix}`
+        convertedValue = formatted
+        break
+      }
       case 'epoch-seconds': {
         const epochSeconds = Math.floor(date.getTime() / 1000)
         convertedValue = epochSeconds
@@ -250,11 +303,111 @@ export class UnitsManager {
   }
 
   /**
+   * Load JSON definition files with fallback to TypeScript
+   */
+  private loadDefinitionFiles(): void {
+    try {
+      // Load conversions.json
+      const conversionsPath = path.join(this.definitionsDir, 'conversions.json')
+      if (fs.existsSync(conversionsPath)) {
+        const data = fs.readFileSync(conversionsPath, 'utf-8')
+        this.conversionsData = JSON.parse(data)
+        this.app.debug('Loaded conversions.json')
+      } else {
+        this.app.debug('conversions.json not found, using TypeScript defaults')
+      }
+    } catch (error) {
+      this.app.error(`Error loading conversions.json: ${error}`)
+      this.app.debug('Using TypeScript fallback for conversions')
+    }
+
+    try {
+      // Load categories.json
+      const categoriesPath = path.join(this.definitionsDir, 'categories.json')
+      if (fs.existsSync(categoriesPath)) {
+        const data = fs.readFileSync(categoriesPath, 'utf-8')
+        this.categoriesData = JSON.parse(data)
+        this.app.debug('Loaded categories.json')
+      } else {
+        this.app.debug('categories.json not found, using TypeScript defaults')
+      }
+    } catch (error) {
+      this.app.error(`Error loading categories.json: ${error}`)
+      this.app.debug('Using TypeScript fallback for categories')
+    }
+
+    try {
+      // Load date-formats.json
+      const dateFormatsPath = path.join(this.definitionsDir, 'date-formats.json')
+      if (fs.existsSync(dateFormatsPath)) {
+        const data = fs.readFileSync(dateFormatsPath, 'utf-8')
+        this.dateFormatsData = JSON.parse(data)
+        this.app.debug('Loaded date-formats.json')
+      } else {
+        this.app.debug('date-formats.json not found, using TypeScript defaults')
+      }
+    } catch (error) {
+      this.app.error(`Error loading date-formats.json: ${error}`)
+      this.app.debug('Using TypeScript fallback for date formats')
+    }
+  }
+
+  /**
    * Initialize the manager by loading or creating data files
    */
   async initialize(): Promise<void> {
+    this.loadDefinitionFiles()
     await this.loadPreferences()
     await this.loadUnitDefinitions()
+  }
+
+  /**
+   * Get category to base unit mapping (JSON or TypeScript fallback)
+   */
+  private getCategoryToBaseUnitMap(): Record<string, string> {
+    if (this.categoriesData?.categoryToBaseUnit) {
+      return this.categoriesData.categoryToBaseUnit
+    }
+    return categoryToBaseUnit
+  }
+
+  /**
+   * Get core categories list (JSON or TypeScript fallback)
+   */
+  private getCoreCategories(): string[] {
+    if (this.categoriesData?.coreCategories) {
+      return this.categoriesData.coreCategories
+    }
+    return Object.keys(categoryToBaseUnit)
+  }
+
+  /**
+   * Get conversions for a base unit (JSON or TypeScript fallback)
+   */
+  private getConversionsForBaseUnit(baseUnit: string): UnitMetadata | null {
+    // Try JSON first
+    if (this.conversionsData[baseUnit]) {
+      return {
+        baseUnit,
+        category: this.conversionsData[baseUnit].category || 'custom',
+        conversions: this.conversionsData[baseUnit].conversions || {}
+      }
+    }
+
+    // Fallback to TypeScript
+    const builtInDef = Object.values(comprehensiveDefaultUnits).find(
+      meta => meta.baseUnit === baseUnit
+    )
+    if (builtInDef) {
+      return builtInDef
+    }
+
+    const defaultDef = Object.values(defaultUnitsMetadata).find(meta => meta.baseUnit === baseUnit)
+    if (defaultDef) {
+      return defaultDef
+    }
+
+    return null
   }
 
   /**
@@ -328,7 +481,9 @@ export class UnitsManager {
     }
 
     // Fallback to category-to-base mapping (may be many-to-one, choose first)
-    const categoryMatch = Object.entries(categoryToBaseUnit).find(([, unit]) => unit === baseUnit)
+    const categoryMatch = Object.entries(this.getCategoryToBaseUnitMap()).find(
+      ([, unit]) => unit === baseUnit
+    )
     if (categoryMatch) {
       return categoryMatch[0]
     }
