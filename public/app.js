@@ -2372,8 +2372,7 @@ function renderUnitDefinitions() {
       <div class="unit-definition-item" style="padding: 12px 16px; background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 6px; margin-bottom: 8px;">
         <div class="collapsible-header" onclick="toggleUnitItem('${baseUnit}')" style="cursor: pointer;">
           <div style="display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0;">
-            <span style="font-family: monospace; font-weight: 500;">${baseUnit}${badge}</span>
-            <span style="color: #7f8c8d; font-size: 13px;">${def.category || baseUnit}</span>
+            <span style="font-family: monospace; font-weight: 600; font-size: 18px; color: #2c3e50;">${baseUnit}${badge}</span>
             <span style="color: #95a5a6; font-size: 13px;">${conversions.length} conversion${conversions.length !== 1 ? 's' : ''}</span>
           </div>
           <div style="display: flex; align-items: center; gap: 10px;">
