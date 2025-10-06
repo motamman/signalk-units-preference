@@ -2,7 +2,7 @@
   "openapi": "3.0.0",
   "info": {
     "title": "SignalK Units Preference API",
-    "version": "1.1.0",
+    "version": "0.6.0-beta.1",
     "description": "REST endpoints exposed by the signalk-units-preference plugin"
   },
   "servers": [
@@ -44,9 +44,10 @@
         }
       }
     },
-    "/conversion/{path}": {
+    "/conversions/{path}": {
       "get": {
-        "summary": "Get conversion configuration for a SignalK path",
+        "summary": "Get conversion configuration or convert a value for a SignalK path",
+        "description": "Returns conversion metadata for a path. If 'value' query parameter is provided, returns the conversion result instead.",
         "parameters": [
           {
             "name": "path",
@@ -57,18 +58,47 @@
             },
             "description": "SignalK path (wildcards and dots allowed)",
             "style": "simple"
+          },
+          {
+            "name": "value",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Value to convert (optional)"
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["number", "boolean", "string", "date", "object"]
+            },
+            "description": "Type hint for value conversion (optional)"
           }
         ],
         "responses": {
           "200": {
-            "description": "Active conversion mapping for the path",
+            "description": "Conversion metadata (if no value) or conversion result (if value provided)",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ConversionByPathResponse"
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ConversionByPathResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/DeltaResponse"
+                    }
+                  ]
                 }
               }
             }
+          },
+          "400": {
+            "description": "Invalid input"
           },
           "404": {
             "description": "No conversion found"
@@ -76,103 +106,7 @@
         }
       }
     },
-    "/convert/{path}/{value}": {
-      "get": {
-        "summary": "Convert a value for a SignalK path (GET variant)",
-        "parameters": [
-          {
-            "name": "path",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            },
-            "style": "simple"
-          },
-          {
-            "name": "value",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "type",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "enum": ["number", "boolean", "string", "date", "object"]
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "SignalK delta envelope containing the converted value",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DeltaResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid input"
-          }
-        }
-      }
-    },
-    "/convert/{path}": {
-      "get": {
-        "summary": "Convert a value for a SignalK path (query variant)",
-        "parameters": [
-          {
-            "name": "path",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            },
-            "style": "simple"
-          },
-          {
-            "name": "value",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "type",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "enum": ["number", "boolean", "string", "date", "object"]
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "SignalK delta envelope containing the converted value",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DeltaResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Missing value or invalid input"
-          }
-        }
-      }
-    },
-    "/convert": {
+    "/conversions": {
       "post": {
         "summary": "Convert a value for a SignalK path",
         "requestBody": {
@@ -202,7 +136,7 @@
         }
       }
     },
-    "/unit-convert": {
+    "/units/conversions": {
       "get": {
         "summary": "Convert a value by base and target unit (query)",
         "parameters": [
@@ -466,7 +400,7 @@
         }
       }
     },
-    "/current-preset": {
+    "/presets/current": {
       "get": {
         "summary": "Get metadata about the currently applied preset",
         "responses": {
@@ -486,6 +420,42 @@
                 }
               }
             }
+          }
+        }
+      },
+      "put": {
+        "summary": "Apply a preset (built-in or custom)",
+        "description": "Sets the current preset to the specified preset type. Accepts both built-in presets (metric, imperial-us, imperial-uk) and custom preset names.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["presetType"],
+                "properties": {
+                  "presetType": {
+                    "type": "string",
+                    "description": "Preset identifier (e.g., 'metric', 'imperial-us', or custom preset name)"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Preset applied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetApplySummary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid preset type"
           }
         }
       }
@@ -811,37 +781,6 @@
         }
       }
     },
-    "/presets/{presetType}": {
-      "post": {
-        "summary": "Apply a built-in preset",
-        "parameters": [
-          {
-            "name": "presetType",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "enum": ["metric", "imperial-us", "imperial-uk"]
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Preset applied",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PresetApplySummary"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Unknown preset"
-          }
-        }
-      }
-    },
     "/presets/custom": {
       "get": {
         "summary": "List available custom presets",
@@ -863,6 +802,34 @@
       }
     },
     "/presets/custom/{name}": {
+      "get": {
+        "summary": "Download a specific custom preset file",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Custom preset file",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Preset not found"
+          }
+        }
+      },
       "post": {
         "summary": "Save the current categories as a custom preset",
         "parameters": [
@@ -894,6 +861,38 @@
           }
         }
       },
+      "put": {
+        "summary": "Upload/update a specific custom preset file",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "description": "Preset file contents"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Preset file uploaded"
+          },
+          "400": {
+            "description": "Invalid preset data"
+          }
+        }
+      },
       "delete": {
         "summary": "Delete a custom preset",
         "parameters": [
@@ -916,32 +915,190 @@
         }
       }
     },
-    "/presets/custom/{name}/apply": {
+    "/backups": {
+      "get": {
+        "summary": "Download a complete backup of all configuration files",
+        "description": "Creates a ZIP archive containing all presets, preferences, and custom unit definitions",
+        "responses": {
+          "200": {
+            "description": "ZIP file containing backup",
+            "content": {
+              "application/zip": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        }
+      },
       "post": {
-        "summary": "Apply a custom preset",
+        "summary": "Restore configuration from a backup ZIP file",
+        "description": "Uploads and extracts a backup ZIP file to restore configuration",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["zipData"],
+                "properties": {
+                  "zipData": {
+                    "type": "string",
+                    "description": "Base64-encoded ZIP file data"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Backup restored successfully"
+          },
+          "400": {
+            "description": "Invalid backup file"
+          }
+        }
+      }
+    },
+    "/files/definitions/{fileType}": {
+      "get": {
+        "summary": "Download a definition file",
         "parameters": [
           {
-            "name": "name",
+            "name": "fileType",
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "enum": ["standard-units", "categories", "date-formats"]
             }
           }
         ],
         "responses": {
           "200": {
-            "description": "Preset applied",
+            "description": "Definition file",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PresetApplySummary"
+                  "type": "object"
                 }
               }
             }
           },
           "404": {
-            "description": "Preset not found"
+            "description": "File not found"
+          }
+        }
+      },
+      "put": {
+        "summary": "Upload a definition file",
+        "parameters": [
+          {
+            "name": "fileType",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": ["standard-units", "categories", "date-formats"]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "description": "File contents"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "File uploaded successfully"
+          },
+          "400": {
+            "description": "Invalid file content"
+          }
+        }
+      }
+    },
+    "/files/configs/{fileType}": {
+      "get": {
+        "summary": "Download a configuration file",
+        "parameters": [
+          {
+            "name": "fileType",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "metric",
+                "imperial-us",
+                "imperial-uk",
+                "units-preferences",
+                "custom-units-definitions"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Configuration file",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "File not found"
+          }
+        }
+      },
+      "put": {
+        "summary": "Upload a configuration file",
+        "parameters": [
+          {
+            "name": "fileType",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "metric",
+                "imperial-us",
+                "imperial-uk",
+                "units-preferences",
+                "custom-units-definitions"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "description": "File contents"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "File uploaded successfully"
+          },
+          "400": {
+            "description": "Invalid file content"
           }
         }
       }

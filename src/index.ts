@@ -921,7 +921,13 @@ module.exports = (app: ServerAPI): Plugin => {
           }
 
           // Check if it's a custom preset first
-          const customPresetPath = path.join(__dirname, '..', 'presets', 'custom', `${presetType}.json`)
+          const customPresetPath = path.join(
+            __dirname,
+            '..',
+            'presets',
+            'custom',
+            `${presetType}.json`
+          )
           let presetPath: string
           let isCustom = false
 
@@ -1340,7 +1346,7 @@ module.exports = (app: ServerAPI): Plugin => {
           // Map to actual file names
           const fileNameMap: Record<string, string> = {
             'standard-units': 'standard-units-definitions.json',
-            'categories': 'categories.json',
+            categories: 'categories.json',
             'date-formats': 'date-formats.json'
           }
           const fileName = fileNameMap[fileType]
@@ -1380,7 +1386,7 @@ module.exports = (app: ServerAPI): Plugin => {
           // Map to actual file names
           const fileNameMap: Record<string, string> = {
             'standard-units': 'standard-units-definitions.json',
-            'categories': 'categories.json',
+            categories: 'categories.json',
             'date-formats': 'date-formats.json'
           }
           const fileName = fileNameMap[fileType]
@@ -1517,7 +1523,8 @@ module.exports = (app: ServerAPI): Plugin => {
             // units-preferences.json should contain preferences structure
             if (!data.categories && !data.pathOverrides && !data.pathPatterns) {
               return res.status(400).json({
-                error: 'Invalid structure: units-preferences.json must contain at least one of: categories, pathOverrides, or pathPatterns'
+                error:
+                  'Invalid structure: units-preferences.json must contain at least one of: categories, pathOverrides, or pathPatterns'
               })
             }
 
@@ -1536,7 +1543,8 @@ module.exports = (app: ServerAPI): Plugin => {
             }
             if (hasUnitDefStructure) {
               return res.status(400).json({
-                error: 'Invalid structure: This looks like units-definitions.json. Please upload the correct file.'
+                error:
+                  'Invalid structure: This looks like units-definitions.json. Please upload the correct file.'
               })
             }
           } else if (['imperial-us', 'imperial-uk', 'metric'].includes(fileType)) {

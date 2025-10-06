@@ -986,7 +986,11 @@ export class UnitsManager {
    */
   async saveUnitDefinitions(): Promise<void> {
     try {
-      fs.writeFileSync(this.customDefinitionsPath, JSON.stringify(this.unitDefinitions, null, 2), 'utf-8')
+      fs.writeFileSync(
+        this.customDefinitionsPath,
+        JSON.stringify(this.unitDefinitions, null, 2),
+        'utf-8'
+      )
       this.app.debug('Saved custom unit definitions')
     } catch (error) {
       this.app.error(`Failed to save custom unit definitions: ${error}`)
@@ -1055,7 +1059,9 @@ export class UnitsManager {
         customDef === null ||
         (!customDef.category && !customDef.conversions)
       ) {
-        this.app.error(`Skipping invalid unit definition for "${baseUnit}" - missing required properties`)
+        this.app.error(
+          `Skipping invalid unit definition for "${baseUnit}" - missing required properties`
+        )
         continue
       }
 

@@ -121,6 +121,11 @@
         "formula": "value * 0.546807",
         "inverseFormula": "value * 1.8288",
         "symbol": "fathom"
+      },
+      "mm": {
+        "formula": "value * 1000",
+        "inverseFormula": "value * 0.001",
+        "symbol": "mm"
       }
     }
   },
