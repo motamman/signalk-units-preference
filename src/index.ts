@@ -702,9 +702,9 @@ module.exports = (app: ServerAPI): Plugin => {
         }
       )
 
-      // GET /plugins/signalk-units-preference/current-preset
+      // GET /plugins/signalk-units-preference/presets/current
       // Get current preset information
-      router.get('/current-preset', (req: Request, res: Response) => {
+      router.get('/presets/current', (req: Request, res: Response) => {
         try {
           const preferences = unitsManager.getPreferences()
           res.json(preferences.currentPreset || null)
@@ -959,20 +959,33 @@ module.exports = (app: ServerAPI): Plugin => {
         }
       })
 
-      // POST /plugins/signalk-units-preference/presets/:presetType
-      // Apply a unit system preset (metric, imperial-us, imperial-uk)
-      router.post('/presets/:presetType', async (req: Request, res: Response) => {
+      // PUT /plugins/signalk-units-preference/presets/current
+      // Apply a preset (built-in or custom)
+      router.put('/presets/current', async (req: Request, res: Response) => {
         try {
-          const presetType = req.params.presetType
+          const { presetType } = req.body
 
-          // Read preset from JSON file
-          const presetPath = path.join(__dirname, '..', 'presets', `${presetType}.json`)
+          if (!presetType || typeof presetType !== 'string') {
+            return res.status(400).json({ error: 'presetType is required' })
+          }
 
-          if (!fs.existsSync(presetPath)) {
-            return res.status(400).json({
-              error: 'Invalid preset type',
-              validPresets: ['metric', 'imperial-us', 'imperial-uk']
-            })
+          // Check if it's a custom preset first
+          const customPresetPath = path.join(__dirname, '..', 'presets', 'custom', `${presetType}.json`)
+          let presetPath: string
+          let isCustom = false
+
+          if (fs.existsSync(customPresetPath)) {
+            presetPath = customPresetPath
+            isCustom = true
+          } else {
+            // Try built-in preset
+            presetPath = path.join(__dirname, '..', 'presets', `${presetType}.json`)
+            if (!fs.existsSync(presetPath)) {
+              return res.status(400).json({
+                error: 'Invalid preset type',
+                validPresets: ['metric', 'imperial-us', 'imperial-uk', 'or any custom preset']
+              })
+            }
           }
 
           const presetData = JSON.parse(fs.readFileSync(presetPath, 'utf-8'))
@@ -983,7 +996,6 @@ module.exports = (app: ServerAPI): Plugin => {
           // Update each category that exists in both the preset and current preferences
           for (const [category, settings] of Object.entries(preset)) {
             if (preferences.categories[category]) {
-              // Only update targetUnit and displayFormat, keep existing baseUnit
               await unitsManager.updateCategoryPreference(category, {
                 targetUnit: (settings as any).targetUnit,
                 displayFormat: (settings as any).displayFormat
@@ -1000,6 +1012,7 @@ module.exports = (app: ServerAPI): Plugin => {
             presetType,
             presetName: presetData.name,
             version: presetData.version,
+            isCustom,
             categoriesUpdated: updatedCount
           })
         } catch (error) {
@@ -1141,53 +1154,6 @@ module.exports = (app: ServerAPI): Plugin => {
         }
       })
 
-      // POST /plugins/signalk-units-preference/presets/custom/:name/apply
-      // Apply a custom preset
-      router.post('/presets/custom/:name/apply', async (req: Request, res: Response) => {
-        try {
-          const presetName = req.params.name
-          const presetPath = path.join(__dirname, '..', 'presets', 'custom', `${presetName}.json`)
-
-          if (!fs.existsSync(presetPath)) {
-            return res.status(404).json({ error: 'Custom preset not found' })
-          }
-
-          const presetData = JSON.parse(fs.readFileSync(presetPath, 'utf-8'))
-          const preset = presetData.categories
-          const preferences = unitsManager.getPreferences()
-          let updatedCount = 0
-
-          // Update each category that exists in both the preset and current preferences
-          for (const [category, settings] of Object.entries(preset)) {
-            if (preferences.categories[category]) {
-              await unitsManager.updateCategoryPreference(category, {
-                targetUnit: (settings as any).targetUnit,
-                displayFormat: (settings as any).displayFormat
-              })
-              updatedCount++
-            }
-          }
-
-          // Update current preset information
-          await unitsManager.updateCurrentPreset(presetName, presetData.name, presetData.version)
-
-          res.json({
-            success: true,
-            presetName,
-            displayName: presetData.name,
-            version: presetData.version,
-            categoriesUpdated: updatedCount
-          })
-        } catch (error) {
-          app.error(`Error applying custom preset: ${error}`)
-          res
-            .status(500)
-            .json({ error: error instanceof Error ? error.message : 'Internal server error' })
-        }
-      })
-
-      // DELETE /plugins/signalk-units-preference/presets/custom/:name
-      // Delete a custom preset
       // GET /plugins/signalk-units-preference/presets/custom/:name
       // Download a specific custom preset file
       router.get('/presets/custom/:name', async (req: Request, res: Response) => {
@@ -1270,9 +1236,9 @@ module.exports = (app: ServerAPI): Plugin => {
         }
       })
 
-      // GET /plugins/signalk-units-preference/backup
+      // GET /plugins/signalk-units-preference/backups
       // Download a complete backup of all configuration files
-      router.get('/backup', async (req: Request, res: Response) => {
+      router.get('/backups', async (req: Request, res: Response) => {
         try {
           const dataDir = app.getDataDirPath()
           const archive = archiver('zip', { zlib: { level: 9 } })
@@ -1345,9 +1311,9 @@ module.exports = (app: ServerAPI): Plugin => {
         }
       })
 
-      // POST /plugins/signalk-units-preference/restore
+      // POST /plugins/signalk-units-preference/backups
       // Restore configuration from a backup zip file
-      router.post('/restore', async (req: Request, res: Response) => {
+      router.post('/backups', async (req: Request, res: Response) => {
         try {
           if (!req.body || !req.body.zipData) {
             return res.status(400).json({ error: 'No zip data provided' })
@@ -1408,9 +1374,9 @@ module.exports = (app: ServerAPI): Plugin => {
         }
       })
 
-      // GET /plugins/signalk-units-preference/definition-file/:fileType
+      // GET /plugins/signalk-units-preference/files/definitions/:fileType
       // Download individual definition file (standard-units, categories, date-formats)
-      router.get('/definition-file/:fileType', (req: Request, res: Response) => {
+      router.get('/files/definitions/:fileType', (req: Request, res: Response) => {
         try {
           const fileType = req.params.fileType
 
@@ -1444,9 +1410,9 @@ module.exports = (app: ServerAPI): Plugin => {
         }
       })
 
-      // POST /plugins/signalk-units-preference/definition-file/:fileType
+      // PUT /plugins/signalk-units-preference/files/definitions/:fileType
       // Upload individual definition file (standard-units, categories, date-formats)
-      router.post('/definition-file/:fileType', (req: Request, res: Response) => {
+      router.put('/files/definitions/:fileType', (req: Request, res: Response) => {
         try {
           const fileType = req.params.fileType
 
@@ -1489,9 +1455,9 @@ module.exports = (app: ServerAPI): Plugin => {
         }
       })
 
-      // GET /plugins/signalk-units-preference/config-file/:fileType
+      // GET /plugins/signalk-units-preference/files/configs/:fileType
       // Download built-in preset or runtime data file
-      router.get('/config-file/:fileType', (req: Request, res: Response) => {
+      router.get('/files/configs/:fileType', (req: Request, res: Response) => {
         try {
           const fileType = req.params.fileType
           const dataDir = app.getDataDirPath()
@@ -1534,9 +1500,9 @@ module.exports = (app: ServerAPI): Plugin => {
         }
       })
 
-      // POST /plugins/signalk-units-preference/config-file/:fileType
+      // PUT /plugins/signalk-units-preference/files/configs/:fileType
       // Upload built-in preset or runtime data file
-      router.post('/config-file/:fileType', async (req: Request, res: Response) => {
+      router.put('/files/configs/:fileType', async (req: Request, res: Response) => {
         try {
           const fileType = req.params.fileType
           const dataDir = app.getDataDirPath()

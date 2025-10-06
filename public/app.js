@@ -306,7 +306,7 @@ async function loadData() {
       fetch(`${API_BASE}/overrides`),
       fetch(`${API_BASE}/patterns`),
       fetch(`${API_BASE}/metadata`),
-      fetch(`${API_BASE}/current-preset`)
+      fetch(`${API_BASE}/presets/current`)
     ])
 
     if (!categoriesRes.ok || !overridesRes.ok || !patternsRes.ok || !metaRes.ok || !presetRes.ok) {
@@ -3273,7 +3273,7 @@ async function downloadBackup() {
     statusEl.innerHTML =
       '<div style="color: #667eea; padding: 10px; background: #f0f4ff; border-radius: 4px;">Creating backup...</div>'
 
-    const res = await fetch(`${API_BASE}/backup`)
+    const res = await fetch(`${API_BASE}/backups`)
     if (!res.ok) throw new Error('Failed to create backup')
 
     const blob = await res.blob()
@@ -3320,7 +3320,7 @@ async function restoreBackup(event) {
     const arrayBuffer = await file.arrayBuffer()
     const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)))
 
-    const res = await fetch(`${API_BASE}/restore`, {
+    const res = await fetch(`${API_BASE}/backups`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ zipData: base64 })
@@ -3401,7 +3401,7 @@ async function uploadFile(event, endpoint, fileType) {
     const json = JSON.parse(text) // Validate JSON
 
     const response = await fetch(`${API_BASE}/${endpoint}/${fileType}`, {
-      method: 'POST',
+      method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(json)
     })

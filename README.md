@@ -619,7 +619,7 @@ Apply a built-in preset: `metric`, `imperial-us`, or `imperial-uk`.
 
 #### Get Current Preset
 ```http
-GET /plugins/signalk-units-preference/current-preset
+GET /plugins/signalk-units-preference/presets/current
 ```
 
 Returns the currently applied preset information or `null` if none.
@@ -1686,11 +1686,12 @@ Apache-2.0
   - **Custom Presets Storage**: Saved to `presets/custom/` directory
   - **Custom Presets Management**: View, apply, and delete custom presets in Settings tab
 - **Preset API Endpoints**:
-  - `POST /presets/:presetType` - Apply built-in preset
-  - `GET /current-preset` - Get currently applied preset
+  - `PUT /presets/current` - Apply any preset (built-in or custom)
+  - `GET /presets/current` - Get currently applied preset
   - `POST /presets/custom/:name` - Save custom preset
   - `GET /presets/custom` - List all custom presets
-  - `POST /presets/custom/:name/apply` - Apply custom preset
+  - `GET /presets/custom/:name` - Download custom preset
+  - `PUT /presets/custom/:name` - Upload/update custom preset
   - `DELETE /presets/custom/:name` - Delete custom preset
 - **Unit Definitions Tab**: Create custom base units and conversion formulas globally
 - **Path Patterns**: Wildcard pattern matching with priority system
