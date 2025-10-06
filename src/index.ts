@@ -1251,6 +1251,20 @@ module.exports = (app: ServerAPI): Plugin => {
             }
           }
 
+          // Add definition files
+          const definitionsDir = path.join(__dirname, '..', 'presets', 'definitions')
+          if (fs.existsSync(definitionsDir)) {
+            archive.file(path.join(definitionsDir, 'conversions.json'), {
+              name: 'presets/definitions/conversions.json'
+            })
+            archive.file(path.join(definitionsDir, 'categories.json'), {
+              name: 'presets/definitions/categories.json'
+            })
+            archive.file(path.join(definitionsDir, 'date-formats.json'), {
+              name: 'presets/definitions/date-formats.json'
+            })
+          }
+
           // Add runtime data files
           const preferencesPath = path.join(dataDir, 'units-preferences.json')
           if (fs.existsSync(preferencesPath)) {
@@ -1329,6 +1343,73 @@ module.exports = (app: ServerAPI): Plugin => {
           app.debug(`Backup restored: ${restoredFiles.join(', ')}`)
         } catch (error) {
           app.error(`Error restoring backup: ${error}`)
+          res
+            .status(500)
+            .json({ error: error instanceof Error ? error.message : 'Internal server error' })
+        }
+      })
+
+      // GET /plugins/signalk-units-preference/definition-file/:fileType
+      // Download individual definition file (conversions, categories, date-formats)
+      router.get('/definition-file/:fileType', (req: Request, res: Response) => {
+        try {
+          const fileType = req.params.fileType
+
+          // Validate file type
+          const validTypes = ['conversions', 'categories', 'date-formats']
+          if (!validTypes.includes(fileType)) {
+            return res.status(400).json({ error: 'Invalid file type' })
+          }
+
+          const filePath = path.join(__dirname, '..', 'presets', 'definitions', `${fileType}.json`)
+
+          if (!fs.existsSync(filePath)) {
+            return res.status(404).json({ error: 'File not found' })
+          }
+
+          res.setHeader('Content-Type', 'application/json')
+          res.setHeader('Content-Disposition', `attachment; filename=${fileType}.json`)
+          res.sendFile(filePath)
+        } catch (error) {
+          app.error(`Error downloading definition file: ${error}`)
+          res
+            .status(500)
+            .json({ error: error instanceof Error ? error.message : 'Internal server error' })
+        }
+      })
+
+      // POST /plugins/signalk-units-preference/definition-file/:fileType
+      // Upload individual definition file (conversions, categories, date-formats)
+      router.post('/definition-file/:fileType', (req: Request, res: Response) => {
+        try {
+          const fileType = req.params.fileType
+
+          // Validate file type
+          const validTypes = ['conversions', 'categories', 'date-formats']
+          if (!validTypes.includes(fileType)) {
+            return res.status(400).json({ error: 'Invalid file type' })
+          }
+
+          if (!req.body) {
+            return res.status(400).json({ error: 'No file data provided' })
+          }
+
+          const filePath = path.join(__dirname, '..', 'presets', 'definitions', `${fileType}.json`)
+
+          // Validate JSON structure
+          const data = req.body
+          if (typeof data !== 'object') {
+            return res.status(400).json({ error: 'Invalid JSON data' })
+          }
+
+          // Write file
+          fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8')
+
+          res.json({ success: true, message: `${fileType}.json uploaded successfully` })
+
+          app.debug(`Definition file uploaded: ${fileType}.json`)
+        } catch (error) {
+          app.error(`Error uploading definition file: ${error}`)
           res
             .status(500)
             .json({ error: error instanceof Error ? error.message : 'Internal server error' })

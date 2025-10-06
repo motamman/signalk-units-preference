@@ -3350,6 +3350,82 @@ async function restoreBackup(event) {
   }
 }
 
+// Download individual definition file
+async function downloadDefinitionFile(fileType) {
+  const statusEl = document.getElementById('definitionFileStatus')
+
+  try {
+    statusEl.innerHTML =
+      '<div style="color: #3498db; padding: 10px; background: #e3f2fd; border-radius: 4px;">Downloading...</div>'
+
+    const response = await fetch(`${API_BASE}/definition-file/${fileType}`)
+
+    if (!response.ok) {
+      throw new Error('Failed to download file')
+    }
+
+    const blob = await response.blob()
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${fileType}.json`
+    document.body.appendChild(a)
+    a.click()
+    window.URL.revokeObjectURL(url)
+    document.body.removeChild(a)
+
+    statusEl.innerHTML = `<div style="color: #27ae60; padding: 10px; background: #e8f5e9; border-radius: 4px;">✓ Downloaded ${fileType}.json</div>`
+
+    setTimeout(() => {
+      statusEl.innerHTML = ''
+    }, 3000)
+  } catch (error) {
+    console.error('Download error:', error)
+    statusEl.innerHTML = `<div style="color: #e74c3c; padding: 10px; background: #ffebee; border-radius: 4px;">✗ Failed to download: ${error.message}</div>`
+  }
+}
+
+// Upload individual definition file
+async function uploadDefinitionFile(event, fileType) {
+  const statusEl = document.getElementById('definitionFileStatus')
+  const file = event.target.files[0]
+
+  if (!file) return
+
+  try {
+    statusEl.innerHTML =
+      '<div style="color: #3498db; padding: 10px; background: #e3f2fd; border-radius: 4px;">Uploading...</div>'
+
+    const text = await file.text()
+    const json = JSON.parse(text) // Validate JSON
+
+    const response = await fetch(`${API_BASE}/definition-file/${fileType}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(json)
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json()
+      throw new Error(errorData.error || 'Failed to upload file')
+    }
+
+    statusEl.innerHTML = `<div style="color: #27ae60; padding: 10px; background: #e8f5e9; border-radius: 4px;">
+      ✓ Uploaded ${fileType}.json successfully!<br>
+      <small>Reloading in 2 seconds to apply changes...</small>
+    </div>`
+
+    setTimeout(() => {
+      window.location.reload()
+    }, 2000)
+  } catch (error) {
+    console.error('Upload error:', error)
+    statusEl.innerHTML = `<div style="color: #e74c3c; padding: 10px; background: #ffebee; border-radius: 4px;">✗ Failed to upload: ${error.message}</div>`
+  } finally {
+    event.target.value = '' // Reset file input
+  }
+}
+
 // Switch to a specific tab programmatically
 function switchTab(tabName) {
   // Update active tab button

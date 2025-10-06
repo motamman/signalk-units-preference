@@ -519,9 +519,7 @@ export class UnitsManager {
     // Path override takes precedence when specifying a base unit
     if (pathOverridePref?.baseUnit) {
       const baseUnit = pathOverridePref.baseUnit
-      const builtInDef = Object.values(comprehensiveDefaultUnits).find(
-        meta => meta.baseUnit === baseUnit
-      )
+      const builtInDef = this.getConversionsForBaseUnit(baseUnit)
       const customDef = this.unitDefinitions[baseUnit]
 
       // Merge built-in and custom conversions
@@ -562,9 +560,7 @@ export class UnitsManager {
           metadata = inferred
         } else {
           const baseUnit = skMetadata.units
-          const builtInDef = Object.values(comprehensiveDefaultUnits).find(
-            meta => meta.baseUnit === baseUnit
-          )
+          const builtInDef = this.getConversionsForBaseUnit(baseUnit)
           const customDef = this.unitDefinitions[baseUnit]
 
           // Merge built-in and custom conversions
@@ -716,10 +712,8 @@ export class UnitsManager {
     }
 
     if (!conversion && baseUnit) {
-      const fallback = Object.values(comprehensiveDefaultUnits).find(
-        meta => meta.baseUnit === baseUnit && meta.conversions?.[targetUnit]
-      )
-      if (fallback) {
+      const fallback = this.getConversionsForBaseUnit(baseUnit)
+      if (fallback?.conversions?.[targetUnit]) {
         conversion = fallback.conversions[targetUnit]
       }
     }
@@ -792,7 +786,7 @@ export class UnitsManager {
                   displayFormat: castSettings.displayFormat || existing.displayFormat || '0.0'
                 }
               } else {
-                const schemaBaseUnit = categoryToBaseUnit[category]
+                const schemaBaseUnit = this.getCategoryToBaseUnitMap()[category]
                 const presetBaseUnit = castSettings.baseUnit
 
                 const newCategoryPref: CategoryPreference = {
@@ -857,7 +851,7 @@ export class UnitsManager {
 
       // Only add baseUnit if this is a custom category (not in the static schema)
       // Core categories get their baseUnit from the categoryToBaseUnit map
-      const isCoreCategory = !!categoryToBaseUnit[category]
+      const isCoreCategory = !!this.getCategoryToBaseUnitMap()[category]
       if (baseUnit && !existing.baseUnit && !isCoreCategory) {
         existing.baseUnit = baseUnit
         updated = true
@@ -975,22 +969,41 @@ export class UnitsManager {
    * Get all unit definitions (built-in + custom)
    */
   getUnitDefinitions(): Record<string, UnitMetadata & { isCustom?: boolean }> {
-    // Extract base unit definitions from comprehensive defaults
+    // Extract base unit definitions from JSON or TypeScript fallback
     const baseUnitDefs: Record<string, UnitMetadata & { isCustom?: boolean }> = {}
 
-    for (const [, meta] of Object.entries(comprehensiveDefaultUnits)) {
-      if (meta.baseUnit && !baseUnitDefs[meta.baseUnit]) {
-        baseUnitDefs[meta.baseUnit] = {
-          baseUnit: meta.baseUnit,
-          category: meta.category || meta.baseUnit,
-          conversions: meta.conversions || {},
+    // Use JSON data if available, otherwise fall back to TypeScript
+    const sourceData =
+      Object.keys(this.conversionsData).length > 0
+        ? this.conversionsData
+        : comprehensiveDefaultUnits
+
+    // Handle JSON format (baseUnit as keys)
+    if (sourceData === this.conversionsData) {
+      for (const [baseUnit, data] of Object.entries(sourceData)) {
+        baseUnitDefs[baseUnit] = {
+          baseUnit,
+          category: data.category || baseUnit,
+          conversions: data.conversions || {},
           isCustom: false
         }
-      } else if (meta.baseUnit && meta.conversions) {
-        // Merge conversions if we've seen this base unit before
-        baseUnitDefs[meta.baseUnit].conversions = {
-          ...baseUnitDefs[meta.baseUnit].conversions,
-          ...meta.conversions
+      }
+    } else {
+      // Handle TypeScript format (path-based entries)
+      for (const [, meta] of Object.entries(sourceData)) {
+        if (meta.baseUnit && !baseUnitDefs[meta.baseUnit]) {
+          baseUnitDefs[meta.baseUnit] = {
+            baseUnit: meta.baseUnit,
+            category: meta.category || meta.baseUnit,
+            conversions: meta.conversions || {},
+            isCustom: false
+          }
+        } else if (meta.baseUnit && meta.conversions) {
+          // Merge conversions if we've seen this base unit before
+          baseUnitDefs[meta.baseUnit].conversions = {
+            ...baseUnitDefs[meta.baseUnit].conversions,
+            ...meta.conversions
+          }
         }
       }
     }
@@ -1236,22 +1249,8 @@ export class UnitsManager {
       return null
     }
 
-    // Search static defaults (these have complete conversion sets)
-    let builtInDef: UnitMetadata | undefined
-
-    const defaultDef = Object.values(defaultUnitsMetadata).find(meta => meta.baseUnit === baseUnit)
-    if (defaultDef) {
-      builtInDef = defaultDef
-    }
-
-    if (!builtInDef) {
-      const comprehensiveDef = Object.values(comprehensiveDefaultUnits).find(
-        meta => meta.baseUnit === baseUnit
-      )
-      if (comprehensiveDef) {
-        builtInDef = comprehensiveDef
-      }
-    }
+    // Get built-in conversions (from JSON or TypeScript fallback)
+    const builtInDef = this.getConversionsForBaseUnit(baseUnit)
 
     // Merge with custom definitions if they exist
     const customDef = this.unitDefinitions[baseUnit]
@@ -1438,9 +1437,7 @@ export class UnitsManager {
     }
 
     // Try to find default conversions for this base unit
-    const defaultsForBaseUnit =
-      Object.values(comprehensiveDefaultUnits).find(meta => meta.baseUnit === baseUnit) ||
-      Object.values(defaultUnitsMetadata).find(meta => meta.baseUnit === baseUnit)
+    const defaultsForBaseUnit = this.getConversionsForBaseUnit(baseUnit)
 
     if (!defaultsForBaseUnit) {
       this.app.debug(`No default conversions found for base unit: ${baseUnit}`)
@@ -1448,7 +1445,7 @@ export class UnitsManager {
     }
 
     this.app.debug(
-      `Found in comprehensiveDefaultUnits, conversions: ${Object.keys(defaultsForBaseUnit.conversions).join(', ')}`
+      `Found conversions for ${baseUnit}: ${Object.keys(defaultsForBaseUnit.conversions).join(', ')}`
     )
 
     return {
@@ -1468,12 +1465,9 @@ export class UnitsManager {
       return categoryPref.baseUnit
     }
 
-    // Look up in comprehensive defaults
-    const defaultMeta = Object.values(comprehensiveDefaultUnits).find(
-      meta => meta.category === category
-    )
-
-    return defaultMeta?.baseUnit || null
+    // Look up in category mapping
+    const baseUnit = this.getCategoryToBaseUnitMap()[category]
+    return baseUnit || null
   }
 
   /**
@@ -1521,7 +1515,7 @@ export class UnitsManager {
    */
   private inferMetadataFromSignalK(_pathStr: string, units: string): UnitMetadata | null {
     // Try to find a matching base unit and category
-    const category = Object.entries(categoryToBaseUnit).find(
+    const category = Object.entries(this.getCategoryToBaseUnitMap()).find(
       ([, baseUnit]) => baseUnit === units
     )?.[0]
 
@@ -1530,26 +1524,13 @@ export class UnitsManager {
       return null
     }
 
-    // Find a similar path in default metadata with same category
-    const similarPath = Object.entries(defaultUnitsMetadata).find(
-      ([, meta]) => meta.category === category && meta.baseUnit === units
-    )
-
-    if (similarPath) {
-      return similarPath[1]
-    }
-
-    // Try comprehensive defaults
-    const comprehensivePath = Object.entries(comprehensiveDefaultUnits).find(
-      ([, meta]) => meta.category === category && meta.baseUnit === units
-    )
-
-    if (comprehensivePath) {
-      return comprehensivePath[1]
+    // Try to get conversions for this base unit
+    const conversions = this.getConversionsForBaseUnit(units)
+    if (conversions && conversions.category === category) {
+      return conversions
     }
 
     // Found category but no conversions - return null to let fallback code handle it
-    // This allows resolveMetadataForPath to merge conversions from comprehensiveDefaultUnits
     return null
   }
 
@@ -1878,10 +1859,10 @@ export class UnitsManager {
 
     // Start with the static category-to-baseUnit mapping from defaultUnits
     // This ensures standard SignalK categories use the correct base units
-    const categoryToBaseUnitMap: Record<string, string> = { ...categoryToBaseUnit }
+    const categoryToBaseUnitMap: Record<string, string> = { ...this.getCategoryToBaseUnitMap() }
 
     // Track which categories are core (from the static schema)
-    const coreCategories = Object.keys(categoryToBaseUnit)
+    const coreCategories = this.getCoreCategories()
 
     // Scan custom categories from preferences
     for (const [category, pref] of Object.entries(this.preferences.categories || {})) {

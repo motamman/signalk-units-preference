@@ -1473,6 +1473,47 @@ Apache-2.0
 
 ## Changelog
 
+### [0.5.0-beta.5] - 2025-10-06
+
+#### Added
+- **Combined Date+Time Formats**: 16 new date/time conversion formats
+  - `short-date-24hrs` / `short-date-24hrs-local` → "Jan 6, 2025 14:30:45"
+  - `short-date-am/pm` / `short-date-am/pm-local` → "Jan 6, 2025 02:30:45 PM"
+  - `long-date-24hrs` / `long-date-24hrs-local` → "Monday, January 6, 2025 14:30:45"
+  - `long-date-am/pm` / `long-date-am/pm-local` → "Monday, January 6, 2025 02:30:45 PM"
+  - `dd/mm/yyyy-24hrs` / `dd/mm/yyyy-24hrs-local` → "06/01/2025 14:30:45"
+  - `dd/mm/yyyy-am/pm` / `dd/mm/yyyy-am/pm-local` → "06/01/2025 02:30:45 PM"
+  - `mm/dd/yyyy-24hrs` / `mm/dd/yyyy-24hrs-local` → "01/06/2025 14:30:45"
+  - `mm/dd/yyyy-am/pm` / `mm/dd/yyyy-am/pm-local` → "01/06/2025 02:30:45 PM"
+  - All available for both dateTime (RFC 3339 UTC) and epoch (Epoch Seconds) categories
+
+- **JSON-Based Unit System**: Refactored all conversions, categories, and date formats to JSON files
+  - `presets/definitions/conversions.json` - All unit conversions by base unit
+  - `presets/definitions/categories.json` - Category→baseUnit mappings and core categories list
+  - `presets/definitions/date-formats.json` - Date/time format definitions with metadata
+  - Automatic loading with TypeScript fallback if JSON files missing or corrupted
+  - Users can now customize unit system by editing/uploading JSON files
+
+#### Changed
+- **Backup/Restore**: Updated to include definition files
+  - Backup ZIP now includes `presets/definitions/*.json` files
+  - Restore automatically applies uploaded definition files
+  - Users can download, edit, and re-upload customized unit systems
+
+- **Individual Definition File Management**: New UI in Settings tab for discrete file editing
+  - Download individual definition files: conversions.json, categories.json, date-formats.json
+  - Upload edited files without affecting other definitions
+  - Automatic validation and reload after upload
+  - Fine-grained control over unit system customization
+
+#### Technical Changes
+- Refactored `UnitsManager` to load JSON definitions at startup
+- Added helper methods: `getCategoryToBaseUnitMap()`, `getCoreCategories()`, `getConversionsForBaseUnit()`
+- Replaced all hardcoded TypeScript references with JSON-backed helpers
+- Simplified lookup logic in `findUnitDefinition()`, `inferMetadataFromSignalK()`, etc.
+- Clean separation of data (JSON) vs logic (TypeScript)
+- Backward compatible with TypeScript fallback for missing JSON files
+
 ### [0.5.0-beta.4] - 2025-10-06
 
 #### Fixed

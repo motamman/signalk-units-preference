@@ -1172,6 +1172,67 @@
                 <div id="backupStatus" style="margin-top: 15px;"></div>
             </div>
 
+            <div class="section">
+                <h2>Definition Files</h2>
+                <p style="color: #7f8c8d; margin-bottom: 20px;">
+                    Download and edit individual definition files for fine-grained customization of the unit system.
+                </p>
+
+                <div style="display: grid; gap: 20px;">
+                    <!-- Conversions File -->
+                    <div style="border: 1px solid #dee2e6; border-radius: 8px; padding: 20px; background: #f8f9fa;">
+                        <h3 style="margin: 0 0 10px 0; color: #2c3e50;">conversions.json</h3>
+                        <p style="color: #7f8c8d; margin-bottom: 15px; font-size: 14px;">
+                            All unit conversions organized by base unit (m/s, K, Pa, etc.). Edit to customize conversion formulas, add new target units, or modify symbols.
+                        </p>
+                        <div style="display: flex; gap: 10px;">
+                            <button class="btn-primary" onclick="downloadDefinitionFile('conversions')" style="flex: 1;">
+                                📥 Download
+                            </button>
+                            <button class="btn-primary" onclick="document.getElementById('uploadConversions').click()" style="flex: 1;">
+                                📤 Upload
+                            </button>
+                            <input type="file" id="uploadConversions" accept=".json" style="display: none;" onchange="uploadDefinitionFile(event, 'conversions')">
+                        </div>
+                    </div>
+
+                    <!-- Categories File -->
+                    <div style="border: 1px solid #dee2e6; border-radius: 8px; padding: 20px; background: #f8f9fa;">
+                        <h3 style="margin: 0 0 10px 0; color: #2c3e50;">categories.json</h3>
+                        <p style="color: #7f8c8d; margin-bottom: 15px; font-size: 14px;">
+                            Category to base unit mappings and core categories list. Edit to add new categories or change which base unit a category uses.
+                        </p>
+                        <div style="display: flex; gap: 10px;">
+                            <button class="btn-primary" onclick="downloadDefinitionFile('categories')" style="flex: 1;">
+                                📥 Download
+                            </button>
+                            <button class="btn-primary" onclick="document.getElementById('uploadCategories').click()" style="flex: 1;">
+                                📤 Upload
+                            </button>
+                            <input type="file" id="uploadCategories" accept=".json" style="display: none;" onchange="uploadDefinitionFile(event, 'categories')">
+                        </div>
+                    </div>
+
+                    <!-- Date Formats File -->
+                    <div style="border: 1px solid #dee2e6; border-radius: 8px; padding: 20px; background: #f8f9fa;">
+                        <h3 style="margin: 0 0 10px 0; color: #2c3e50;">date-formats.json</h3>
+                        <p style="color: #7f8c8d; margin-bottom: 15px; font-size: 14px;">
+                            Date and time format definitions with metadata. Edit to add custom date/time formats (requires pattern parser for non-built-in formats).
+                        </p>
+                        <div style="display: flex; gap: 10px;">
+                            <button class="btn-primary" onclick="downloadDefinitionFile('date-formats')" style="flex: 1;">
+                                📥 Download
+                            </button>
+                            <button class="btn-primary" onclick="document.getElementById('uploadDateFormats').click()" style="flex: 1;">
+                                📤 Upload
+                            </button>
+                            <input type="file" id="uploadDateFormats" accept=".json" style="display: none;" onchange="uploadDefinitionFile(event, 'date-formats')">
+                        </div>
+                    </div>
+                </div>
+                <div id="definitionFileStatus" style="margin-top: 15px;"></div>
+            </div>
+
         </div>
     </div>
 
