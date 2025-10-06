@@ -1919,6 +1919,11 @@ export class UnitsManager {
     // Track which categories are core (from the static schema)
     const coreCategories = this.getCoreCategories()
 
+    // Add all core categories to the set (so they always appear even if no paths use them)
+    for (const category of coreCategories) {
+      categoriesSet.add(category)
+    }
+
     // Scan custom categories from preferences
     for (const [category, pref] of Object.entries(this.preferences.categories || {})) {
       if (pref.baseUnit) {
@@ -1935,7 +1940,28 @@ export class UnitsManager {
       }
     }
 
-    // Scan custom unit definitions
+    // Scan standard unit definitions
+    const sourceData =
+      Object.keys(this.standardUnitsData).length > 0
+        ? this.standardUnitsData
+        : comprehensiveDefaultUnits
+
+    if (sourceData === this.standardUnitsData) {
+      // JSON format (baseUnit as keys)
+      for (const [baseUnit, data] of Object.entries(sourceData)) {
+        baseUnitsSet.add(baseUnit)
+        if (data.conversions) {
+          if (!targetUnitsByBase[baseUnit]) {
+            targetUnitsByBase[baseUnit] = new Set()
+          }
+          for (const targetUnit of Object.keys(data.conversions)) {
+            targetUnitsByBase[baseUnit].add(targetUnit)
+          }
+        }
+      }
+    }
+
+    // Scan custom unit definitions (override/extend standard)
     for (const [baseUnit, def] of Object.entries(this.unitDefinitions)) {
       baseUnitsSet.add(baseUnit)
 
@@ -1949,7 +1975,8 @@ export class UnitsManager {
       }
     }
 
-    // Scan all metadata (including comprehensive defaults)
+    // Scan all metadata to discover categories (but NOT to add conversions)
+    // Path-specific metadata conversions shouldn't pollute the global schema
     const allMetadata = { ...comprehensiveDefaultUnits, ...this.metadata }
 
     for (const [, meta] of Object.entries(allMetadata)) {
@@ -1965,14 +1992,8 @@ export class UnitsManager {
         }
       }
 
-      if (meta.conversions) {
-        if (!targetUnitsByBase[meta.baseUnit]) {
-          targetUnitsByBase[meta.baseUnit] = new Set()
-        }
-        for (const targetUnit of Object.keys(meta.conversions)) {
-          targetUnitsByBase[meta.baseUnit].add(targetUnit)
-        }
-      }
+      // NOTE: We do NOT add path-specific conversions to targetUnitsByBase
+      // Those are only for specific paths, not global schema
     }
 
     // Convert sets to arrays and create labeled base units

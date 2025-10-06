@@ -947,18 +947,15 @@ module.exports = (app: ServerAPI): Plugin => {
 
           const presetData = JSON.parse(fs.readFileSync(presetPath, 'utf-8'))
           const preset = presetData.categories
-          const preferences = unitsManager.getPreferences()
           let updatedCount = 0
 
-          // Update each category that exists in both the preset and current preferences
+          // Update all categories from the preset (create if missing, update if exists)
           for (const [category, settings] of Object.entries(preset)) {
-            if (preferences.categories[category]) {
-              await unitsManager.updateCategoryPreference(category, {
-                targetUnit: (settings as any).targetUnit,
-                displayFormat: (settings as any).displayFormat
-              })
-              updatedCount++
-            }
+            await unitsManager.updateCategoryPreference(category, {
+              targetUnit: (settings as any).targetUnit,
+              displayFormat: (settings as any).displayFormat
+            })
+            updatedCount++
           }
 
           // Update current preset information
