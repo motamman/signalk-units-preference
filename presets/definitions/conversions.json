@@ -21,6 +21,11 @@
         "formula": "value * 2.23694",
         "inverseFormula": "value * 0.44704",
         "symbol": "mph"
+      },
+      "Beaufort": {
+        "formula": "Math.pow(value / 0.836, 2/3)",
+        "inverseFormula": "0.836 * Math.pow(value, 1.5)",
+        "symbol": "Bf"
       }
     }
   },
