@@ -3350,15 +3350,15 @@ async function restoreBackup(event) {
   }
 }
 
-// Download individual definition file
-async function downloadDefinitionFile(fileType) {
-  const statusEl = document.getElementById('definitionFileStatus')
+// Generic download function for all file types
+async function downloadFile(endpoint, fileType) {
+  const statusEl = document.getElementById('fileManagementStatus')
 
   try {
     statusEl.innerHTML =
       '<div style="color: #3498db; padding: 10px; background: #e3f2fd; border-radius: 4px;">Downloading...</div>'
 
-    const response = await fetch(`${API_BASE}/definition-file/${fileType}`)
+    const response = await fetch(`${API_BASE}/${endpoint}/${fileType}`)
 
     if (!response.ok) {
       throw new Error('Failed to download file')
@@ -3385,9 +3385,9 @@ async function downloadDefinitionFile(fileType) {
   }
 }
 
-// Upload individual definition file
-async function uploadDefinitionFile(event, fileType) {
-  const statusEl = document.getElementById('definitionFileStatus')
+// Generic upload function for all file types
+async function uploadFile(event, endpoint, fileType) {
+  const statusEl = document.getElementById('fileManagementStatus')
   const file = event.target.files[0]
 
   if (!file) return
@@ -3399,7 +3399,7 @@ async function uploadDefinitionFile(event, fileType) {
     const text = await file.text()
     const json = JSON.parse(text) // Validate JSON
 
-    const response = await fetch(`${API_BASE}/definition-file/${fileType}`, {
+    const response = await fetch(`${API_BASE}/${endpoint}/${fileType}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(json)

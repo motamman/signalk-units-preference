@@ -1173,64 +1173,150 @@
             </div>
 
             <div class="section">
-                <h2>Definition Files</h2>
+                <h2>Configuration Files</h2>
                 <p style="color: #7f8c8d; margin-bottom: 20px;">
-                    Download and edit individual definition files for fine-grained customization of the unit system.
+                    Download and edit individual configuration files for fine-grained customization. All files are included in the full backup ZIP.
                 </p>
 
-                <div style="display: grid; gap: 20px;">
+                <h3 style="margin: 20px 0 15px 0; color: #34495e; font-size: 1.1rem;">Definition Files</h3>
+                <div style="display: grid; gap: 15px; margin-bottom: 30px;">
                     <!-- Conversions File -->
-                    <div style="border: 1px solid #dee2e6; border-radius: 8px; padding: 20px; background: #f8f9fa;">
-                        <h3 style="margin: 0 0 10px 0; color: #2c3e50;">conversions.json</h3>
-                        <p style="color: #7f8c8d; margin-bottom: 15px; font-size: 14px;">
-                            All unit conversions organized by base unit (m/s, K, Pa, etc.). Edit to customize conversion formulas, add new target units, or modify symbols.
+                    <div style="border: 1px solid #dee2e6; border-radius: 6px; padding: 15px; background: #f8f9fa;">
+                        <h4 style="margin: 0 0 8px 0; color: #2c3e50; font-size: 1rem;">conversions.json</h4>
+                        <p style="color: #7f8c8d; margin-bottom: 12px; font-size: 13px;">
+                            All unit conversions by base unit. Edit formulas, add target units, or modify symbols.
                         </p>
-                        <div style="display: flex; gap: 10px;">
-                            <button class="btn-primary" onclick="downloadDefinitionFile('conversions')" style="flex: 1;">
+                        <div style="display: flex; gap: 8px;">
+                            <button class="btn-primary" onclick="downloadFile('definition-file', 'conversions')" style="flex: 1; padding: 8px;">
                                 📥 Download
                             </button>
-                            <button class="btn-primary" onclick="document.getElementById('uploadConversions').click()" style="flex: 1;">
+                            <button class="btn-primary" onclick="document.getElementById('uploadConversions').click()" style="flex: 1; padding: 8px;">
                                 📤 Upload
                             </button>
-                            <input type="file" id="uploadConversions" accept=".json" style="display: none;" onchange="uploadDefinitionFile(event, 'conversions')">
+                            <input type="file" id="uploadConversions" accept=".json" style="display: none;" onchange="uploadFile(event, 'definition-file', 'conversions')">
                         </div>
                     </div>
 
-                    <!-- Categories File -->
-                    <div style="border: 1px solid #dee2e6; border-radius: 8px; padding: 20px; background: #f8f9fa;">
-                        <h3 style="margin: 0 0 10px 0; color: #2c3e50;">categories.json</h3>
-                        <p style="color: #7f8c8d; margin-bottom: 15px; font-size: 14px;">
-                            Category to base unit mappings and core categories list. Edit to add new categories or change which base unit a category uses.
+                    <div style="border: 1px solid #dee2e6; border-radius: 6px; padding: 15px; background: #f8f9fa;">
+                        <h4 style="margin: 0 0 8px 0; color: #2c3e50; font-size: 1rem;">categories.json</h4>
+                        <p style="color: #7f8c8d; margin-bottom: 12px; font-size: 13px;">
+                            Category→baseUnit mappings and core categories list.
                         </p>
-                        <div style="display: flex; gap: 10px;">
-                            <button class="btn-primary" onclick="downloadDefinitionFile('categories')" style="flex: 1;">
+                        <div style="display: flex; gap: 8px;">
+                            <button class="btn-primary" onclick="downloadFile('definition-file', 'categories')" style="flex: 1; padding: 8px;">
                                 📥 Download
                             </button>
-                            <button class="btn-primary" onclick="document.getElementById('uploadCategories').click()" style="flex: 1;">
+                            <button class="btn-primary" onclick="document.getElementById('uploadCategories').click()" style="flex: 1; padding: 8px;">
                                 📤 Upload
                             </button>
-                            <input type="file" id="uploadCategories" accept=".json" style="display: none;" onchange="uploadDefinitionFile(event, 'categories')">
+                            <input type="file" id="uploadCategories" accept=".json" style="display: none;" onchange="uploadFile(event, 'definition-file', 'categories')">
                         </div>
                     </div>
 
-                    <!-- Date Formats File -->
-                    <div style="border: 1px solid #dee2e6; border-radius: 8px; padding: 20px; background: #f8f9fa;">
-                        <h3 style="margin: 0 0 10px 0; color: #2c3e50;">date-formats.json</h3>
-                        <p style="color: #7f8c8d; margin-bottom: 15px; font-size: 14px;">
-                            Date and time format definitions with metadata. Edit to add custom date/time formats (requires pattern parser for non-built-in formats).
+                    <div style="border: 1px solid #dee2e6; border-radius: 6px; padding: 15px; background: #f8f9fa;">
+                        <h4 style="margin: 0 0 8px 0; color: #2c3e50; font-size: 1rem;">date-formats.json</h4>
+                        <p style="color: #7f8c8d; margin-bottom: 12px; font-size: 13px;">
+                            Date/time format definitions with metadata and examples.
                         </p>
-                        <div style="display: flex; gap: 10px;">
-                            <button class="btn-primary" onclick="downloadDefinitionFile('date-formats')" style="flex: 1;">
+                        <div style="display: flex; gap: 8px;">
+                            <button class="btn-primary" onclick="downloadFile('definition-file', 'date-formats')" style="flex: 1; padding: 8px;">
                                 📥 Download
                             </button>
-                            <button class="btn-primary" onclick="document.getElementById('uploadDateFormats').click()" style="flex: 1;">
+                            <button class="btn-primary" onclick="document.getElementById('uploadDateFormats').click()" style="flex: 1; padding: 8px;">
                                 📤 Upload
                             </button>
-                            <input type="file" id="uploadDateFormats" accept=".json" style="display: none;" onchange="uploadDefinitionFile(event, 'date-formats')">
+                            <input type="file" id="uploadDateFormats" accept=".json" style="display: none;" onchange="uploadFile(event, 'definition-file', 'date-formats')">
                         </div>
                     </div>
                 </div>
-                <div id="definitionFileStatus" style="margin-top: 15px;"></div>
+
+                <h3 style="margin: 20px 0 15px 0; color: #34495e; font-size: 1.1rem;">Built-in Presets</h3>
+                <div style="display: grid; gap: 15px; margin-bottom: 30px;">
+                    <div style="border: 1px solid #dee2e6; border-radius: 6px; padding: 15px; background: #f8f9fa;">
+                        <h4 style="margin: 0 0 8px 0; color: #2c3e50; font-size: 1rem;">imperial-us.json</h4>
+                        <p style="color: #7f8c8d; margin-bottom: 12px; font-size: 13px;">
+                            Imperial (US) unit preset with US customary units.
+                        </p>
+                        <div style="display: flex; gap: 8px;">
+                            <button class="btn-primary" onclick="downloadFile('config-file', 'imperial-us')" style="flex: 1; padding: 8px;">
+                                📥 Download
+                            </button>
+                            <button class="btn-primary" onclick="document.getElementById('uploadImperialUs').click()" style="flex: 1; padding: 8px;">
+                                📤 Upload
+                            </button>
+                            <input type="file" id="uploadImperialUs" accept=".json" style="display: none;" onchange="uploadFile(event, 'config-file', 'imperial-us')">
+                        </div>
+                    </div>
+
+                    <div style="border: 1px solid #dee2e6; border-radius: 6px; padding: 15px; background: #f8f9fa;">
+                        <h4 style="margin: 0 0 8px 0; color: #2c3e50; font-size: 1rem;">imperial-uk.json</h4>
+                        <p style="color: #7f8c8d; margin-bottom: 12px; font-size: 13px;">
+                            Imperial (UK) unit preset with British units.
+                        </p>
+                        <div style="display: flex; gap: 8px;">
+                            <button class="btn-primary" onclick="downloadFile('config-file', 'imperial-uk')" style="flex: 1; padding: 8px;">
+                                📥 Download
+                            </button>
+                            <button class="btn-primary" onclick="document.getElementById('uploadImperialUk').click()" style="flex: 1; padding: 8px;">
+                                📤 Upload
+                            </button>
+                            <input type="file" id="uploadImperialUk" accept=".json" style="display: none;" onchange="uploadFile(event, 'config-file', 'imperial-uk')">
+                        </div>
+                    </div>
+
+                    <div style="border: 1px solid #dee2e6; border-radius: 6px; padding: 15px; background: #f8f9fa;">
+                        <h4 style="margin: 0 0 8px 0; color: #2c3e50; font-size: 1rem;">metric.json</h4>
+                        <p style="color: #7f8c8d; margin-bottom: 12px; font-size: 13px;">
+                            Metric unit preset with SI units.
+                        </p>
+                        <div style="display: flex; gap: 8px;">
+                            <button class="btn-primary" onclick="downloadFile('config-file', 'metric')" style="flex: 1; padding: 8px;">
+                                📥 Download
+                            </button>
+                            <button class="btn-primary" onclick="document.getElementById('uploadMetric').click()" style="flex: 1; padding: 8px;">
+                                📤 Upload
+                            </button>
+                            <input type="file" id="uploadMetric" accept=".json" style="display: none;" onchange="uploadFile(event, 'config-file', 'metric')">
+                        </div>
+                    </div>
+                </div>
+
+                <h3 style="margin: 20px 0 15px 0; color: #34495e; font-size: 1.1rem;">Runtime Data Files</h3>
+                <div style="display: grid; gap: 15px;">
+                    <div style="border: 1px solid #dee2e6; border-radius: 6px; padding: 15px; background: #f8f9fa;">
+                        <h4 style="margin: 0 0 8px 0; color: #2c3e50; font-size: 1rem;">units-preferences.json</h4>
+                        <p style="color: #7f8c8d; margin-bottom: 12px; font-size: 13px;">
+                            Current preferences, path overrides, patterns, and active preset.
+                        </p>
+                        <div style="display: flex; gap: 8px;">
+                            <button class="btn-primary" onclick="downloadFile('config-file', 'units-preferences')" style="flex: 1; padding: 8px;">
+                                📥 Download
+                            </button>
+                            <button class="btn-primary" onclick="document.getElementById('uploadPreferences').click()" style="flex: 1; padding: 8px;">
+                                📤 Upload
+                            </button>
+                            <input type="file" id="uploadPreferences" accept=".json" style="display: none;" onchange="uploadFile(event, 'config-file', 'units-preferences')">
+                        </div>
+                    </div>
+
+                    <div style="border: 1px solid #dee2e6; border-radius: 6px; padding: 15px; background: #f8f9fa;">
+                        <h4 style="margin: 0 0 8px 0; color: #2c3e50; font-size: 1rem;">units-definitions.json</h4>
+                        <p style="color: #7f8c8d; margin-bottom: 12px; font-size: 13px;">
+                            Custom unit definitions and user-added conversions.
+                        </p>
+                        <div style="display: flex; gap: 8px;">
+                            <button class="btn-primary" onclick="downloadFile('config-file', 'units-definitions')" style="flex: 1; padding: 8px;">
+                                📥 Download
+                            </button>
+                            <button class="btn-primary" onclick="document.getElementById('uploadDefinitionsData').click()" style="flex: 1; padding: 8px;">
+                                📤 Upload
+                            </button>
+                            <input type="file" id="uploadDefinitionsData" accept=".json" style="display: none;" onchange="uploadFile(event, 'config-file', 'units-definitions')">
+                        </div>
+                    </div>
+                </div>
+
+                <div id="fileManagementStatus" style="margin-top: 15px;"></div>
             </div>
 
         </div>

@@ -1416,6 +1416,101 @@ module.exports = (app: ServerAPI): Plugin => {
         }
       })
 
+      // GET /plugins/signalk-units-preference/config-file/:fileType
+      // Download built-in preset or runtime data file
+      router.get('/config-file/:fileType', (req: Request, res: Response) => {
+        try {
+          const fileType = req.params.fileType
+          const dataDir = app.getDataDirPath()
+
+          let filePath: string
+          let fileName: string
+
+          // Map file types to paths
+          switch (fileType) {
+            case 'imperial-us':
+            case 'imperial-uk':
+            case 'metric':
+              filePath = path.join(__dirname, '..', 'presets', `${fileType}.json`)
+              fileName = `${fileType}.json`
+              break
+            case 'units-preferences':
+              filePath = path.join(dataDir, 'units-preferences.json')
+              fileName = 'units-preferences.json'
+              break
+            case 'units-definitions':
+              filePath = path.join(dataDir, 'units-definitions.json')
+              fileName = 'units-definitions.json'
+              break
+            default:
+              return res.status(400).json({ error: 'Invalid file type' })
+          }
+
+          if (!fs.existsSync(filePath)) {
+            return res.status(404).json({ error: 'File not found' })
+          }
+
+          res.setHeader('Content-Type', 'application/json')
+          res.setHeader('Content-Disposition', `attachment; filename=${fileName}`)
+          res.sendFile(filePath)
+        } catch (error) {
+          app.error(`Error downloading config file: ${error}`)
+          res
+            .status(500)
+            .json({ error: error instanceof Error ? error.message : 'Internal server error' })
+        }
+      })
+
+      // POST /plugins/signalk-units-preference/config-file/:fileType
+      // Upload built-in preset or runtime data file
+      router.post('/config-file/:fileType', (req: Request, res: Response) => {
+        try {
+          const fileType = req.params.fileType
+          const dataDir = app.getDataDirPath()
+
+          if (!req.body) {
+            return res.status(400).json({ error: 'No file data provided' })
+          }
+
+          let filePath: string
+
+          // Map file types to paths
+          switch (fileType) {
+            case 'imperial-us':
+            case 'imperial-uk':
+            case 'metric':
+              filePath = path.join(__dirname, '..', 'presets', `${fileType}.json`)
+              break
+            case 'units-preferences':
+              filePath = path.join(dataDir, 'units-preferences.json')
+              break
+            case 'units-definitions':
+              filePath = path.join(dataDir, 'units-definitions.json')
+              break
+            default:
+              return res.status(400).json({ error: 'Invalid file type' })
+          }
+
+          // Validate JSON structure
+          const data = req.body
+          if (typeof data !== 'object') {
+            return res.status(400).json({ error: 'Invalid JSON data' })
+          }
+
+          // Write file
+          fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8')
+
+          res.json({ success: true, message: `${fileType}.json uploaded successfully` })
+
+          app.debug(`Config file uploaded: ${fileType}.json`)
+        } catch (error) {
+          app.error(`Error uploading config file: ${error}`)
+          res
+            .status(500)
+            .json({ error: error instanceof Error ? error.message : 'Internal server error' })
+        }
+      })
+
       app.debug('API routes registered')
     },
 

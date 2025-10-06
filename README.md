@@ -1500,11 +1500,13 @@ Apache-2.0
   - Restore automatically applies uploaded definition files
   - Users can download, edit, and re-upload customized unit systems
 
-- **Individual Definition File Management**: New UI in Settings tab for discrete file editing
-  - Download individual definition files: conversions.json, categories.json, date-formats.json
-  - Upload edited files without affecting other definitions
-  - Automatic validation and reload after upload
-  - Fine-grained control over unit system customization
+- **Comprehensive File Management**: New UI in Settings tab for discrete file editing
+  - **Definition Files**: conversions.json, categories.json, date-formats.json
+  - **Built-in Presets**: imperial-us.json, imperial-uk.json, metric.json
+  - **Runtime Data**: units-preferences.json, units-definitions.json
+  - Download/upload any individual file without affecting others
+  - Automatic JSON validation and reload after upload
+  - Fine-grained control over every aspect of the unit system
 
 #### Technical Changes
 - Refactored `UnitsManager` to load JSON definitions at startup
