@@ -1275,8 +1275,10 @@ async function applyCustomPreset(presetId, presetName) {
   }
 
   try {
-    const res = await fetch(`${API_BASE}/presets/custom/${presetId}/apply`, {
-      method: 'POST'
+    const res = await fetch(`${API_BASE}/presets/current`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ presetType: presetId })
     })
 
     if (!res.ok) throw new Error('Failed to apply custom preset')
@@ -1377,8 +1379,10 @@ async function applyUnitPreset(presetType) {
   }
 
   try {
-    const res = await fetch(`${API_BASE}/presets/${presetType}`, {
-      method: 'POST'
+    const res = await fetch(`${API_BASE}/presets/current`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ presetType })
     })
 
     if (!res.ok) throw new Error('Failed to apply preset')
