@@ -1522,7 +1522,7 @@ module.exports = (app: ServerAPI): Plugin => {
 
       // POST /plugins/signalk-units-preference/config-file/:fileType
       // Upload built-in preset or runtime data file
-      router.post('/config-file/:fileType', (req: Request, res: Response) => {
+      router.post('/config-file/:fileType', async (req: Request, res: Response) => {
         try {
           const fileType = req.params.fileType
           const dataDir = app.getDataDirPath()
@@ -1556,8 +1556,72 @@ module.exports = (app: ServerAPI): Plugin => {
             return res.status(400).json({ error: 'Invalid JSON data' })
           }
 
+          // Validate structure based on file type
+          if (fileType === 'units-definitions') {
+            // units-definitions.json should contain unit definitions, NOT preferences
+            const invalidKeys = ['categories', 'pathOverrides', 'pathPatterns', 'currentPreset']
+            for (const key of invalidKeys) {
+              if (key in data) {
+                return res.status(400).json({
+                  error: `Invalid structure: "${key}" belongs in units-preferences.json, not units-definitions.json. Please upload the correct file.`
+                })
+              }
+            }
+
+            // Validate that it contains valid unit definitions structure
+            for (const [baseUnit, def] of Object.entries(data)) {
+              if (typeof def !== 'object' || def === null) {
+                return res.status(400).json({
+                  error: `Invalid unit definition for "${baseUnit}": must be an object`
+                })
+              }
+              const unitDef = def as any
+              if (!unitDef.category && !unitDef.conversions) {
+                return res.status(400).json({
+                  error: `Invalid unit definition for "${baseUnit}": must have "category" or "conversions" property`
+                })
+              }
+            }
+          } else if (fileType === 'units-preferences') {
+            // units-preferences.json should contain preferences structure
+            if (!data.categories && !data.pathOverrides && !data.pathPatterns) {
+              return res.status(400).json({
+                error: 'Invalid structure: units-preferences.json must contain at least one of: categories, pathOverrides, or pathPatterns'
+              })
+            }
+
+            // Check for mistakenly uploaded units-definitions
+            let hasUnitDefStructure = false
+            for (const [key, value] of Object.entries(data)) {
+              if (
+                typeof value === 'object' &&
+                value !== null &&
+                'conversions' in value &&
+                !['categories', 'pathOverrides', 'pathPatterns', 'currentPreset'].includes(key)
+              ) {
+                hasUnitDefStructure = true
+                break
+              }
+            }
+            if (hasUnitDefStructure) {
+              return res.status(400).json({
+                error: 'Invalid structure: This looks like units-definitions.json. Please upload the correct file.'
+              })
+            }
+          } else if (['imperial-us', 'imperial-uk', 'metric'].includes(fileType)) {
+            // Preset files should have categories
+            if (!data.categories) {
+              return res.status(400).json({
+                error: 'Invalid preset structure: must contain "categories" property'
+              })
+            }
+          }
+
           // Write file
           fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8')
+
+          // Reload units manager to apply changes
+          await unitsManager.initialize()
 
           res.json({ success: true, message: `${fileType}.json uploaded successfully` })
 

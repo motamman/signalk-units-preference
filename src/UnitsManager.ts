@@ -1009,7 +1009,27 @@ export class UnitsManager {
     }
 
     // Merge custom units with built-in units
+    // Filter out invalid keys that don't belong in unit definitions
+    const invalidKeys = ['categories', 'pathOverrides', 'pathPatterns', 'currentPreset']
     for (const [baseUnit, customDef] of Object.entries(this.unitDefinitions)) {
+      // Skip keys that are preferences properties, not unit definitions
+      if (invalidKeys.includes(baseUnit)) {
+        this.app.error(
+          `Skipping invalid key "${baseUnit}" in units-definitions.json - this belongs in units-preferences.json`
+        )
+        continue
+      }
+
+      // Validate that customDef has the expected structure
+      if (
+        typeof customDef !== 'object' ||
+        customDef === null ||
+        (!customDef.category && !customDef.conversions)
+      ) {
+        this.app.error(`Skipping invalid unit definition for "${baseUnit}" - missing required properties`)
+        continue
+      }
+
       if (baseUnitDefs[baseUnit]) {
         // This is an extension of a built-in base unit - merge conversions
         baseUnitDefs[baseUnit] = {
