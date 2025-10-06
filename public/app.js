@@ -965,7 +965,7 @@ function renderMetadataTable(pathInfo) {
   const tbody = document.getElementById('metadataTableBody')
   tbody.innerHTML = pathInfo
     .map(info => {
-      const conversionUrl = `${API_BASE}/conversion/${info.path}`
+      const conversionUrl = `${API_BASE}/conversions/${info.path}`
       const details = getCurrentValueDetails(info.path)
       const currentValue = details?.value
 
@@ -973,7 +973,7 @@ function renderMetadataTable(pathInfo) {
       let testLink = ''
       if (currentValue !== undefined && currentValue !== null) {
         if (info.valueType === 'number') {
-          const convertUrl = `${API_BASE}/convert/${info.path}/${currentValue}`
+          const convertUrl = `${API_BASE}/conversions/${info.path}?value=${encodeURIComponent(currentValue)}`
           testLink = `<a href="${convertUrl}" target="_blank" title="Run conversion test - convert current value (${currentValue}) and see result in new tab" style="color: #2ecc71; margin-left: 4px; text-decoration: none; font-size: 14px;">▶️</a>`
         } else {
           const formId = `convert-form-${info.path.replace(/\./g, '-')}`
@@ -984,7 +984,7 @@ function renderMetadataTable(pathInfo) {
                 ? currentValue
                 : JSON.stringify(currentValue)
 
-          testLink = `<form id="${formId}" method="POST" action="${API_BASE}/convert" target="_blank" style="display: inline; margin: 0;">
+          testLink = `<form id="${formId}" method="POST" action="${API_BASE}/conversions" target="_blank" style="display: inline; margin: 0;">
         <input type="hidden" name="path" value="${info.path}">
         <input type="hidden" name="value" value="${serializedValue.replace(/"/g, '&quot;')}">
         <input type="hidden" name="type" value="${info.valueType}">
@@ -999,7 +999,7 @@ function renderMetadataTable(pathInfo) {
       const encodedCurrentValue = canUseGetLink ? encodeURIComponent(String(currentValue)) : null
 
       const getLink = canUseGetLink
-        ? `<a href="${API_BASE}/convert/${info.path}/${encodedCurrentValue}" target="_blank" title="Open conversion in new tab - test GET endpoint with current value (${currentValue})" style="color: #e67e22; margin-left: 4px; text-decoration: none; font-size: 14px;">🔗</a>`
+        ? `<a href="${API_BASE}/conversions/${info.path}?value=${encodedCurrentValue}" target="_blank" title="Open conversion in new tab - test GET endpoint with current value (${currentValue})" style="color: #e67e22; margin-left: 4px; text-decoration: none; font-size: 14px;">🔗</a>`
         : ''
 
       // Add pattern icon if not already a pattern or auto-assigned
@@ -2850,9 +2850,9 @@ function renderPathOverrides() {
 
   container.innerHTML = overrides
     .map(override => {
-      const conversionUrl = `${API_BASE}/conversion/${override.path}`
+      const conversionUrl = `${API_BASE}/conversions/${override.path}`
       const currentValue = getCurrentValue(override.path) || 0
-      const convertUrl = `${API_BASE}/convert/${override.path}/${currentValue}`
+      const convertUrl = `${API_BASE}/conversions/${override.path}?value=${encodeURIComponent(currentValue)}`
       const baseUnit = override.baseUnit || 'auto'
       const targetUnit = override.targetUnit || 'none'
       const displayFormat = override.displayFormat || '0.0'
@@ -2895,7 +2895,7 @@ async function editPathOverride(path) {
   let baseUnit = override.baseUnit
   if (!baseUnit || baseUnit === 'auto') {
     try {
-      const res = await fetch(`${API_BASE}/conversion/${path}`)
+      const res = await fetch(`${API_BASE}/conversions/${path}`)
       if (res.ok) {
         const conversion = await res.json()
         baseUnit = conversion.baseUnit || 'auto'

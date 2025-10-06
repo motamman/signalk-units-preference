@@ -349,15 +349,26 @@ module.exports = (app: ServerAPI): Plugin => {
         }
       })
 
-      // GET /plugins/signalk-units-preference/conversion/:path
-      // Get conversion info for a specific path (shows currently selected conversion)
-      router.get('/conversion/:path(*)', (req: Request, res: Response) => {
+      // GET /plugins/signalk-units-preference/conversions/:path
+      // Get conversion info for a specific path, optionally convert a value with ?value query param
+      router.get('/conversions/:path(*)', (req: Request, res: Response) => {
         try {
           const pathStr = req.params.path
-          app.debug(`Getting conversion for path: ${pathStr}`)
+          const valueParam = Array.isArray(req.query.value) ? req.query.value[0] : req.query.value
+          const typeParam = Array.isArray(req.query.type) ? req.query.type[0] : req.query.type
 
+          // If value query param provided, return conversion result
+          if (valueParam !== undefined) {
+            app.debug(`Converting value ${valueParam} for path: ${pathStr}`)
+            const result = buildDeltaResponse(pathStr, valueParam, {
+              typeHint: typeof typeParam === 'string' ? toSupportedValueType(typeParam) : undefined
+            })
+            return res.json(result)
+          }
+
+          // Otherwise return conversion metadata
+          app.debug(`Getting conversion metadata for path: ${pathStr}`)
           const conversion = unitsManager.getConversion(pathStr)
-
           const targetUnit = conversion.targetUnit || conversion.baseUnit || 'none'
 
           const response = {
@@ -378,40 +389,20 @@ module.exports = (app: ServerAPI): Plugin => {
 
           res.json(response)
         } catch (error) {
-          app.error(`Error getting conversion: ${error}`)
-          res.status(500).json({ error: 'Internal server error' })
-        }
-      })
-
-      // GET /plugins/signalk-units-preference/convert/:path/:value
-      // Convert a value supplied via path segment
-      router.get('/convert/:path(*)/:value', (req: Request, res: Response) => {
-        try {
-          const pathStr = req.params.path
-          const rawValue = req.params.value
-          const typeParam = Array.isArray(req.query.type) ? req.query.type[0] : req.query.type
-
-          app.debug(`Converting value ${rawValue} for path: ${pathStr}`)
-
-          const result = buildDeltaResponse(pathStr, rawValue, {
-            typeHint: typeof typeParam === 'string' ? toSupportedValueType(typeParam) : undefined
-          })
-          res.json(result)
-        } catch (error) {
           if ((error as any).status === 400) {
             return res.status(400).json({
               error: (error as Error).message,
               details: (error as any).details
             })
           }
-          app.error(`Error converting value: ${error}`)
+          app.error(`Error getting conversion: ${error}`)
           res.status(500).json({ error: 'Internal server error' })
         }
       })
 
-      // POST /plugins/signalk-units-preference/unit-convert
+      // POST /plugins/signalk-units-preference/units/conversions
       // Convert a value using base unit and target unit directly
-      router.post('/unit-convert', (req: Request, res: Response) => {
+      router.post('/units/conversions', (req: Request, res: Response) => {
         try {
           const { baseUnit, targetUnit, value, displayFormat, useLocalTime } = req.body || {}
 
@@ -446,8 +437,8 @@ module.exports = (app: ServerAPI): Plugin => {
         }
       })
 
-      // GET /plugins/signalk-units-preference/unit-convert
-      router.get('/unit-convert', (req: Request, res: Response) => {
+      // GET /plugins/signalk-units-preference/units/conversions
+      router.get('/units/conversions', (req: Request, res: Response) => {
         try {
           const baseUnitParam = Array.isArray(req.query.baseUnit)
             ? req.query.baseUnit[0]
@@ -499,49 +490,9 @@ module.exports = (app: ServerAPI): Plugin => {
         }
       })
 
-      router.get('/convert/:path(*)', (req: Request, res: Response) => {
-        try {
-          const rawPathParam = req.params.path
-          const typeParam = Array.isArray(req.query.type) ? req.query.type[0] : req.query.type
-
-          let resolvedPath = rawPathParam
-          let valueParam = Array.isArray(req.query.value) ? req.query.value[0] : req.query.value
-
-          if (valueParam === undefined && typeof rawPathParam === 'string') {
-            const firstSlashIndex = rawPathParam.indexOf('/')
-            if (firstSlashIndex !== -1) {
-              resolvedPath = rawPathParam.substring(0, firstSlashIndex)
-              valueParam = rawPathParam.substring(firstSlashIndex + 1)
-            }
-          }
-
-          if (!resolvedPath) {
-            throw createBadRequestError('Missing path parameter')
-          }
-
-          if (valueParam === undefined) {
-            throw createBadRequestError('Missing value query parameter')
-          }
-
-          const result = buildDeltaResponse(resolvedPath, valueParam, {
-            typeHint: typeof typeParam === 'string' ? toSupportedValueType(typeParam) : undefined
-          })
-          res.json(result)
-        } catch (error) {
-          if ((error as any).status === 400) {
-            return res.status(400).json({
-              error: (error as Error).message,
-              details: (error as any).details
-            })
-          }
-          app.error(`Error converting value via GET: ${error}`)
-          res.status(500).json({ error: 'Internal server error' })
-        }
-      })
-
-      // POST /plugins/signalk-units-preference/convert
+      // POST /plugins/signalk-units-preference/conversions
       // Convert any value type (number, boolean, string, date)
-      router.post('/convert', (req: Request, res: Response) => {
+      router.post('/conversions', (req: Request, res: Response) => {
         try {
           // Support both JSON and form data
           const path = req.body.path
