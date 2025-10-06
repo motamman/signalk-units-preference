@@ -399,7 +399,7 @@ export class UnitsManager {
 
     // Fall back to SignalK metadata units
     if (!metadata) {
-      const skMetadata = this.app.getMetadata(pathStr)
+      const skMetadata = this.signalKMetadata[pathStr]
 
       if (skMetadata?.units) {
         const inferred = this.inferMetadataFromSignalK(pathStr, skMetadata.units)

@@ -1473,6 +1473,21 @@ Apache-2.0
 
 ## Changelog
 
+### [0.5.0-beta.4] - 2025-10-06
+
+#### Fixed
+- **Auto-Assigned Path Conversions**: Fixed conversion endpoints returning pass-through conversions instead of proper category-based conversions
+  - Changed `resolveMetadataForPath()` to use `this.signalKMetadata[pathStr]` instead of `this.app.getMetadata(pathStr)`
+  - Auto-assigned paths (SignalK Auto status) now show correct conversions with proper formulas
+  - `/conversion/:path` endpoint now returns selected target conversion instead of identity pass-through
+  - `/paths` endpoint now includes proper conversion data for auto-assigned paths
+  - Examples: temperature (K → celsius), speed (m/s → knots), percentage (ratio → percent), angle (rad → deg)
+
+#### Technical Changes
+- Updated `resolveMetadataForPath()` to use frontend-provided SignalK metadata store
+- Made metadata resolution consistent with other methods (`getConversion()`, `getPassThroughConversion()`, `getAllPathsInfo()`)
+- Removed debug logging added during investigation
+
 ### [0.5.0-beta.3] - 2025-10-05
 
 #### Added
