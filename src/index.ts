@@ -1188,6 +1188,65 @@ module.exports = (app: ServerAPI): Plugin => {
 
       // DELETE /plugins/signalk-units-preference/presets/custom/:name
       // Delete a custom preset
+      // GET /plugins/signalk-units-preference/presets/custom/:name
+      // Download a specific custom preset file
+      router.get('/presets/custom/:name', async (req: Request, res: Response) => {
+        try {
+          const presetName = req.params.name
+          const presetPath = path.join(__dirname, '..', 'presets', 'custom', `${presetName}.json`)
+
+          if (!fs.existsSync(presetPath)) {
+            return res.status(404).json({ error: 'Custom preset not found' })
+          }
+
+          res.setHeader('Content-Type', 'application/json')
+          res.setHeader('Content-Disposition', `attachment; filename=${presetName}.json`)
+          res.sendFile(presetPath)
+        } catch (error) {
+          app.error(`Error downloading custom preset: ${error}`)
+          res
+            .status(500)
+            .json({ error: error instanceof Error ? error.message : 'Internal server error' })
+        }
+      })
+
+      // PUT /plugins/signalk-units-preference/presets/custom/:name
+      // Upload/update a specific custom preset file
+      router.put('/presets/custom/:name', async (req: Request, res: Response) => {
+        try {
+          const presetName = req.params.name
+          const presetPath = path.join(__dirname, '..', 'presets', 'custom', `${presetName}.json`)
+
+          if (!req.body) {
+            return res.status(400).json({ error: 'No preset data provided' })
+          }
+
+          // Validate JSON structure
+          const data = req.body
+          if (typeof data !== 'object') {
+            return res.status(400).json({ error: 'Invalid JSON data' })
+          }
+
+          // Ensure custom directory exists
+          const customDir = path.join(__dirname, '..', 'presets', 'custom')
+          if (!fs.existsSync(customDir)) {
+            fs.mkdirSync(customDir, { recursive: true })
+          }
+
+          // Write preset file
+          fs.writeFileSync(presetPath, JSON.stringify(data, null, 2), 'utf-8')
+
+          res.json({ success: true, message: `${presetName}.json uploaded successfully` })
+
+          app.debug(`Custom preset uploaded: ${presetName}.json`)
+        } catch (error) {
+          app.error(`Error uploading custom preset: ${error}`)
+          res
+            .status(500)
+            .json({ error: error instanceof Error ? error.message : 'Internal server error' })
+        }
+      })
+
       router.delete('/presets/custom/:name', async (req: Request, res: Response) => {
         try {
           const presetName = req.params.name

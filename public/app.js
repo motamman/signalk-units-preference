@@ -1323,38 +1323,39 @@ async function deleteCustomPreset(presetId, presetName) {
   }
 }
 
-// Render custom presets in Settings tab
+// Render custom presets as file download/upload items
 function renderCustomPresets(customPresets) {
-  const container = document.getElementById('customPresetsList')
+  const container = document.getElementById('customPresetsFileList')
 
   if (!container) return
 
   if (customPresets.length === 0) {
     container.innerHTML =
-      '<div class="empty-state">No custom presets yet. Modify a preset and save it from the Categories tab.</div>'
+      '<div class="empty-state" style="color: #7f8c8d; font-size: 14px; padding: 20px; text-align: center; background: #f8f9fa; border-radius: 6px;">No custom presets yet. Create one from the Categories tab.</div>'
     return
   }
 
   container.innerHTML = customPresets
     .map(
       preset => `
-    <div style="background: #f8f9fa; padding: 16px; border-radius: 6px; border: 1px solid #e9ecef;">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-        <div>
-          <h3 style="margin: 0 0 4px 0; font-size: 16px; color: #2c3e50;">${preset.name}</h3>
-          <p style="margin: 0; font-size: 13px; color: #7f8c8d;">${preset.description || 'Custom preset'}</p>
-        </div>
-        <div style="text-align: right;">
-          <div style="font-size: 12px; color: #7f8c8d;">Version ${preset.version}</div>
-          <div style="font-size: 12px; color: #7f8c8d;">${preset.categoriesCount} categories</div>
-        </div>
-      </div>
-      <div style="display: flex; gap: 8px;">
-        <button class="btn-primary" onclick="applyCustomPreset('${preset.id}', '${preset.name}')" style="flex: 1; padding: 8px 16px;">
-          Apply Preset
+    <div style="border: 1px solid #dee2e6; border-radius: 6px; padding: 15px; background: #f8f9fa;">
+      <h4 style="margin: 0 0 8px 0; color: #2c3e50; font-size: 1rem;">${preset.id}.json</h4>
+      <p style="color: #7f8c8d; margin-bottom: 12px; font-size: 13px;">
+        ${preset.description || 'Custom user preset'} • Version ${preset.version} • ${preset.categoriesCount} categories
+      </p>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+        <button class="btn-primary" onclick="applyCustomPreset('${preset.id}', '${preset.name}')" style="padding: 8px; grid-column: 1 / -1;">
+          ✓ Apply Preset
         </button>
-        <button class="btn-danger" onclick="deleteCustomPreset('${preset.id}', '${preset.name}')" style="padding: 8px 16px;">
-          Delete
+        <button class="btn-primary" onclick="downloadCustomPreset('${preset.id}')" style="padding: 8px;">
+          📥 Download
+        </button>
+        <button class="btn-primary" onclick="document.getElementById('upload-${preset.id}').click()" style="padding: 8px;">
+          📤 Upload
+        </button>
+        <input type="file" id="upload-${preset.id}" accept=".json" style="display: none;" onchange="uploadCustomPreset(event, '${preset.id}')">
+        <button class="btn-danger" onclick="deleteCustomPreset('${preset.id}', '${preset.name}')" style="padding: 8px; grid-column: 1 / -1;">
+          🗑️ Delete
         </button>
       </div>
     </div>
@@ -3412,6 +3413,82 @@ async function uploadFile(event, endpoint, fileType) {
 
     statusEl.innerHTML = `<div style="color: #27ae60; padding: 10px; background: #e8f5e9; border-radius: 4px;">
       ✓ Uploaded ${fileType}.json successfully!<br>
+      <small>Reloading in 2 seconds to apply changes...</small>
+    </div>`
+
+    setTimeout(() => {
+      window.location.reload()
+    }, 2000)
+  } catch (error) {
+    console.error('Upload error:', error)
+    statusEl.innerHTML = `<div style="color: #e74c3c; padding: 10px; background: #ffebee; border-radius: 4px;">✗ Failed to upload: ${error.message}</div>`
+  } finally {
+    event.target.value = '' // Reset file input
+  }
+}
+
+// Download custom preset file
+async function downloadCustomPreset(presetId) {
+  const statusEl = document.getElementById('fileManagementStatus')
+
+  try {
+    statusEl.innerHTML =
+      '<div style="color: #3498db; padding: 10px; background: #e3f2fd; border-radius: 4px;">Downloading...</div>'
+
+    const response = await fetch(`${API_BASE}/presets/custom/${presetId}`)
+
+    if (!response.ok) {
+      throw new Error('Failed to download preset')
+    }
+
+    const blob = await response.blob()
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${presetId}.json`
+    document.body.appendChild(a)
+    a.click()
+    window.URL.revokeObjectURL(url)
+    document.body.removeChild(a)
+
+    statusEl.innerHTML = `<div style="color: #27ae60; padding: 10px; background: #e8f5e9; border-radius: 4px;">✓ Downloaded ${presetId}.json</div>`
+
+    setTimeout(() => {
+      statusEl.innerHTML = ''
+    }, 3000)
+  } catch (error) {
+    console.error('Download error:', error)
+    statusEl.innerHTML = `<div style="color: #e74c3c; padding: 10px; background: #ffebee; border-radius: 4px;">✗ Failed to download: ${error.message}</div>`
+  }
+}
+
+// Upload custom preset file
+async function uploadCustomPreset(event, presetId) {
+  const statusEl = document.getElementById('fileManagementStatus')
+  const file = event.target.files[0]
+
+  if (!file) return
+
+  try {
+    statusEl.innerHTML =
+      '<div style="color: #3498db; padding: 10px; background: #e3f2fd; border-radius: 4px;">Uploading...</div>'
+
+    const text = await file.text()
+    const json = JSON.parse(text) // Validate JSON
+
+    const response = await fetch(`${API_BASE}/presets/custom/${presetId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(json)
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json()
+      throw new Error(errorData.error || 'Failed to upload preset')
+    }
+
+    statusEl.innerHTML = `<div style="color: #27ae60; padding: 10px; background: #e8f5e9; border-radius: 4px;">
+      ✓ Uploaded ${presetId}.json successfully!<br>
       <small>Reloading in 2 seconds to apply changes...</small>
     </div>`
 

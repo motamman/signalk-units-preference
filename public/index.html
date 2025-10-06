@@ -1146,16 +1146,6 @@
             </div>
 
             <div class="section">
-                <h2>Custom Presets</h2>
-                <p style="color: #7f8c8d; margin-bottom: 20px;">
-                    Your saved custom presets. These are created when you modify a preset and save it from the Categories tab.
-                </p>
-                <div id="customPresetsList" style="display: grid; gap: 15px;">
-                    <div class="loader">Loading custom presets...</div>
-                </div>
-            </div>
-
-            <div class="section">
                 <h2>Backup & Restore</h2>
                 <p style="color: #7f8c8d; margin-bottom: 20px;">
                     Download a complete backup of your configuration or restore from a previous backup. Includes all presets, preferences, and custom unit definitions.
@@ -1279,6 +1269,14 @@
                             <input type="file" id="uploadMetric" accept=".json" style="display: none;" onchange="uploadFile(event, 'config-file', 'metric')">
                         </div>
                     </div>
+                </div>
+
+                <h3 style="margin: 20px 0 15px 0; color: #34495e; font-size: 1.1rem;">Custom Presets</h3>
+                <p style="color: #7f8c8d; margin-bottom: 15px; font-size: 14px;">
+                    Your saved custom presets from the Categories tab. Upload new preset files or download existing ones.
+                </p>
+                <div id="customPresetsFileList" style="display: grid; gap: 15px; margin-bottom: 30px;">
+                    <div class="loader">Loading custom presets...</div>
                 </div>
 
                 <h3 style="margin: 20px 0 15px 0; color: #34495e; font-size: 1.1rem;">Runtime Data Files</h3>
