@@ -1313,8 +1313,8 @@ module.exports = (app: ServerAPI): Plugin => {
           // Add definition files
           const definitionsDir = path.join(__dirname, '..', 'presets', 'definitions')
           if (fs.existsSync(definitionsDir)) {
-            archive.file(path.join(definitionsDir, 'conversions.json'), {
-              name: 'presets/definitions/conversions.json'
+            archive.file(path.join(definitionsDir, 'standard-units-definitions.json'), {
+              name: 'presets/definitions/standard-units-definitions.json'
             })
             archive.file(path.join(definitionsDir, 'categories.json'), {
               name: 'presets/definitions/categories.json'
@@ -1330,9 +1330,9 @@ module.exports = (app: ServerAPI): Plugin => {
             archive.file(preferencesPath, { name: 'units-preferences.json' })
           }
 
-          const definitionsPath = path.join(dataDir, 'units-definitions.json')
-          if (fs.existsSync(definitionsPath)) {
-            archive.file(definitionsPath, { name: 'units-definitions.json' })
+          const customDefinitionsPath = path.join(dataDir, 'custom-units-definitions.json')
+          if (fs.existsSync(customDefinitionsPath)) {
+            archive.file(customDefinitionsPath, { name: 'custom-units-definitions.json' })
           }
 
           await archive.finalize()
@@ -1371,7 +1371,7 @@ module.exports = (app: ServerAPI): Plugin => {
               targetPath = path.join(__dirname, '..', entryName)
             } else if (
               entryName === 'units-preferences.json' ||
-              entryName === 'units-definitions.json'
+              entryName === 'custom-units-definitions.json'
             ) {
               // Restore runtime data files
               targetPath = path.join(dataDir, entryName)
@@ -1409,25 +1409,32 @@ module.exports = (app: ServerAPI): Plugin => {
       })
 
       // GET /plugins/signalk-units-preference/definition-file/:fileType
-      // Download individual definition file (conversions, categories, date-formats)
+      // Download individual definition file (standard-units, categories, date-formats)
       router.get('/definition-file/:fileType', (req: Request, res: Response) => {
         try {
           const fileType = req.params.fileType
 
           // Validate file type
-          const validTypes = ['conversions', 'categories', 'date-formats']
+          const validTypes = ['standard-units', 'categories', 'date-formats']
           if (!validTypes.includes(fileType)) {
             return res.status(400).json({ error: 'Invalid file type' })
           }
 
-          const filePath = path.join(__dirname, '..', 'presets', 'definitions', `${fileType}.json`)
+          // Map to actual file names
+          const fileNameMap: Record<string, string> = {
+            'standard-units': 'standard-units-definitions.json',
+            'categories': 'categories.json',
+            'date-formats': 'date-formats.json'
+          }
+          const fileName = fileNameMap[fileType]
+          const filePath = path.join(__dirname, '..', 'presets', 'definitions', fileName)
 
           if (!fs.existsSync(filePath)) {
             return res.status(404).json({ error: 'File not found' })
           }
 
           res.setHeader('Content-Type', 'application/json')
-          res.setHeader('Content-Disposition', `attachment; filename=${fileType}.json`)
+          res.setHeader('Content-Disposition', `attachment; filename=${fileName}`)
           res.sendFile(filePath)
         } catch (error) {
           app.error(`Error downloading definition file: ${error}`)
@@ -1438,13 +1445,13 @@ module.exports = (app: ServerAPI): Plugin => {
       })
 
       // POST /plugins/signalk-units-preference/definition-file/:fileType
-      // Upload individual definition file (conversions, categories, date-formats)
+      // Upload individual definition file (standard-units, categories, date-formats)
       router.post('/definition-file/:fileType', (req: Request, res: Response) => {
         try {
           const fileType = req.params.fileType
 
           // Validate file type
-          const validTypes = ['conversions', 'categories', 'date-formats']
+          const validTypes = ['standard-units', 'categories', 'date-formats']
           if (!validTypes.includes(fileType)) {
             return res.status(400).json({ error: 'Invalid file type' })
           }
@@ -1453,7 +1460,14 @@ module.exports = (app: ServerAPI): Plugin => {
             return res.status(400).json({ error: 'No file data provided' })
           }
 
-          const filePath = path.join(__dirname, '..', 'presets', 'definitions', `${fileType}.json`)
+          // Map to actual file names
+          const fileNameMap: Record<string, string> = {
+            'standard-units': 'standard-units-definitions.json',
+            'categories': 'categories.json',
+            'date-formats': 'date-formats.json'
+          }
+          const fileName = fileNameMap[fileType]
+          const filePath = path.join(__dirname, '..', 'presets', 'definitions', fileName)
 
           // Validate JSON structure
           const data = req.body
@@ -1464,9 +1478,9 @@ module.exports = (app: ServerAPI): Plugin => {
           // Write file
           fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8')
 
-          res.json({ success: true, message: `${fileType}.json uploaded successfully` })
+          res.json({ success: true, message: `${fileName} uploaded successfully` })
 
-          app.debug(`Definition file uploaded: ${fileType}.json`)
+          app.debug(`Definition file uploaded: ${fileName}`)
         } catch (error) {
           app.error(`Error uploading definition file: ${error}`)
           res
@@ -1497,9 +1511,9 @@ module.exports = (app: ServerAPI): Plugin => {
               filePath = path.join(dataDir, 'units-preferences.json')
               fileName = 'units-preferences.json'
               break
-            case 'units-definitions':
-              filePath = path.join(dataDir, 'units-definitions.json')
-              fileName = 'units-definitions.json'
+            case 'custom-units-definitions':
+              filePath = path.join(dataDir, 'custom-units-definitions.json')
+              fileName = 'custom-units-definitions.json'
               break
             default:
               return res.status(400).json({ error: 'Invalid file type' })
@@ -1543,8 +1557,8 @@ module.exports = (app: ServerAPI): Plugin => {
             case 'units-preferences':
               filePath = path.join(dataDir, 'units-preferences.json')
               break
-            case 'units-definitions':
-              filePath = path.join(dataDir, 'units-definitions.json')
+            case 'custom-units-definitions':
+              filePath = path.join(dataDir, 'custom-units-definitions.json')
               break
             default:
               return res.status(400).json({ error: 'Invalid file type' })
@@ -1557,13 +1571,13 @@ module.exports = (app: ServerAPI): Plugin => {
           }
 
           // Validate structure based on file type
-          if (fileType === 'units-definitions') {
-            // units-definitions.json should contain unit definitions, NOT preferences
+          if (fileType === 'custom-units-definitions') {
+            // custom-units-definitions.json should contain unit definitions, NOT preferences
             const invalidKeys = ['categories', 'pathOverrides', 'pathPatterns', 'currentPreset']
             for (const key of invalidKeys) {
               if (key in data) {
                 return res.status(400).json({
-                  error: `Invalid structure: "${key}" belongs in units-preferences.json, not units-definitions.json. Please upload the correct file.`
+                  error: `Invalid structure: "${key}" belongs in units-preferences.json, not custom-units-definitions.json. Please upload the correct file.`
                 })
               }
             }

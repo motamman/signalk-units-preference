@@ -1170,20 +1170,20 @@
 
                 <h3 style="margin: 20px 0 15px 0; color: #34495e; font-size: 1.1rem;">Definition Files</h3>
                 <div style="display: grid; gap: 15px; margin-bottom: 30px;">
-                    <!-- Conversions File -->
+                    <!-- Standard Units Definitions File -->
                     <div style="border: 1px solid #dee2e6; border-radius: 6px; padding: 15px; background: #f8f9fa;">
-                        <h4 style="margin: 0 0 8px 0; color: #2c3e50; font-size: 1rem;">conversions.json</h4>
+                        <h4 style="margin: 0 0 8px 0; color: #2c3e50; font-size: 1rem;">standard-units-definitions.json</h4>
                         <p style="color: #7f8c8d; margin-bottom: 12px; font-size: 13px;">
-                            All unit conversions by base unit. Edit formulas, add target units, or modify symbols.
+                            All standard unit definitions by base unit. Edit formulas, add target units, or modify symbols.
                         </p>
                         <div style="display: flex; gap: 8px;">
-                            <button class="btn-primary" onclick="downloadFile('definition-file', 'conversions')" style="flex: 1; padding: 8px;">
+                            <button class="btn-primary" onclick="downloadFile('definition-file', 'standard-units')" style="flex: 1; padding: 8px;">
                                 📥 Download
                             </button>
-                            <button class="btn-primary" onclick="document.getElementById('uploadConversions').click()" style="flex: 1; padding: 8px;">
+                            <button class="btn-primary" onclick="document.getElementById('uploadStandardUnits').click()" style="flex: 1; padding: 8px;">
                                 📤 Upload
                             </button>
-                            <input type="file" id="uploadConversions" accept=".json" style="display: none;" onchange="uploadFile(event, 'definition-file', 'conversions')">
+                            <input type="file" id="uploadStandardUnits" accept=".json" style="display: none;" onchange="uploadFile(event, 'definition-file', 'standard-units')">
                         </div>
                     </div>
 
@@ -1298,18 +1298,18 @@
                     </div>
 
                     <div style="border: 1px solid #dee2e6; border-radius: 6px; padding: 15px; background: #f8f9fa;">
-                        <h4 style="margin: 0 0 8px 0; color: #2c3e50; font-size: 1rem;">units-definitions.json</h4>
+                        <h4 style="margin: 0 0 8px 0; color: #2c3e50; font-size: 1rem;">custom-units-definitions.json</h4>
                         <p style="color: #7f8c8d; margin-bottom: 12px; font-size: 13px;">
                             Custom unit definitions and user-added conversions.
                         </p>
                         <div style="display: flex; gap: 8px;">
-                            <button class="btn-primary" onclick="downloadFile('config-file', 'units-definitions')" style="flex: 1; padding: 8px;">
+                            <button class="btn-primary" onclick="downloadFile('config-file', 'custom-units-definitions')" style="flex: 1; padding: 8px;">
                                 📥 Download
                             </button>
-                            <button class="btn-primary" onclick="document.getElementById('uploadDefinitionsData').click()" style="flex: 1; padding: 8px;">
+                            <button class="btn-primary" onclick="document.getElementById('uploadCustomDefinitionsData').click()" style="flex: 1; padding: 8px;">
                                 📤 Upload
                             </button>
-                            <input type="file" id="uploadDefinitionsData" accept=".json" style="display: none;" onchange="uploadFile(event, 'config-file', 'units-definitions')">
+                            <input type="file" id="uploadCustomDefinitionsData" accept=".json" style="display: none;" onchange="uploadFile(event, 'config-file', 'custom-units-definitions')">
                         </div>
                     </div>
                 </div>

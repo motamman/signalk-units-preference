@@ -125,8 +125,8 @@ export class UnitsManager {
   private unitDefinitions: Record<string, UnitMetadata>
   private signalKMetadata: Record<string, SignalKPathMetadata> // path -> full metadata
   private preferencesPath: string
-  private definitionsPath: string
-  private conversionsData: Record<string, any> = {}
+  private customDefinitionsPath: string
+  private standardUnitsData: Record<string, any> = {}
   private categoriesData: any = {}
   private dateFormatsData: any = {}
   private definitionsDir: string
@@ -136,7 +136,7 @@ export class UnitsManager {
     private dataDir: string
   ) {
     this.preferencesPath = path.join(dataDir, 'units-preferences.json')
-    this.definitionsPath = path.join(dataDir, 'units-definitions.json')
+    this.customDefinitionsPath = path.join(dataDir, 'custom-units-definitions.json')
     this.definitionsDir = path.join(__dirname, '..', 'presets', 'definitions')
     // Use only built-in default metadata (no custom file loading)
     this.metadata = { ...defaultUnitsMetadata, ...comprehensiveDefaultUnits }
@@ -307,18 +307,18 @@ export class UnitsManager {
    */
   private loadDefinitionFiles(): void {
     try {
-      // Load conversions.json
-      const conversionsPath = path.join(this.definitionsDir, 'conversions.json')
-      if (fs.existsSync(conversionsPath)) {
-        const data = fs.readFileSync(conversionsPath, 'utf-8')
-        this.conversionsData = JSON.parse(data)
-        this.app.debug('Loaded conversions.json')
+      // Load standard-units-definitions.json
+      const standardUnitsPath = path.join(this.definitionsDir, 'standard-units-definitions.json')
+      if (fs.existsSync(standardUnitsPath)) {
+        const data = fs.readFileSync(standardUnitsPath, 'utf-8')
+        this.standardUnitsData = JSON.parse(data)
+        this.app.debug('Loaded standard-units-definitions.json')
       } else {
-        this.app.debug('conversions.json not found, using TypeScript defaults')
+        this.app.debug('standard-units-definitions.json not found, using TypeScript defaults')
       }
     } catch (error) {
-      this.app.error(`Error loading conversions.json: ${error}`)
-      this.app.debug('Using TypeScript fallback for conversions')
+      this.app.error(`Error loading standard-units-definitions.json: ${error}`)
+      this.app.debug('Using TypeScript fallback for standard units')
     }
 
     try {
@@ -356,6 +356,7 @@ export class UnitsManager {
    * Initialize the manager by loading or creating data files
    */
   async initialize(): Promise<void> {
+    this.migrateFileNames()
     this.loadDefinitionFiles()
     await this.loadPreferences()
     await this.loadUnitDefinitions()
@@ -386,11 +387,11 @@ export class UnitsManager {
    */
   private getConversionsForBaseUnit(baseUnit: string): UnitMetadata | null {
     // Try JSON first
-    if (this.conversionsData[baseUnit]) {
+    if (this.standardUnitsData[baseUnit]) {
       return {
         baseUnit,
-        category: this.conversionsData[baseUnit].category || 'custom',
-        conversions: this.conversionsData[baseUnit].conversions || {}
+        category: this.standardUnitsData[baseUnit].category || 'custom',
+        conversions: this.standardUnitsData[baseUnit].conversions || {}
       }
     }
 
@@ -933,21 +934,49 @@ export class UnitsManager {
   }
 
   /**
+   * Migrate old file names to new naming convention
+   */
+  private migrateFileNames(): void {
+    // Migrate units-definitions.json to custom-units-definitions.json
+    const oldCustomPath = path.join(this.dataDir, 'units-definitions.json')
+    if (fs.existsSync(oldCustomPath) && !fs.existsSync(this.customDefinitionsPath)) {
+      try {
+        fs.renameSync(oldCustomPath, this.customDefinitionsPath)
+        this.app.debug('Migrated units-definitions.json to custom-units-definitions.json')
+      } catch (error) {
+        this.app.error(`Failed to migrate units-definitions.json: ${error}`)
+      }
+    }
+
+    // Migrate conversions.json to standard-units-definitions.json
+    const oldStandardPath = path.join(this.definitionsDir, 'conversions.json')
+    const newStandardPath = path.join(this.definitionsDir, 'standard-units-definitions.json')
+    if (fs.existsSync(oldStandardPath) && !fs.existsSync(newStandardPath)) {
+      try {
+        fs.renameSync(oldStandardPath, newStandardPath)
+        this.app.debug('Migrated conversions.json to standard-units-definitions.json')
+      } catch (error) {
+        this.app.error(`Failed to migrate conversions.json: ${error}`)
+      }
+    }
+  }
+
+  /**
    * Load unit definitions from file
    */
   private async loadUnitDefinitions(): Promise<void> {
     try {
-      if (fs.existsSync(this.definitionsPath)) {
-        const data = fs.readFileSync(this.definitionsPath, 'utf-8')
+      if (fs.existsSync(this.customDefinitionsPath)) {
+        const data = fs.readFileSync(this.customDefinitionsPath, 'utf-8')
         this.unitDefinitions = JSON.parse(data)
-        this.app.debug('Loaded unit definitions from file')
+        this.app.debug('Loaded custom unit definitions from file')
       } else {
         this.unitDefinitions = {}
         await this.saveUnitDefinitions()
-        this.app.debug('Created default unit definitions file')
+        this.app.debug('Created default custom unit definitions file')
       }
     } catch (error) {
-      this.app.error(`Failed to load unit definitions: ${error}`)
+      this.app.error(`Failed to load custom unit definitions: ${error}`)
       throw error
     }
   }
@@ -957,10 +986,10 @@ export class UnitsManager {
    */
   async saveUnitDefinitions(): Promise<void> {
     try {
-      fs.writeFileSync(this.definitionsPath, JSON.stringify(this.unitDefinitions, null, 2), 'utf-8')
-      this.app.debug('Saved unit definitions')
+      fs.writeFileSync(this.customDefinitionsPath, JSON.stringify(this.unitDefinitions, null, 2), 'utf-8')
+      this.app.debug('Saved custom unit definitions')
     } catch (error) {
-      this.app.error(`Failed to save unit definitions: ${error}`)
+      this.app.error(`Failed to save custom unit definitions: ${error}`)
       throw error
     }
   }
@@ -974,12 +1003,12 @@ export class UnitsManager {
 
     // Use JSON data if available, otherwise fall back to TypeScript
     const sourceData =
-      Object.keys(this.conversionsData).length > 0
-        ? this.conversionsData
+      Object.keys(this.standardUnitsData).length > 0
+        ? this.standardUnitsData
         : comprehensiveDefaultUnits
 
     // Handle JSON format (baseUnit as keys)
-    if (sourceData === this.conversionsData) {
+    if (sourceData === this.standardUnitsData) {
       for (const [baseUnit, data] of Object.entries(sourceData)) {
         baseUnitDefs[baseUnit] = {
           baseUnit,
