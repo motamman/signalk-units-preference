@@ -24,10 +24,14 @@ export interface ConversionDefinition {
 export interface BaseUnitDefinition {
   /** Base unit symbol (e.g., "m/s", "Pa", "K") */
   baseUnit: string
+  /** Human-readable description (e.g., "speed", "temperature", "date/time format") */
+  description?: string
   /** Available conversions for this unit */
   conversions: Record<string, ConversionDefinition>
   /** Whether this is a custom (user-defined) unit */
   isCustom?: boolean
+  /** List of conversion names that are custom (user-added) */
+  customConversions?: string[]
 }
 
 /**
