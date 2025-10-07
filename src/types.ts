@@ -19,6 +19,18 @@ export interface ConversionDefinition {
 }
 
 /**
+ * Base unit definition (pure conversion math, no category)
+ */
+export interface BaseUnitDefinition {
+  /** Base unit symbol (e.g., "m/s", "Pa", "K") */
+  baseUnit: string
+  /** Available conversions for this unit */
+  conversions: Record<string, ConversionDefinition>
+  /** Whether this is a custom (user-defined) unit */
+  isCustom?: boolean
+}
+
+/**
  * Unit metadata for a specific path
  */
 export interface UnitMetadata {
