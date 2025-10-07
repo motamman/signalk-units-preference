@@ -51,6 +51,12 @@ function initializePatternDropdowns() {
     )
     categoryCustomInput.style.display = 'none'
     attachCategoryHandler()
+
+    // Trigger category change to populate target units if category was auto-selected
+    const categorySelect = document.getElementById('newPatternCategory')
+    if (categorySelect && categorySelect.value) {
+      categorySelect.dispatchEvent(new Event('change'))
+    }
   })
 
   // Handle category change

@@ -174,7 +174,7 @@ async function editPathOverride(path) {
     baseUnit,
     `${categorySelectId}-container`,
     categorySelectId,
-    '',
+    override.category || '',
     false
   )
 
