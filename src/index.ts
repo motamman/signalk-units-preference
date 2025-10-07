@@ -744,6 +744,31 @@ module.exports = (app: ServerAPI): Plugin => {
         }
       })
 
+      // GET /plugins/signalk-units-preference/categories-for-base-unit
+      // Get all categories that map to a given base unit (for smart category dropdowns)
+      router.get('/categories-for-base-unit', (req: Request, res: Response) => {
+        try {
+          const baseUnit = req.query.baseUnit as string
+
+          if (!baseUnit) {
+            return res.status(400).json({
+              error: 'Missing required query parameter: baseUnit'
+            })
+          }
+
+          const categories = unitsManager.getCategoriesForBaseUnit(baseUnit)
+
+          res.json({
+            baseUnit,
+            categories,
+            count: categories.length
+          })
+        } catch (error) {
+          app.error(`Error getting categories for base unit: ${error}`)
+          res.status(500).json({ error: 'Internal server error' })
+        }
+      })
+
       // DELETE /plugins/signalk-units-preference/categories/:category
       // Delete custom category preference
       router.delete('/categories/:category', async (req: Request, res: Response) => {

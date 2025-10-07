@@ -27,7 +27,7 @@
         "symbol": "Bf"
       }
     },
-    "description": "speed"
+    "description": "meters per second"
   },
   "K": {
     "conversions": {
@@ -47,7 +47,7 @@
         "symbol": "°F"
       }
     },
-    "description": "temperature"
+    "description": "kelvin"
   },
   "Pa": {
     "conversions": {
@@ -87,7 +87,7 @@
         "symbol": "mmHg"
       }
     },
-    "description": "pressure"
+    "description": "pascal"
   },
   "m": {
     "conversions": {
@@ -122,7 +122,7 @@
         "symbol": "fathom"
       }
     },
-    "description": "distance"
+    "description": "meter"
   },
   "rad": {
     "conversions": {
@@ -137,7 +137,7 @@
         "symbol": "°"
       }
     },
-    "description": "angle"
+    "description": "radian"
   },
   "rad/s": {
     "conversions": {
@@ -157,7 +157,7 @@
         "symbol": "rpm"
       }
     },
-    "description": "angularVelocity"
+    "description": "radians per second"
   },
   "m3": {
     "conversions": {
@@ -182,7 +182,7 @@
         "symbol": "qt"
       }
     },
-    "description": "volume"
+    "description": "cubic meter"
   },
   "V": {
     "conversions": {
@@ -192,7 +192,7 @@
         "symbol": "V"
       }
     },
-    "description": "voltage"
+    "description": "volt"
   },
   "A": {
     "conversions": {
@@ -202,7 +202,7 @@
         "symbol": "A"
       }
     },
-    "description": "current"
+    "description": "ampere"
   },
   "W": {
     "conversions": {
@@ -222,7 +222,7 @@
         "symbol": "hp"
       }
     },
-    "description": "power"
+    "description": "watt"
   },
   "ratio": {
     "conversions": {
@@ -237,7 +237,7 @@
         "symbol": "%"
       }
     },
-    "description": "percentage"
+    "description": "ratio"
   },
   "Hz": {
     "conversions": {
@@ -252,7 +252,7 @@
         "symbol": "rpm"
       }
     },
-    "description": "frequency"
+    "description": "hertz"
   },
   "s": {
     "conversions": {
@@ -277,7 +277,7 @@
         "symbol": "day"
       }
     },
-    "description": "time"
+    "description": "second"
   },
   "C": {
     "conversions": {
@@ -297,7 +297,7 @@
         "symbol": "mAh"
       }
     },
-    "description": "charge"
+    "description": "coulomb"
   },
   "m3/s": {
     "conversions": {
@@ -322,7 +322,7 @@
         "symbol": "gal/h"
       }
     },
-    "description": "volumeRate"
+    "description": "cubic meters per second"
   },
   "tr": {
     "conversions": {
@@ -332,7 +332,7 @@
         "symbol": "tr"
       }
     },
-    "description": "unitless"
+    "description": "tabula rasa"
   },
   "RFC 3339 (UTC)": {
     "conversions": {
@@ -342,7 +342,7 @@
         "symbol": ""
       }
     },
-    "description": "date/time format"
+    "description": "RFC 3339 UTC format"
   },
   "Epoch Seconds": {
     "conversions": {
@@ -352,6 +352,6 @@
         "symbol": ""
       }
     },
-    "description": "date/time format"
+    "description": "Unix epoch seconds"
   }
 }
