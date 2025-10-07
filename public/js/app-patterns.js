@@ -3,6 +3,34 @@
  * Depends on: app-state.js, app-utils.js, app-dropdowns.js
  */
 
+// Track original form state for dirty checking
+let patternFormOriginalState = null
+let currentlyEditingPatternIndex = null
+
+// Check if pattern form is dirty (has unsaved changes)
+function isPatternFormDirty() {
+  if (patternFormOriginalState === null || currentlyEditingPatternIndex === null) return false
+
+  const index = currentlyEditingPatternIndex
+  const patternInput = document.getElementById(`edit-pattern-pattern-${index}`)
+  const baseSelect = document.getElementById(`edit-pattern-base-${index}`)
+  const categorySelect = document.getElementById(`edit-pattern-category-${index}`)
+  const targetSelect = document.getElementById(`edit-pattern-target-${index}`)
+  const formatInput = document.getElementById(`edit-pattern-format-${index}`)
+  const priorityInput = document.getElementById(`edit-pattern-priority-${index}`)
+
+  if (!patternInput) return false
+
+  return (
+    patternInput.value !== patternFormOriginalState.pattern ||
+    (baseSelect && baseSelect.value !== patternFormOriginalState.baseUnit) ||
+    (categorySelect && categorySelect.value !== patternFormOriginalState.category) ||
+    (targetSelect && targetSelect.value !== patternFormOriginalState.targetUnit) ||
+    (formatInput && formatInput.value !== patternFormOriginalState.displayFormat) ||
+    (priorityInput && priorityInput.value !== patternFormOriginalState.priority)
+  )
+}
+
 /**
  * Initialize dropdown handlers for add pattern form
  */
@@ -291,6 +319,26 @@ async function addPattern() {
  * Edit an existing pattern
  */
 async function editPattern(index) {
+  // Check if there's another open pattern form with unsaved changes
+  if (currentlyEditingPatternIndex !== null && currentlyEditingPatternIndex !== index && isPatternFormDirty()) {
+    if (
+      !confirm(
+        `You have unsaved changes for pattern #${currentlyEditingPatternIndex + 1}. Discard changes and edit pattern #${index + 1} instead?`
+      )
+    ) {
+      return
+    }
+    // Close the previous form
+    const prevViewDiv = document.getElementById(`pattern-view-${currentlyEditingPatternIndex}`)
+    const prevEditDiv = document.getElementById(`pattern-edit-${currentlyEditingPatternIndex}`)
+    if (prevViewDiv && prevEditDiv) {
+      patternFormOriginalState = null
+      currentlyEditingPatternIndex = null
+      prevViewDiv.style.display = 'flex'
+      prevEditDiv.style.display = 'none'
+    }
+  }
+
   const pattern = preferences.pathPatterns[index]
   const viewDiv = document.getElementById(`pattern-view-${index}`)
   const editDiv = document.getElementById(`pattern-edit-${index}`)
@@ -407,6 +455,26 @@ async function editPattern(index) {
   // Show edit form, hide view
   viewDiv.style.display = 'none'
   editDiv.style.display = 'block'
+
+  // Store original state for dirty checking AFTER form is populated
+  currentlyEditingPatternIndex = index
+  setTimeout(() => {
+    const patternInput = document.getElementById(`edit-pattern-pattern-${index}`)
+    const baseSelect = document.getElementById(`edit-pattern-base-${index}`)
+    const categorySelect = document.getElementById(`edit-pattern-category-${index}`)
+    const targetSelect = document.getElementById(`edit-pattern-target-${index}`)
+    const formatInput = document.getElementById(`edit-pattern-format-${index}`)
+    const priorityInput = document.getElementById(`edit-pattern-priority-${index}`)
+
+    patternFormOriginalState = {
+      pattern: patternInput?.value || '',
+      baseUnit: baseSelect?.value || '',
+      category: categorySelect?.value || '',
+      targetUnit: targetSelect?.value || '',
+      displayFormat: formatInput?.value || '',
+      priority: priorityInput?.value || '100'
+    }
+  }, 0)
 }
 
 /**
@@ -445,6 +513,10 @@ async function saveEditPattern(index) {
 
     showStatus(`Updated pattern: ${patternStr}`, 'success')
 
+    // Clear dirty tracking
+    patternFormOriginalState = null
+    currentlyEditingPatternIndex = null
+
     // Reload data and re-render (requires app.js loadData function)
     if (typeof loadData === 'function') {
       await loadData()
@@ -459,8 +531,19 @@ async function saveEditPattern(index) {
  * Cancel editing a pattern
  */
 function cancelEditPattern(index) {
+  // Check for unsaved changes
+  if (isPatternFormDirty()) {
+    if (!confirm(`Discard unsaved changes for pattern #${index + 1}?`)) {
+      return
+    }
+  }
+
   const viewDiv = document.getElementById(`pattern-view-${index}`)
   const editDiv = document.getElementById(`pattern-edit-${index}`)
+
+  // Clear dirty tracking
+  patternFormOriginalState = null
+  currentlyEditingPatternIndex = null
 
   viewDiv.style.display = 'flex'
   editDiv.style.display = 'none'

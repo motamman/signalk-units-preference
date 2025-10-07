@@ -13,6 +13,51 @@
 
 let unitDefinitions = {}
 
+// Track original form state for dirty checking
+let baseUnitFormOriginalState = null
+let currentlyEditingBaseUnit = null
+let conversionFormOriginalState = null
+let currentlyEditingConversion = null
+
+// ============================================================================
+// DIRTY TRACKING FUNCTIONS
+// ============================================================================
+
+// Check if base unit form is dirty
+function isBaseUnitFormDirty() {
+  if (!baseUnitFormOriginalState || !currentlyEditingBaseUnit) return false
+
+  const safeBaseUnit = sanitizeIdSegment(currentlyEditingBaseUnit)
+  const descInputId = `edit-unit-desc-${safeBaseUnit}`
+  const descInput = document.getElementById(descInputId)
+
+  if (!descInput) return false
+
+  return descInput.value !== baseUnitFormOriginalState.description
+}
+
+// Check if conversion form is dirty
+function isConversionFormDirty() {
+  if (!conversionFormOriginalState || !currentlyEditingConversion) return false
+
+  const { baseUnit, targetUnit } = currentlyEditingConversion
+  const formulaInputId = buildConversionId('edit-conv-formula', baseUnit, targetUnit)
+  const inverseInputId = buildConversionId('edit-conv-inverse', baseUnit, targetUnit)
+  const symbolInputId = buildConversionId('edit-conv-symbol', baseUnit, targetUnit)
+
+  const formulaInput = document.getElementById(formulaInputId)
+  const inverseInput = document.getElementById(inverseInputId)
+  const symbolInput = document.getElementById(symbolInputId)
+
+  if (!formulaInput || !inverseInput || !symbolInput) return false
+
+  return (
+    formulaInput.value !== conversionFormOriginalState.formula ||
+    inverseInput.value !== conversionFormOriginalState.inverseFormula ||
+    symbolInput.value !== conversionFormOriginalState.symbol
+  )
+}
+
 // ============================================================================
 // BASE UNIT CRUD OPERATIONS
 // ============================================================================
@@ -95,6 +140,52 @@ Are you sure you want to continue?`
 
 // Edit base unit
 function editBaseUnit(baseUnit) {
+  // Check if there's an open base unit form with unsaved changes
+  if (currentlyEditingBaseUnit && currentlyEditingBaseUnit !== baseUnit) {
+    if (isBaseUnitFormDirty()) {
+      if (
+        !confirm(
+          `You have unsaved changes for base unit "${currentlyEditingBaseUnit}". Discard changes and edit "${baseUnit}" instead?`
+        )
+      ) {
+        return
+      }
+    }
+    // Close the previous form (avoiding confirm dialog on cancel)
+    const prevSafeBaseUnit = sanitizeIdSegment(currentlyEditingBaseUnit)
+    const prevViewDiv = document.getElementById(`unit-view-${prevSafeBaseUnit}`)
+    const prevEditDiv = document.getElementById(`unit-edit-${prevSafeBaseUnit}`)
+    if (prevViewDiv && prevEditDiv) {
+      baseUnitFormOriginalState = null
+      currentlyEditingBaseUnit = null
+      prevViewDiv.style.display = 'block'
+      prevEditDiv.style.display = 'none'
+    }
+  }
+
+  // Check if there's an open conversion form with unsaved changes
+  if (currentlyEditingConversion) {
+    const { baseUnit: convBase, targetUnit: convTarget } = currentlyEditingConversion
+    if (isConversionFormDirty()) {
+      if (
+        !confirm(
+          `You have unsaved changes for conversion "${convBase} → ${convTarget}". Discard changes and edit "${baseUnit}" instead?`
+        )
+      ) {
+        return
+      }
+    }
+    // Close the previous form (avoiding confirm dialog on cancel)
+    const rowId = buildConversionId('conversion-row', convBase, convTarget)
+    const editRowId = buildConversionId('conversion-edit', convBase, convTarget)
+    const row = document.getElementById(rowId)
+    const editRow = document.getElementById(editRowId)
+    conversionFormOriginalState = null
+    currentlyEditingConversion = null
+    if (row) row.style.display = ''
+    if (editRow) editRow.remove()
+  }
+
   const safeBaseUnit = sanitizeIdSegment(baseUnit)
   const def = unitDefinitions[baseUnit] || {}
   const description = def.description || ''
@@ -138,6 +229,15 @@ function editBaseUnit(baseUnit) {
     content.classList.remove('collapsed')
     icon.classList.remove('collapsed')
   }
+
+  // Store original state for dirty checking AFTER form is populated
+  currentlyEditingBaseUnit = baseUnit
+  setTimeout(() => {
+    const descInput = document.getElementById(descInputId)
+    baseUnitFormOriginalState = {
+      description: descInput?.value || ''
+    }
+  }, 0)
 }
 
 // Save edited base unit
@@ -159,6 +259,10 @@ async function saveEditBaseUnit(baseUnit) {
 
     showStatus(`Updated base unit: ${baseUnit}`, 'success')
 
+    // Clear dirty tracking
+    baseUnitFormOriginalState = null
+    currentlyEditingBaseUnit = null
+
     // Update local unitDefinitions
     if (unitDefinitions[baseUnit]) {
       unitDefinitions[baseUnit].description = description
@@ -177,9 +281,20 @@ async function saveEditBaseUnit(baseUnit) {
 
 // Cancel editing base unit
 function cancelEditBaseUnit(baseUnit) {
+  // Check for unsaved changes
+  if (isBaseUnitFormDirty()) {
+    if (!confirm(`Discard unsaved changes for base unit "${baseUnit}"?`)) {
+      return
+    }
+  }
+
   const safeBaseUnit = sanitizeIdSegment(baseUnit)
   const viewDiv = document.getElementById(`unit-view-${safeBaseUnit}`)
   const editDiv = document.getElementById(`unit-edit-${safeBaseUnit}`)
+
+  // Clear dirty tracking
+  baseUnitFormOriginalState = null
+  currentlyEditingBaseUnit = null
 
   viewDiv.style.display = 'block'
   editDiv.style.display = 'none'
@@ -260,6 +375,54 @@ async function deleteConversion(baseUnit, targetUnit) {
 
 // Edit conversion
 function editConversion(baseUnit, targetUnit) {
+  // Check if there's an open base unit form with unsaved changes
+  if (currentlyEditingBaseUnit) {
+    if (isBaseUnitFormDirty()) {
+      if (
+        !confirm(
+          `You have unsaved changes for base unit "${currentlyEditingBaseUnit}". Discard changes and edit conversion "${baseUnit} → ${targetUnit}" instead?`
+        )
+      ) {
+        return
+      }
+    }
+    // Close the previous form (avoiding confirm dialog on cancel)
+    const prevSafeBaseUnit = sanitizeIdSegment(currentlyEditingBaseUnit)
+    const prevViewDiv = document.getElementById(`unit-view-${prevSafeBaseUnit}`)
+    const prevEditDiv = document.getElementById(`unit-edit-${prevSafeBaseUnit}`)
+    if (prevViewDiv && prevEditDiv) {
+      baseUnitFormOriginalState = null
+      currentlyEditingBaseUnit = null
+      prevViewDiv.style.display = 'block'
+      prevEditDiv.style.display = 'none'
+    }
+  }
+
+  // Check if there's another open conversion form with unsaved changes
+  if (currentlyEditingConversion) {
+    const { baseUnit: convBase, targetUnit: convTarget } = currentlyEditingConversion
+    if (convBase !== baseUnit || convTarget !== targetUnit) {
+      if (isConversionFormDirty()) {
+        if (
+          !confirm(
+            `You have unsaved changes for conversion "${convBase} → ${convTarget}". Discard changes and edit "${baseUnit} → ${targetUnit}" instead?`
+          )
+        ) {
+          return
+        }
+      }
+      // Close the previous form (avoiding confirm dialog on cancel)
+      const rowId = buildConversionId('conversion-row', convBase, convTarget)
+      const editRowId = buildConversionId('conversion-edit', convBase, convTarget)
+      const row = document.getElementById(rowId)
+      const editRow = document.getElementById(editRowId)
+      conversionFormOriginalState = null
+      currentlyEditingConversion = null
+      if (row) row.style.display = ''
+      if (editRow) editRow.remove()
+    }
+  }
+
   const conv = unitDefinitions[baseUnit]?.conversions?.[targetUnit] || {}
 
   const rowId = buildConversionId('conversion-row', baseUnit, targetUnit)
@@ -307,6 +470,20 @@ function editConversion(baseUnit, targetUnit) {
   // Insert edit row after current row and hide current row
   row.style.display = 'none'
   row.parentNode.insertBefore(editRow, row.nextSibling)
+
+  // Store original state for dirty checking AFTER form is populated
+  currentlyEditingConversion = { baseUnit, targetUnit }
+  setTimeout(() => {
+    const formulaInput = document.getElementById(formulaInputId)
+    const inverseInput = document.getElementById(inverseInputId)
+    const symbolInput = document.getElementById(symbolInputId)
+
+    conversionFormOriginalState = {
+      formula: formulaInput?.value || '',
+      inverseFormula: inverseInput?.value || '',
+      symbol: symbolInput?.value || ''
+    }
+  }, 0)
 }
 
 // Save edited conversion
@@ -335,6 +512,10 @@ async function saveEditConversion(baseUnit, targetUnit) {
 
     showStatus(`Updated conversion: ${baseUnit} → ${targetUnit}`, 'success')
 
+    // Clear dirty tracking
+    conversionFormOriginalState = null
+    currentlyEditingConversion = null
+
     // Reload schema and unit definitions
     await loadSchema()
     await loadUnitDefinitions()
@@ -351,11 +532,22 @@ async function saveEditConversion(baseUnit, targetUnit) {
 
 // Cancel editing conversion
 function cancelEditConversion(baseUnit, targetUnit) {
+  // Check for unsaved changes
+  if (isConversionFormDirty()) {
+    if (!confirm(`Discard unsaved changes for conversion "${baseUnit} → ${targetUnit}"?`)) {
+      return
+    }
+  }
+
   const rowId = buildConversionId('conversion-row', baseUnit, targetUnit)
   const editRowId = buildConversionId('conversion-edit', baseUnit, targetUnit)
 
   const row = document.getElementById(rowId)
   const editRow = document.getElementById(editRowId)
+
+  // Clear dirty tracking
+  conversionFormOriginalState = null
+  currentlyEditingConversion = null
 
   if (row) row.style.display = ''
   if (editRow) editRow.remove()
@@ -491,6 +683,48 @@ function renderUnitDefinitions() {
 
 // Toggle unit item
 function toggleUnitItem(baseUnit) {
+  // Check if there's an open base unit form with unsaved changes
+  if (currentlyEditingBaseUnit && isBaseUnitFormDirty()) {
+    if (
+      !confirm(
+        `You have unsaved changes for base unit "${currentlyEditingBaseUnit}". Discard changes and expand "${baseUnit}"?`
+      )
+    ) {
+      return
+    }
+    // Close the form (avoiding confirm dialog on cancel)
+    const prevSafeBaseUnit = sanitizeIdSegment(currentlyEditingBaseUnit)
+    const prevViewDiv = document.getElementById(`unit-view-${prevSafeBaseUnit}`)
+    const prevEditDiv = document.getElementById(`unit-edit-${prevSafeBaseUnit}`)
+    if (prevViewDiv && prevEditDiv) {
+      baseUnitFormOriginalState = null
+      currentlyEditingBaseUnit = null
+      prevViewDiv.style.display = 'block'
+      prevEditDiv.style.display = 'none'
+    }
+  }
+
+  // Check if there's an open conversion form with unsaved changes
+  if (currentlyEditingConversion && isConversionFormDirty()) {
+    const { baseUnit: convBase, targetUnit: convTarget } = currentlyEditingConversion
+    if (
+      !confirm(
+        `You have unsaved changes for conversion "${convBase} → ${convTarget}". Discard changes and expand "${baseUnit}"?`
+      )
+    ) {
+      return
+    }
+    // Close the form (avoiding confirm dialog on cancel)
+    const rowId = buildConversionId('conversion-row', convBase, convTarget)
+    const editRowId = buildConversionId('conversion-edit', convBase, convTarget)
+    const row = document.getElementById(rowId)
+    const editRow = document.getElementById(editRowId)
+    conversionFormOriginalState = null
+    currentlyEditingConversion = null
+    if (row) row.style.display = ''
+    if (editRow) editRow.remove()
+  }
+
   const safeBaseUnit = sanitizeIdSegment(baseUnit)
   const content = document.getElementById(`unit-content-${safeBaseUnit}`)
   const icon = document.getElementById(`unit-icon-${safeBaseUnit}`)
@@ -513,9 +747,47 @@ function toggleUnitItem(baseUnit) {
 
   // Toggle current unit
   if (isCurrentlyCollapsed) {
+    // Expanding
     content.classList.remove('collapsed')
     icon.classList.remove('collapsed')
   } else {
+    // Collapsing - check if there are unsaved changes within this section
+    const hasBaseUnitForm = currentlyEditingBaseUnit === baseUnit && isBaseUnitFormDirty()
+    const hasConversionFormInSection =
+      currentlyEditingConversion &&
+      currentlyEditingConversion.baseUnit === baseUnit &&
+      isConversionFormDirty()
+
+    if (hasBaseUnitForm || hasConversionFormInSection) {
+      const formType = hasBaseUnitForm ? `base unit "${baseUnit}"` : `conversion`
+      if (!confirm(`You have unsaved changes for ${formType}. Discard changes and collapse?`)) {
+        return
+      }
+      // Clear the forms
+      if (hasBaseUnitForm) {
+        const prevSafeBaseUnit = sanitizeIdSegment(currentlyEditingBaseUnit)
+        const prevViewDiv = document.getElementById(`unit-view-${prevSafeBaseUnit}`)
+        const prevEditDiv = document.getElementById(`unit-edit-${prevSafeBaseUnit}`)
+        if (prevViewDiv && prevEditDiv) {
+          baseUnitFormOriginalState = null
+          currentlyEditingBaseUnit = null
+          prevViewDiv.style.display = 'block'
+          prevEditDiv.style.display = 'none'
+        }
+      }
+      if (hasConversionFormInSection) {
+        const { baseUnit: convBase, targetUnit: convTarget } = currentlyEditingConversion
+        const rowId = buildConversionId('conversion-row', convBase, convTarget)
+        const editRowId = buildConversionId('conversion-edit', convBase, convTarget)
+        const row = document.getElementById(rowId)
+        const editRow = document.getElementById(editRowId)
+        conversionFormOriginalState = null
+        currentlyEditingConversion = null
+        if (row) row.style.display = ''
+        if (editRow) editRow.remove()
+      }
+    }
+
     content.classList.add('collapsed')
     icon.classList.add('collapsed')
   }

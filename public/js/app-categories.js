@@ -11,6 +11,10 @@
 // PRESET STATE MANAGEMENT
 // ============================================================================
 
+// Track original form state for dirty checking
+let categoryFormOriginalState = null
+let currentlyEditingCategory = null
+
 // Save original preset state for dirty tracking
 function saveOriginalPresetState() {
   if (preferences?.currentPreset && preferences?.categories) {
@@ -306,8 +310,52 @@ async function deleteCategory(category) {
   }
 }
 
+// Check if category form is dirty (has unsaved changes)
+function isCategoryFormDirty() {
+  if (!categoryFormOriginalState || !currentlyEditingCategory) return false
+
+  const baseSelectId = `edit-base-${currentlyEditingCategory}`
+  const targetSelectId = `edit-target-${currentlyEditingCategory}`
+  const formatInputId = `edit-format-${currentlyEditingCategory}`
+
+  const baseSelect = document.getElementById(baseSelectId)
+  const targetSelect = document.getElementById(targetSelectId)
+  const formatInput = document.getElementById(formatInputId)
+
+  if (!baseSelect || !targetSelect || !formatInput) return false
+
+  return (
+    baseSelect.value !== categoryFormOriginalState.baseUnit ||
+    targetSelect.value !== categoryFormOriginalState.targetUnit ||
+    formatInput.value !== categoryFormOriginalState.displayFormat
+  )
+}
+
 // Edit custom category
 function editCategory(category) {
+  // Check if there's an open form with unsaved changes
+  if (currentlyEditingCategory && currentlyEditingCategory !== category && isCategoryFormDirty()) {
+    if (
+      !confirm(
+        `You have unsaved changes for "${currentlyEditingCategory}". Discard changes and edit "${category}" instead?`
+      )
+    ) {
+      return
+    }
+  }
+
+  // Close any other open edit forms
+  document.querySelectorAll('.category-item [id^="category-edit-"]').forEach(editDiv => {
+    if (editDiv.style.display === 'block') {
+      const viewId = editDiv.id.replace('category-edit-', 'category-view-')
+      const viewDiv = document.getElementById(viewId)
+      if (viewDiv) {
+        viewDiv.style.display = 'flex'
+      }
+      editDiv.style.display = 'none'
+    }
+  })
+
   const pref = preferences?.categories?.[category] || {}
   const schemaBaseUnit = unitSchema.categoryToBaseUnit[category] || ''
   const prefBaseUnit = pref.baseUnit
@@ -386,6 +434,21 @@ function editCategory(category) {
   // Show edit form, hide view
   viewDiv.style.display = 'none'
   editDiv.style.display = 'block'
+
+  // Store original state for dirty checking AFTER form is populated
+  // Use setTimeout to ensure dropdowns are rendered
+  currentlyEditingCategory = category
+  setTimeout(() => {
+    const baseSelect = document.getElementById(baseSelectId)
+    const targetSelect = document.getElementById(targetSelectId)
+    const formatInput = document.getElementById(formatInputId)
+
+    categoryFormOriginalState = {
+      baseUnit: baseSelect?.value || '',
+      targetUnit: targetSelect?.value || '',
+      displayFormat: formatInput?.value || ''
+    }
+  }, 0)
 }
 
 // Save edited category
@@ -426,6 +489,10 @@ async function saveEditCategory(category) {
 
     showStatus(`Updated category: ${category}`, 'success')
 
+    // Clear dirty tracking
+    categoryFormOriginalState = null
+    currentlyEditingCategory = null
+
     // Check if preset is now dirty and re-render
     checkPresetDirty()
     renderCurrentPreset()
@@ -443,8 +510,19 @@ async function saveEditCategory(category) {
 
 // Cancel editing category
 function cancelEditCategory(category) {
+  // Check for unsaved changes
+  if (isCategoryFormDirty()) {
+    if (!confirm(`Discard unsaved changes for "${category}"?`)) {
+      return
+    }
+  }
+
   const viewDiv = document.getElementById(`category-view-${category}`)
   const editDiv = document.getElementById(`category-edit-${category}`)
+
+  // Clear dirty tracking
+  categoryFormOriginalState = null
+  currentlyEditingCategory = null
 
   // Show view, hide edit form
   viewDiv.style.display = 'flex'

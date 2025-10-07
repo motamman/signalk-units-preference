@@ -7,6 +7,10 @@
  * Functions for managing path-specific unit overrides
  */
 
+// Track original form state for dirty checking
+let overrideFormOriginalState = null
+let currentlyEditingOverridePath = null
+
 // ============================================================================
 // PATH OVERRIDE CRUD OPERATIONS
 // ============================================================================
@@ -106,10 +110,58 @@ function renderPathOverrides() {
     .join('')
 }
 
+// Check if override form is dirty (has unsaved changes)
+function isOverrideFormDirty() {
+  if (!overrideFormOriginalState || !currentlyEditingOverridePath) return false
+
+  const safePath = currentlyEditingOverridePath.replace(/\./g, '-')
+  const baseSelectId = `edit-override-base-${safePath}`
+  const categorySelectId = `edit-override-category-${safePath}`
+  const targetSelectId = `edit-override-target-${safePath}`
+  const formatInputId = `edit-override-format-${safePath}`
+
+  const baseSelect = document.getElementById(baseSelectId)
+  const categorySelect = document.getElementById(categorySelectId)
+  const targetSelect = document.getElementById(targetSelectId)
+  const formatInput = document.getElementById(formatInputId)
+
+  if (!baseSelect || !targetSelect || !formatInput) return false
+
+  return (
+    baseSelect.value !== overrideFormOriginalState.baseUnit ||
+    (categorySelect && categorySelect.value !== overrideFormOriginalState.category) ||
+    targetSelect.value !== overrideFormOriginalState.targetUnit ||
+    formatInput.value !== overrideFormOriginalState.displayFormat
+  )
+}
+
 // Edit path override
 async function editPathOverride(path) {
   const override = preferences.pathOverrides[path]
   if (!override) return
+
+  // Check if there's an open form with unsaved changes
+  if (currentlyEditingOverridePath && currentlyEditingOverridePath !== path && isOverrideFormDirty()) {
+    if (
+      !confirm(
+        `You have unsaved changes for "${currentlyEditingOverridePath}". Discard changes and edit "${path}" instead?`
+      )
+    ) {
+      return
+    }
+  }
+
+  // Close any other open edit forms
+  document.querySelectorAll('.override-item [id^="override-edit-"]').forEach(editDiv => {
+    if (editDiv.style.display === 'block') {
+      const viewId = editDiv.id.replace('override-edit-', 'override-view-')
+      const viewDiv = document.getElementById(viewId)
+      if (viewDiv) {
+        viewDiv.style.display = 'flex'
+      }
+      editDiv.style.display = 'none'
+    }
+  })
 
   const safePath = path.replace(/\./g, '-')
   const viewDiv = document.getElementById(`override-view-${safePath}`)
@@ -137,6 +189,7 @@ async function editPathOverride(path) {
 
   editDiv.innerHTML = `
     <div style="background: #fff3cd; padding: 16px; border-radius: 6px; margin-top: 12px;">
+      <h4 style="margin: 0 0 12px 0; color: #856404; font-size: 14px; font-family: monospace;">Edit Override: ${path}</h4>
       <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 16px; margin-bottom: 12px;">
         <div>
           <label style="display: block; font-weight: 500; margin-bottom: 6px; font-size: 13px;">Base Unit</label>
@@ -210,6 +263,23 @@ async function editPathOverride(path) {
   // Show edit form, hide view
   viewDiv.style.display = 'none'
   editDiv.style.display = 'block'
+
+  // Store original state for dirty checking AFTER form is populated
+  // Use setTimeout to ensure dropdowns are rendered
+  currentlyEditingOverridePath = path
+  setTimeout(() => {
+    const baseSelect = document.getElementById(baseSelectId)
+    const categorySelect = document.getElementById(categorySelectId)
+    const targetSelect = document.getElementById(targetSelectId)
+    const formatInput = document.getElementById(formatInputId)
+
+    overrideFormOriginalState = {
+      baseUnit: baseSelect?.value || '',
+      category: categorySelect?.value || '',
+      targetUnit: targetSelect?.value || '',
+      displayFormat: formatInput?.value || ''
+    }
+  }, 0)
 }
 
 // Save edited path override
@@ -253,6 +323,10 @@ async function saveEditPathOverride(path) {
 
     showStatus(`Updated path override: ${path}`, 'success')
 
+    // Clear dirty tracking
+    overrideFormOriginalState = null
+    currentlyEditingOverridePath = null
+
     // Re-render without reloading (to preserve dirty state)
     renderPathOverrides()
   } catch (error) {
@@ -262,9 +336,20 @@ async function saveEditPathOverride(path) {
 
 // Cancel editing path override
 function cancelEditPathOverride(path) {
+  // Check for unsaved changes
+  if (isOverrideFormDirty()) {
+    if (!confirm(`Discard unsaved changes for "${path}"?`)) {
+      return
+    }
+  }
+
   const safePath = path.replace(/\./g, '-')
   const viewDiv = document.getElementById(`override-view-${safePath}`)
   const editDiv = document.getElementById(`override-edit-${safePath}`)
+
+  // Clear dirty tracking
+  overrideFormOriginalState = null
+  currentlyEditingOverridePath = null
 
   // Show view, hide edit form
   viewDiv.style.display = 'flex'

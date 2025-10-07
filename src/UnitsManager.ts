@@ -388,7 +388,16 @@ export class UnitsManager {
    * Public API for frontend use
    */
   getCategoriesForBaseUnit(baseUnit: string): string[] {
-    const categoryMap = this.getCategoryToBaseUnitMap()
+    // Start with static categories
+    const categoryMap = { ...this.getCategoryToBaseUnitMap() }
+
+    // Add custom categories that have a baseUnit defined
+    for (const [category, pref] of Object.entries(this.preferences.categories || {})) {
+      if (pref.baseUnit) {
+        categoryMap[category] = pref.baseUnit
+      }
+    }
+
     return Object.entries(categoryMap)
       .filter(([, unit]) => unit === baseUnit)
       .map(([category]) => category)
