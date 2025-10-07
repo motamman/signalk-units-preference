@@ -593,23 +593,45 @@ export class UnitsManager {
       return this.cloneMetadata(metadata)
     }
 
-    // Path override takes precedence when specifying a base unit
-    if (pathOverridePref?.baseUnit) {
-      const baseUnit = pathOverridePref.baseUnit
-      const builtInDef = this.getConversionsForBaseUnit(baseUnit)
-      const customDef = this.unitDefinitions[baseUnit]
+    // Path override takes precedence (highest priority)
+    if (pathOverridePref) {
+      let baseUnit: string | null = null
+      let category: string | null = null
 
-      // Merge built-in and custom conversions
-      const conversions = {
-        ...(builtInDef?.conversions || {}),
-        ...(customDef?.conversions || {})
+      // If override specifies baseUnit, use it
+      if (pathOverridePref.baseUnit) {
+        baseUnit = pathOverridePref.baseUnit
       }
 
-      metadata = {
-        baseUnit,
-        category:
-          builtInDef?.category || this.getCategoryFromBaseUnit(baseUnit, pathStr) || 'custom',
-        conversions
+      // If override specifies category, always use it
+      if (pathOverridePref.category) {
+        category = pathOverridePref.category
+      }
+
+      // If we have category but no baseUnit yet, get baseUnit from category
+      if (category && !baseUnit) {
+        baseUnit = this.getBaseUnitForCategory(category)
+      }
+
+      // If we have a baseUnit from either source, build metadata
+      if (baseUnit) {
+        const builtInDef = this.getConversionsForBaseUnit(baseUnit)
+        const customDef = this.unitDefinitions[baseUnit]
+
+        // Merge built-in and custom conversions
+        const conversions = {
+          ...(builtInDef?.conversions || {}),
+          ...(customDef?.conversions || {})
+        }
+
+        // Use the override's category if specified, otherwise infer from baseUnit
+        const finalCategory = category || builtInDef?.category || this.getCategoryFromBaseUnit(baseUnit, pathStr) || 'custom'
+
+        metadata = {
+          baseUnit,
+          category: finalCategory,
+          conversions
+        }
       }
     }
 
@@ -647,6 +669,32 @@ export class UnitsManager {
             baseUnit,
             category:
               builtInDef?.category || this.getCategoryFromBaseUnit(baseUnit, pathStr) || 'custom',
+            conversions
+          }
+        }
+      }
+    }
+
+    // FINAL FALLBACK: Path-only inference (catches paths not in comprehensive defaults)
+    if (!metadata) {
+      const inferredCategory = this.inferCategoryFromPath(pathStr)
+      if (inferredCategory) {
+        const baseUnit = this.getBaseUnitForCategory(inferredCategory)
+        if (baseUnit) {
+          this.app.debug(
+            `Path-only inference: ${pathStr} → category "${inferredCategory}" → base unit "${baseUnit}"`
+          )
+          const builtInDef = this.getConversionsForBaseUnit(baseUnit)
+          const customDef = this.unitDefinitions[baseUnit]
+
+          const conversions = {
+            ...(builtInDef?.conversions || {}),
+            ...(customDef?.conversions || {})
+          }
+
+          metadata = {
+            baseUnit,
+            category: inferredCategory,
             conversions
           }
         }
@@ -1819,7 +1867,8 @@ export class UnitsManager {
     const result: Record<string, UnitMetadata> = {}
 
     try {
-      const pathsSet = await this.collectSignalKPaths()
+      // Use paths from signalKMetadata (sent by frontend) instead of stale API snapshot
+      const pathsSet = new Set<string>(Object.keys(this.signalKMetadata))
 
       // Include any overrides even if not currently present in the SignalK data
       Object.keys(this.preferences.pathOverrides || {}).forEach(path => pathsSet.add(path))

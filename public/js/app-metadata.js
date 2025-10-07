@@ -229,13 +229,18 @@ async function renderMetadata() {
   // Get all SignalK metadata at once
   const signalKMetadata = await getAllSignalKMetadata()
 
+  // Get resolved metadata from backend (includes path inference)
+  const backendMetadata = await apiLoadMetadata()
+
   // Build path info with metadata status
   const pathInfo = []
 
   for (const path of availablePaths) {
     const skMeta = signalKMetadata[path]
+    const backendMeta = backendMetadata[path]
     const valueDetails = getCurrentValueDetails(path)
     const hasSignalKMetadata = skMeta && skMeta.units
+    const hasBackendMetadata = backendMeta && backendMeta.baseUnit && backendMeta.baseUnit !== 'none'
     const matchingPattern = findMatchingPattern(path)
     const pathOverride = preferences?.pathOverrides?.[path]
 
@@ -281,6 +286,25 @@ async function renderMetadata() {
         color = '#cfe2ff'
         status = 'SignalK Only'
         category = '-'
+        displayUnit = baseUnit
+      }
+    } else if (hasBackendMetadata) {
+      // Backend has resolved metadata (e.g., from path inference)
+      baseUnit = backendMeta.baseUnit
+      category = backendMeta.category || '-'
+
+      // Check if this category has a preference
+      const categoryPref = category !== '-' ? preferences?.categories?.[category] : null
+
+      if (categoryPref && categoryPref.targetUnit) {
+        // Darker blue: Auto-assigned to category via backend inference
+        color = '#b3d9ff'
+        status = 'SignalK Auto'
+        displayUnit = categoryPref.targetUnit
+      } else {
+        // Light blue: Has backend metadata but no category preference
+        color = '#cfe2ff'
+        status = 'SignalK Only'
         displayUnit = baseUnit
       }
     } else {
@@ -379,7 +403,7 @@ function renderMetadataTable(pathInfo) {
           <button onclick="clearMetadataFilter()" style="padding: 4px 12px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; margin-left: 10px;">Clear</button>
         </div>
       </div>
-      <div style="overflow-x: auto;">
+      <div style="max-height: 600px; overflow-x: auto; overflow-y: auto;">
         <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
           <thead>
             <tr style="background: #f8f9fa; border-bottom: 2px solid #dee2e6;">
@@ -430,15 +454,6 @@ function renderMetadataTable(pathInfo) {
         }
       }
 
-      const canUseGetLink =
-        currentValue !== undefined && currentValue !== null && typeof currentValue !== 'object'
-
-      const encodedCurrentValue = canUseGetLink ? encodeURIComponent(String(currentValue)) : null
-
-      const getLink = canUseGetLink
-        ? `<a href="${API_BASE}/conversions/${info.path}?value=${encodedCurrentValue}" target="_blank" title="Open conversion in new tab - test GET endpoint with current value (${currentValue})" style="color: #e67e22; margin-left: 4px; text-decoration: none; font-size: 14px;">🔗</a>`
-        : ''
-
       // Add pattern icon if not already a pattern or auto-assigned
       const hasPattern = info.status.startsWith('Pattern:')
       const hasAuto = info.status === 'SignalK Auto'
@@ -468,7 +483,6 @@ function renderMetadataTable(pathInfo) {
         <td style="padding: 8px; font-family: monospace; font-size: 11px; word-break: break-all; text-align: left;">
           ${info.path}
           <a href="${conversionUrl}" target="_blank" title="View conversion details - shows base unit, target unit, formula, symbol, and metadata" style="color: #3498db; margin-left: 6px; text-decoration: none; font-size: 14px;">🔧</a>
-          ${getLink}
           ${testLink}
           ${patternIcon}
           ${overrideIcon}
