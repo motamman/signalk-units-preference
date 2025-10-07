@@ -2887,10 +2887,12 @@ function initializeUnitDefinitionsDropdowns() {
 async function addPathOverride() {
   const path = document.getElementById('overridePathInput').value.trim()
   const baseSelect = document.getElementById('overrideBaseUnit')
+  const categorySelect = document.getElementById('overrideCategory')
   const targetSelect = document.getElementById('overrideTargetUnit')
   const format = document.getElementById('overrideFormat').value.trim()
 
   const baseUnit = baseSelect.value.trim()
+  const category = categorySelect?.value?.trim() || ''
   const targetUnit = targetSelect.value.trim()
 
   if (!path || !baseUnit || !targetUnit || !format) {
@@ -2899,15 +2901,22 @@ async function addPathOverride() {
   }
 
   try {
+    const overrideData = {
+      path,
+      baseUnit,
+      targetUnit,
+      displayFormat: format
+    }
+
+    // Include category if specified
+    if (category) {
+      overrideData.category = category
+    }
+
     const res = await fetch(`${API_BASE}/overrides/${path}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        path,
-        baseUnit,
-        targetUnit,
-        displayFormat: format
-      })
+      body: JSON.stringify(overrideData)
     })
 
     if (!res.ok) throw new Error('Failed to add override')
@@ -2916,12 +2925,7 @@ async function addPathOverride() {
     if (!preferences.pathOverrides) {
       preferences.pathOverrides = {}
     }
-    preferences.pathOverrides[path] = {
-      path,
-      baseUnit,
-      targetUnit,
-      displayFormat: format
-    }
+    preferences.pathOverrides[path] = overrideData
 
     showStatus(`Added path override: ${path}`, 'success')
 
@@ -3083,10 +3087,12 @@ async function editPathOverride(path) {
 async function saveEditPathOverride(path) {
   const safePath = path.replace(/\./g, '-')
   const baseSelectId = `edit-override-base-${safePath}`
+  const categorySelectId = `edit-override-category-${safePath}`
   const targetSelectId = `edit-override-target-${safePath}`
   const formatInputId = `edit-override-format-${safePath}`
 
   const baseUnit = document.getElementById(baseSelectId).value
+  const category = document.getElementById(categorySelectId)?.value?.trim() || ''
   const targetUnit = document.getElementById(targetSelectId).value
   const displayFormat = document.getElementById(formatInputId).value
 
@@ -3101,6 +3107,11 @@ async function saveEditPathOverride(path) {
       baseUnit,
       targetUnit,
       displayFormat
+    }
+
+    // Include category if specified
+    if (category) {
+      overridePref.category = category
     }
 
     const res = await fetch(`${API_BASE}/overrides/${path}`, {
