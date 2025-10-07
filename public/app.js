@@ -2359,7 +2359,16 @@ function renderUnitDefinitions() {
   container.innerHTML = defs
     .map(([baseUnit, def]) => {
       console.log(`Rendering baseUnit: ${baseUnit}, category: ${def.category}`)
-      const conversions = Object.entries(def.conversions || {}).sort((a, b) =>
+      // For display purposes, use schema's target units if available (e.g., for date/time formats)
+      const schemaTargets = unitSchema.targetUnitsByBase?.[baseUnit] || []
+      const fileConversions = def.conversions || {}
+
+      // Merge: show all from schema, fill in details from file where available
+      const conversionsToDisplay = schemaTargets.length > 0
+        ? schemaTargets.map(target => [target, fileConversions[target] || { formula: 'value', inverseFormula: 'value', symbol: '' }])
+        : Object.entries(fileConversions)
+
+      const conversions = conversionsToDisplay.sort((a, b) =>
         a[0].toLowerCase().localeCompare(b[0].toLowerCase())
       )
       const isCustom = def.isCustom === true
@@ -2376,8 +2385,12 @@ function renderUnitDefinitions() {
             <span style="color: #95a5a6; font-size: 13px;">${conversions.length} conversion${conversions.length !== 1 ? 's' : ''}</span>
           </div>
           <div style="display: flex; align-items: center; gap: 10px;">
-            <button class="btn-primary btn-edit" onclick="event.stopPropagation(); editBaseUnit('${baseUnit}')">Edit</button>
-            <button class="btn-danger btn-delete" onclick="event.stopPropagation(); deleteBaseUnit('${baseUnit}')">Delete</button>
+            ${
+              isCustom
+                ? `<button class="btn-primary btn-edit" onclick="event.stopPropagation(); editBaseUnit('${baseUnit}')">Edit</button>
+            <button class="btn-danger btn-delete" onclick="event.stopPropagation(); deleteBaseUnit('${baseUnit}')">Delete</button>`
+                : ''
+            }
             <span class="collapse-icon collapsed" id="unit-icon-${safeBaseUnit}">▼</span>
           </div>
         </div>
@@ -2401,6 +2414,8 @@ function renderUnitDefinitions() {
                   <tbody id="conversions-tbody-${safeBaseUnit}">
                     ${conversions
                       .map(([target, conv]) => {
+                        // Check if this specific conversion is custom (editable)
+                        const isConversionCustom = isCustom || (def.customConversions || []).includes(target)
                         return `
                       <tr id="${buildConversionId('conversion-row', baseUnit, target)}" style="border-bottom: 1px solid #f0f0f0;">
                         <td style="padding: 8px; font-family: monospace;">${target}</td>
@@ -2408,8 +2423,12 @@ function renderUnitDefinitions() {
                         <td style="padding: 8px; font-family: monospace; font-size: 12px;">${conv.inverseFormula}</td>
                         <td style="padding: 8px;">${conv.symbol}</td>
                         <td style="padding: 8px;">
-                          <button class="btn-primary btn-edit" onclick="editConversion('${baseUnit}', '${target}')">Edit</button>
-                          <button class="btn-danger btn-delete" onclick="deleteConversion('${baseUnit}', '${target}')">Delete</button>
+                          ${
+                            isConversionCustom
+                              ? `<button class="btn-primary btn-edit" onclick="editConversion('${baseUnit}', '${target}')">Edit</button>
+                          <button class="btn-danger btn-delete" onclick="deleteConversion('${baseUnit}', '${target}')">Delete</button>`
+                              : ''
+                          }
                         </td>
                       </tr>`
                       })

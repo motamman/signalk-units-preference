@@ -30,6 +30,8 @@ export interface BaseUnitDefinition {
   conversions: Record<string, ConversionDefinition>
   /** Whether this is a custom (user-defined) unit */
   isCustom?: boolean
+  /** List of conversion names that are custom (user-added) */
+  customConversions?: string[]
 }
 
 /**

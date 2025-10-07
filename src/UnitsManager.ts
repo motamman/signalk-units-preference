@@ -1061,19 +1061,29 @@ export class UnitsManager {
 
       if (baseUnitDefs[baseUnit]) {
         // This is an extension of a built-in base unit - merge conversions
+        const coreConversions = baseUnitDefs[baseUnit].conversions
+        const customConvs = customDef.conversions || {}
+
+        // Only mark conversions as custom if they DON'T exist in the core definition
+        const customConversionNames = Object.keys(customConvs).filter(
+          conv => !coreConversions[conv]
+        )
+
         baseUnitDefs[baseUnit] = {
           baseUnit,
           conversions: {
-            ...baseUnitDefs[baseUnit].conversions,
-            ...customDef.conversions
+            ...coreConversions,
+            ...customConvs
           },
-          isCustom: false // Mark as not custom since it's extending a built-in
+          isCustom: false, // Mark as not custom since it's extending a built-in
+          customConversions: customConversionNames // Only truly custom conversions
         }
       } else {
         // This is a purely custom base unit
         baseUnitDefs[baseUnit] = {
           ...customDef,
-          isCustom: true
+          isCustom: true,
+          customConversions: Object.keys(customDef.conversions || {}) // All conversions are custom
         }
       }
     }
