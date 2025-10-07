@@ -320,15 +320,21 @@ async function addPattern() {
  */
 async function editPattern(index) {
   // Check if there's another open pattern form with unsaved changes
-  if (currentlyEditingPatternIndex !== null && currentlyEditingPatternIndex !== index && isPatternFormDirty()) {
-    if (
-      !confirm(
-        `You have unsaved changes for pattern #${currentlyEditingPatternIndex + 1}. Discard changes and edit pattern #${index + 1} instead?`
-      )
-    ) {
-      return
+  if (currentlyEditingPatternIndex !== null && currentlyEditingPatternIndex !== index) {
+    const currentPattern = preferences.pathPatterns[currentlyEditingPatternIndex]
+    const newPattern = preferences.pathPatterns[index]
+
+    if (isPatternFormDirty()) {
+      if (
+        !confirm(
+          `You have unsaved changes for pattern "${currentPattern?.pattern}". Discard changes and edit "${newPattern?.pattern}" instead?`
+        )
+      ) {
+        return
+      }
     }
-    // Close the previous form
+
+    // Close the previous form (avoiding confirm dialog on cancel)
     const prevViewDiv = document.getElementById(`pattern-view-${currentlyEditingPatternIndex}`)
     const prevEditDiv = document.getElementById(`pattern-edit-${currentlyEditingPatternIndex}`)
     if (prevViewDiv && prevEditDiv) {
@@ -533,7 +539,8 @@ async function saveEditPattern(index) {
 function cancelEditPattern(index) {
   // Check for unsaved changes
   if (isPatternFormDirty()) {
-    if (!confirm(`Discard unsaved changes for pattern #${index + 1}?`)) {
+    const pattern = preferences.pathPatterns[index]
+    if (!confirm(`Discard unsaved changes for pattern "${pattern?.pattern}"?`)) {
       return
     }
   }
