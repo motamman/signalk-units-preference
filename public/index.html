@@ -921,10 +921,14 @@
                     <p style="color: #7f8c8d; margin-bottom: 20px;">
                         Define a new base unit that can be used across paths. The base unit will be available for conversions.
                     </p>
-                    <div class="add-override" style="display: grid; grid-template-columns: 2fr auto; gap: 15px; align-items: end; margin-bottom: 30px;">
+                    <div class="add-override" style="display: grid; grid-template-columns: 2fr 2fr auto; gap: 15px; align-items: end; margin-bottom: 30px;">
                         <div class="input-group">
                             <label>Base Unit Symbol</label>
                             <input type="text" id="newBaseUnitSymbol" placeholder="e.g., L/h, bar, psi">
+                        </div>
+                        <div class="input-group">
+                            <label>Description (optional)</label>
+                            <input type="text" id="newBaseUnitDesc" placeholder="e.g., flow rate, pressure">
                         </div>
                         <button class="btn-success" onclick="addBaseUnit()" style="padding: 10px 24px;">Add Base Unit</button>
                     </div>

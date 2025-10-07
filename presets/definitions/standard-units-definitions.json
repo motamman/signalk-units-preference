@@ -1,6 +1,5 @@
 {
   "m/s": {
-    "category": "speed",
     "conversions": {
       "m/s": {
         "formula": "value * 1",
@@ -27,10 +26,10 @@
         "inverseFormula": "0.836 * Math.pow(value, 1.5)",
         "symbol": "Bf"
       }
-    }
+    },
+    "description": "speed"
   },
   "K": {
-    "category": "temperature",
     "conversions": {
       "kelvin": {
         "formula": "value * 1",
@@ -47,10 +46,10 @@
         "inverseFormula": "(value - 32) * 5/9 + 273.15",
         "symbol": "°F"
       }
-    }
+    },
+    "description": "temperature"
   },
   "Pa": {
-    "category": "pressure",
     "conversions": {
       "Pa": {
         "formula": "value * 1",
@@ -87,10 +86,10 @@
         "inverseFormula": "value * 133.322",
         "symbol": "mmHg"
       }
-    }
+    },
+    "description": "pressure"
   },
   "m": {
-    "category": "distance",
     "conversions": {
       "m": {
         "formula": "value * 1",
@@ -122,10 +121,10 @@
         "inverseFormula": "value * 1.8288",
         "symbol": "fathom"
       }
-    }
+    },
+    "description": "distance"
   },
   "rad": {
-    "category": "angle",
     "conversions": {
       "rad": {
         "formula": "value * 1",
@@ -137,10 +136,10 @@
         "inverseFormula": "value * 0.0174533",
         "symbol": "°"
       }
-    }
+    },
+    "description": "angle"
   },
   "rad/s": {
-    "category": "angularVelocity",
     "conversions": {
       "rad/s": {
         "formula": "value * 1",
@@ -157,10 +156,10 @@
         "inverseFormula": "value * 0.104720",
         "symbol": "rpm"
       }
-    }
+    },
+    "description": "angularVelocity"
   },
   "m3": {
-    "category": "volume",
     "conversions": {
       "m3": {
         "formula": "value * 1",
@@ -182,30 +181,30 @@
         "inverseFormula": "value * 0.000946353",
         "symbol": "qt"
       }
-    }
+    },
+    "description": "volume"
   },
   "V": {
-    "category": "voltage",
     "conversions": {
       "V": {
         "formula": "value * 1",
         "inverseFormula": "value * 1",
         "symbol": "V"
       }
-    }
+    },
+    "description": "voltage"
   },
   "A": {
-    "category": "current",
     "conversions": {
       "A": {
         "formula": "value * 1",
         "inverseFormula": "value * 1",
         "symbol": "A"
       }
-    }
+    },
+    "description": "current"
   },
   "W": {
-    "category": "power",
     "conversions": {
       "W": {
         "formula": "value * 1",
@@ -222,10 +221,10 @@
         "inverseFormula": "value * 745.7",
         "symbol": "hp"
       }
-    }
+    },
+    "description": "power"
   },
   "ratio": {
-    "category": "percentage",
     "conversions": {
       "ratio": {
         "formula": "value * 1",
@@ -237,10 +236,10 @@
         "inverseFormula": "value * 0.01",
         "symbol": "%"
       }
-    }
+    },
+    "description": "percentage"
   },
   "Hz": {
-    "category": "frequency",
     "conversions": {
       "Hz": {
         "formula": "value * 1",
@@ -252,10 +251,10 @@
         "inverseFormula": "value * 0.0166667",
         "symbol": "rpm"
       }
-    }
+    },
+    "description": "frequency"
   },
   "s": {
-    "category": "time",
     "conversions": {
       "s": {
         "formula": "value * 1",
@@ -277,10 +276,10 @@
         "inverseFormula": "value * 86400",
         "symbol": "day"
       }
-    }
+    },
+    "description": "time"
   },
   "C": {
-    "category": "charge",
     "conversions": {
       "C": {
         "formula": "value * 1",
@@ -297,10 +296,10 @@
         "inverseFormula": "value * 3.6",
         "symbol": "mAh"
       }
-    }
+    },
+    "description": "charge"
   },
   "m3/s": {
-    "category": "volumeRate",
     "conversions": {
       "m3/s": {
         "formula": "value * 1",
@@ -322,16 +321,37 @@
         "inverseFormula": "value * 0.00000105150327",
         "symbol": "gal/h"
       }
-    }
+    },
+    "description": "volumeRate"
   },
   "tr": {
-    "category": "unitless",
     "conversions": {
       "tr": {
         "formula": "value * 1",
         "inverseFormula": "value * 1",
         "symbol": "tr"
       }
-    }
+    },
+    "description": "unitless"
+  },
+  "RFC 3339 (UTC)": {
+    "conversions": {
+      "RFC 3339 (UTC)": {
+        "formula": "value",
+        "inverseFormula": "value",
+        "symbol": ""
+      }
+    },
+    "description": "date/time format"
+  },
+  "Epoch Seconds": {
+    "conversions": {
+      "Epoch Seconds": {
+        "formula": "value",
+        "inverseFormula": "value",
+        "symbol": ""
+      }
+    },
+    "description": "date/time format"
   }
 }

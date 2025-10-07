@@ -2231,6 +2231,7 @@ let unitDefinitions = {}
 // Add a new base unit
 async function addBaseUnit() {
   const symbol = document.getElementById('newBaseUnitSymbol').value.trim()
+  const description = document.getElementById('newBaseUnitDesc').value.trim()
 
   if (!symbol) {
     showStatus('Please enter a base unit symbol', 'error')
@@ -2243,6 +2244,7 @@ async function addBaseUnit() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         baseUnit: symbol,
+        description: description || undefined,
         conversions: {}
       })
     })
@@ -2253,6 +2255,7 @@ async function addBaseUnit() {
 
     // Clear form
     document.getElementById('newBaseUnitSymbol').value = ''
+    document.getElementById('newBaseUnitDesc').value = ''
 
     // Reload schema and unit definitions
     await loadSchema()
@@ -2536,23 +2539,33 @@ function toggleUnitItem(baseUnit) {
 // Edit base unit
 function editBaseUnit(baseUnit) {
   const safeBaseUnit = sanitizeIdSegment(baseUnit)
+  const def = unitDefinitions[baseUnit] || {}
+  const description = def.description || ''
 
   const viewDiv = document.getElementById(`unit-view-${safeBaseUnit}`)
   const editDiv = document.getElementById(`unit-edit-${safeBaseUnit}`)
 
   const symbolInputId = `edit-unit-symbol-${safeBaseUnit}`
+  const descInputId = `edit-unit-desc-${safeBaseUnit}`
 
   // Build edit form
   editDiv.innerHTML = `
     <div style="background: #fff3cd; padding: 15px; border-radius: 4px; border: 1px dashed #ffc107; margin-top: 10px;">
       <h4 style="margin: 0 0 15px 0; color: #856404; font-size: 14px;">Edit Base Unit: ${baseUnit}</h4>
-      <div class="input-group" style="margin-bottom: 15px;">
-        <label>Base Unit Symbol</label>
-        <input type="text" id="${symbolInputId}" value="${baseUnit}" placeholder="e.g., L/h, bar" readonly style="background: #f5f5f5;">
-        <small style="color: #666; display: block; margin-top: 3px;">Symbol cannot be changed. Use this form to verify the base unit or add conversions below.</small>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+        <div class="input-group">
+          <label>Base Unit Symbol</label>
+          <input type="text" id="${symbolInputId}" value="${baseUnit}" placeholder="e.g., L/h, bar" readonly style="background: #f5f5f5;">
+          <small style="color: #666; display: block; margin-top: 3px;">Symbol cannot be changed</small>
+        </div>
+        <div class="input-group">
+          <label>Description (optional)</label>
+          <input type="text" id="${descInputId}" value="${description}" placeholder="e.g., flow rate, energy">
+        </div>
       </div>
       <div style="display: flex; gap: 10px;">
-        <button class="btn-secondary" onclick="cancelEditBaseUnit('${baseUnit}')" style="padding: 8px 16px;">Close</button>
+        <button class="btn-success" onclick="saveEditBaseUnit('${baseUnit}')" style="padding: 8px 16px;">Save Changes</button>
+        <button class="btn-secondary" onclick="cancelEditBaseUnit('${baseUnit}')" style="padding: 8px 16px;">Cancel</button>
       </div>
     </div>
   `
@@ -2567,6 +2580,50 @@ function editBaseUnit(baseUnit) {
   if (content.classList.contains('collapsed')) {
     content.classList.remove('collapsed')
     icon.classList.remove('collapsed')
+  }
+}
+
+// Save edited base unit
+async function saveEditBaseUnit(baseUnit) {
+  const safeBaseUnit = sanitizeIdSegment(baseUnit)
+  const descInputId = `edit-unit-desc-${safeBaseUnit}`
+  const description = document.getElementById(descInputId).value.trim()
+
+  try {
+    // Get the existing unit definition and update only the description
+    const existingDef = unitDefinitions[baseUnit] || { conversions: {} }
+    const updatedDef = {
+      baseUnit: baseUnit,
+      description: description || undefined,
+      conversions: existingDef.conversions || {}
+    }
+
+    const res = await fetch(`${API_BASE}/unit-definitions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updatedDef)
+    })
+
+    if (!res.ok) {
+      const errorText = await res.text()
+      throw new Error('Failed to update base unit')
+    }
+
+    showStatus(`Updated base unit: ${baseUnit}`, 'success')
+
+    // Update local unitDefinitions
+    if (unitDefinitions[baseUnit]) {
+      unitDefinitions[baseUnit].description = description
+    }
+
+    // Reload and re-render
+    await loadUnitDefinitions()
+    renderUnitDefinitions()
+
+    // Cancel edit mode to show updated view
+    cancelEditBaseUnit(baseUnit)
+  } catch (error) {
+    showStatus('Failed to update base unit: ' + error.message, 'error')
   }
 }
 
