@@ -919,16 +919,12 @@
                 <div id="addUnitDefinitionsContent" class="collapsible-content collapsed">
                     <h3 style="color: #667eea; margin-bottom: 10px; font-size: 1.2rem;">Add Base Unit</h3>
                     <p style="color: #7f8c8d; margin-bottom: 20px;">
-                        Define a new base unit that can be used across paths.
+                        Define a new base unit that can be used across paths. The base unit will be available for conversions.
                     </p>
-                    <div class="add-override" style="display: grid; grid-template-columns: 2fr 3fr auto; gap: 15px; align-items: end; margin-bottom: 30px;">
+                    <div class="add-override" style="display: grid; grid-template-columns: 2fr auto; gap: 15px; align-items: end; margin-bottom: 30px;">
                         <div class="input-group">
                             <label>Base Unit Symbol</label>
                             <input type="text" id="newBaseUnitSymbol" placeholder="e.g., L/h, bar, psi">
-                        </div>
-                        <div class="input-group">
-                            <label>Description (optional)</label>
-                            <input type="text" id="newBaseUnitDesc" placeholder="e.g., Liters per hour, Pressure">
                         </div>
                         <button class="btn-success" onclick="addBaseUnit()" style="padding: 10px 24px;">Add Base Unit</button>
                     </div>
@@ -1060,9 +1056,9 @@
                         <div style="background: #f8f9fa; padding: 15px; border-radius: 6px; border-left: 4px solid #667eea;">
                             <h3 style="margin: 0 0 10px 0; color: #667eea; font-size: 1.1rem;">Conversion Endpoints</h3>
                             <ul class="api-test-list">
-                                <li><a href="/plugins/signalk-units-preference/conversion/navigation.speedOverGround" target="_blank">/conversion/:path</a> - Get conversion metadata for a path</li>
-                                <li><a href="/plugins/signalk-units-preference/convert/navigation.speedOverGround/5.14" target="_blank">/convert/:path/:value</a> - Convert a value (simple types)</li>
-                                <li><a href="/plugins/signalk-units-preference/unit-convert?baseUnit=m/s&targetUnit=knots&value=5.14" target="_blank">/unit-convert?baseUnit=...&targetUnit=...&value=...</a> - Convert by base unit</li>
+                                <li><a href="/plugins/signalk-units-preference/conversions/navigation.speedOverGround" target="_blank">/conversions/:path</a> - Get conversion metadata for a path</li>
+                                <li><a href="/plugins/signalk-units-preference/conversions/navigation.speedOverGround?value=5.14" target="_blank">/conversions/:path?value=...</a> - Convert a value for a path</li>
+                                <li><a href="/plugins/signalk-units-preference/units/conversions?baseUnit=m/s&targetUnit=knots&value=5.14" target="_blank">/units/conversions?baseUnit=...&targetUnit=...&value=...</a> - Convert by base unit</li>
                             </ul>
                         </div>
 
@@ -1105,7 +1101,7 @@
                         <div style="background: #f8f9fa; padding: 15px; border-radius: 6px; border-left: 4px solid #e74c3c;">
                             <h3 style="margin: 0 0 10px 0; color: #e74c3c; font-size: 1.1rem;">Presets</h3>
                             <ul class="api-test-list">
-                                <li><a href="/plugins/signalk-units-preference/current-preset" target="_blank">/current-preset</a> - Get currently applied preset</li>
+                                <li><a href="/plugins/signalk-units-preference/presets/current" target="_blank">/presets/current</a> - Get currently applied preset</li>
                                 <li><a href="/plugins/signalk-units-preference/presets/custom" target="_blank">/presets/custom</a> - List custom presets</li>
                             </ul>
                         </div>
@@ -1177,13 +1173,13 @@
                             All standard unit definitions by base unit. Edit formulas, add target units, or modify symbols.
                         </p>
                         <div style="display: flex; gap: 8px;">
-                            <button class="btn-primary" onclick="downloadFile('definition-file', 'standard-units')" style="flex: 1; padding: 8px;">
+                            <button class="btn-primary" onclick="downloadFile('files/definitions', 'standard-units')" style="flex: 1; padding: 8px;">
                                 📥 Download
                             </button>
                             <button class="btn-primary" onclick="document.getElementById('uploadStandardUnits').click()" style="flex: 1; padding: 8px;">
                                 📤 Upload
                             </button>
-                            <input type="file" id="uploadStandardUnits" accept=".json" style="display: none;" onchange="uploadFile(event, 'definition-file', 'standard-units')">
+                            <input type="file" id="uploadStandardUnits" accept=".json" style="display: none;" onchange="uploadFile(event, 'files/definitions', 'standard-units')">
                         </div>
                     </div>
 
@@ -1193,13 +1189,13 @@
                             Category→baseUnit mappings and core categories list.
                         </p>
                         <div style="display: flex; gap: 8px;">
-                            <button class="btn-primary" onclick="downloadFile('definition-file', 'categories')" style="flex: 1; padding: 8px;">
+                            <button class="btn-primary" onclick="downloadFile('files/definitions', 'categories')" style="flex: 1; padding: 8px;">
                                 📥 Download
                             </button>
                             <button class="btn-primary" onclick="document.getElementById('uploadCategories').click()" style="flex: 1; padding: 8px;">
                                 📤 Upload
                             </button>
-                            <input type="file" id="uploadCategories" accept=".json" style="display: none;" onchange="uploadFile(event, 'definition-file', 'categories')">
+                            <input type="file" id="uploadCategories" accept=".json" style="display: none;" onchange="uploadFile(event, 'files/definitions', 'categories')">
                         </div>
                     </div>
 
@@ -1209,13 +1205,13 @@
                             Date/time format definitions with metadata and examples.
                         </p>
                         <div style="display: flex; gap: 8px;">
-                            <button class="btn-primary" onclick="downloadFile('definition-file', 'date-formats')" style="flex: 1; padding: 8px;">
+                            <button class="btn-primary" onclick="downloadFile('files/definitions', 'date-formats')" style="flex: 1; padding: 8px;">
                                 📥 Download
                             </button>
                             <button class="btn-primary" onclick="document.getElementById('uploadDateFormats').click()" style="flex: 1; padding: 8px;">
                                 📤 Upload
                             </button>
-                            <input type="file" id="uploadDateFormats" accept=".json" style="display: none;" onchange="uploadFile(event, 'definition-file', 'date-formats')">
+                            <input type="file" id="uploadDateFormats" accept=".json" style="display: none;" onchange="uploadFile(event, 'files/definitions', 'date-formats')">
                         </div>
                     </div>
                 </div>
@@ -1228,13 +1224,13 @@
                             Imperial (US) unit preset with US customary units.
                         </p>
                         <div style="display: flex; gap: 8px;">
-                            <button class="btn-primary" onclick="downloadFile('config-file', 'imperial-us')" style="flex: 1; padding: 8px;">
+                            <button class="btn-primary" onclick="downloadFile('files/configs', 'imperial-us')" style="flex: 1; padding: 8px;">
                                 📥 Download
                             </button>
                             <button class="btn-primary" onclick="document.getElementById('uploadImperialUs').click()" style="flex: 1; padding: 8px;">
                                 📤 Upload
                             </button>
-                            <input type="file" id="uploadImperialUs" accept=".json" style="display: none;" onchange="uploadFile(event, 'config-file', 'imperial-us')">
+                            <input type="file" id="uploadImperialUs" accept=".json" style="display: none;" onchange="uploadFile(event, 'files/configs', 'imperial-us')">
                         </div>
                     </div>
 
@@ -1244,13 +1240,13 @@
                             Imperial (UK) unit preset with British units.
                         </p>
                         <div style="display: flex; gap: 8px;">
-                            <button class="btn-primary" onclick="downloadFile('config-file', 'imperial-uk')" style="flex: 1; padding: 8px;">
+                            <button class="btn-primary" onclick="downloadFile('files/configs', 'imperial-uk')" style="flex: 1; padding: 8px;">
                                 📥 Download
                             </button>
                             <button class="btn-primary" onclick="document.getElementById('uploadImperialUk').click()" style="flex: 1; padding: 8px;">
                                 📤 Upload
                             </button>
-                            <input type="file" id="uploadImperialUk" accept=".json" style="display: none;" onchange="uploadFile(event, 'config-file', 'imperial-uk')">
+                            <input type="file" id="uploadImperialUk" accept=".json" style="display: none;" onchange="uploadFile(event, 'files/configs', 'imperial-uk')">
                         </div>
                     </div>
 
@@ -1260,13 +1256,13 @@
                             Metric unit preset with SI units.
                         </p>
                         <div style="display: flex; gap: 8px;">
-                            <button class="btn-primary" onclick="downloadFile('config-file', 'metric')" style="flex: 1; padding: 8px;">
+                            <button class="btn-primary" onclick="downloadFile('files/configs', 'metric')" style="flex: 1; padding: 8px;">
                                 📥 Download
                             </button>
                             <button class="btn-primary" onclick="document.getElementById('uploadMetric').click()" style="flex: 1; padding: 8px;">
                                 📤 Upload
                             </button>
-                            <input type="file" id="uploadMetric" accept=".json" style="display: none;" onchange="uploadFile(event, 'config-file', 'metric')">
+                            <input type="file" id="uploadMetric" accept=".json" style="display: none;" onchange="uploadFile(event, 'files/configs', 'metric')">
                         </div>
                     </div>
                 </div>
@@ -1287,13 +1283,13 @@
                             Current preferences, path overrides, patterns, and active preset.
                         </p>
                         <div style="display: flex; gap: 8px;">
-                            <button class="btn-primary" onclick="downloadFile('config-file', 'units-preferences')" style="flex: 1; padding: 8px;">
+                            <button class="btn-primary" onclick="downloadFile('files/configs', 'units-preferences')" style="flex: 1; padding: 8px;">
                                 📥 Download
                             </button>
                             <button class="btn-primary" onclick="document.getElementById('uploadPreferences').click()" style="flex: 1; padding: 8px;">
                                 📤 Upload
                             </button>
-                            <input type="file" id="uploadPreferences" accept=".json" style="display: none;" onchange="uploadFile(event, 'config-file', 'units-preferences')">
+                            <input type="file" id="uploadPreferences" accept=".json" style="display: none;" onchange="uploadFile(event, 'files/configs', 'units-preferences')">
                         </div>
                     </div>
 
@@ -1303,13 +1299,13 @@
                             Custom unit definitions and user-added conversions.
                         </p>
                         <div style="display: flex; gap: 8px;">
-                            <button class="btn-primary" onclick="downloadFile('config-file', 'custom-units-definitions')" style="flex: 1; padding: 8px;">
+                            <button class="btn-primary" onclick="downloadFile('files/configs', 'custom-units-definitions')" style="flex: 1; padding: 8px;">
                                 📥 Download
                             </button>
                             <button class="btn-primary" onclick="document.getElementById('uploadCustomDefinitionsData').click()" style="flex: 1; padding: 8px;">
                                 📤 Upload
                             </button>
-                            <input type="file" id="uploadCustomDefinitionsData" accept=".json" style="display: none;" onchange="uploadFile(event, 'config-file', 'custom-units-definitions')">
+                            <input type="file" id="uploadCustomDefinitionsData" accept=".json" style="display: none;" onchange="uploadFile(event, 'files/configs', 'custom-units-definitions')">
                         </div>
                     </div>
                 </div>

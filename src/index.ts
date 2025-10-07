@@ -349,15 +349,26 @@ module.exports = (app: ServerAPI): Plugin => {
         }
       })
 
-      // GET /plugins/signalk-units-preference/conversion/:path
-      // Get conversion info for a specific path (shows currently selected conversion)
-      router.get('/conversion/:path(*)', (req: Request, res: Response) => {
+      // GET /plugins/signalk-units-preference/conversions/:path
+      // Get conversion info for a specific path, optionally convert a value with ?value query param
+      router.get('/conversions/:path(*)', (req: Request, res: Response) => {
         try {
           const pathStr = req.params.path
-          app.debug(`Getting conversion for path: ${pathStr}`)
+          const valueParam = Array.isArray(req.query.value) ? req.query.value[0] : req.query.value
+          const typeParam = Array.isArray(req.query.type) ? req.query.type[0] : req.query.type
 
+          // If value query param provided, return conversion result
+          if (valueParam !== undefined) {
+            app.debug(`Converting value ${valueParam} for path: ${pathStr}`)
+            const result = buildDeltaResponse(pathStr, valueParam, {
+              typeHint: typeof typeParam === 'string' ? toSupportedValueType(typeParam) : undefined
+            })
+            return res.json(result)
+          }
+
+          // Otherwise return conversion metadata
+          app.debug(`Getting conversion metadata for path: ${pathStr}`)
           const conversion = unitsManager.getConversion(pathStr)
-
           const targetUnit = conversion.targetUnit || conversion.baseUnit || 'none'
 
           const response = {
@@ -378,40 +389,20 @@ module.exports = (app: ServerAPI): Plugin => {
 
           res.json(response)
         } catch (error) {
-          app.error(`Error getting conversion: ${error}`)
-          res.status(500).json({ error: 'Internal server error' })
-        }
-      })
-
-      // GET /plugins/signalk-units-preference/convert/:path/:value
-      // Convert a value supplied via path segment
-      router.get('/convert/:path(*)/:value', (req: Request, res: Response) => {
-        try {
-          const pathStr = req.params.path
-          const rawValue = req.params.value
-          const typeParam = Array.isArray(req.query.type) ? req.query.type[0] : req.query.type
-
-          app.debug(`Converting value ${rawValue} for path: ${pathStr}`)
-
-          const result = buildDeltaResponse(pathStr, rawValue, {
-            typeHint: typeof typeParam === 'string' ? toSupportedValueType(typeParam) : undefined
-          })
-          res.json(result)
-        } catch (error) {
           if ((error as any).status === 400) {
             return res.status(400).json({
               error: (error as Error).message,
               details: (error as any).details
             })
           }
-          app.error(`Error converting value: ${error}`)
+          app.error(`Error getting conversion: ${error}`)
           res.status(500).json({ error: 'Internal server error' })
         }
       })
 
-      // POST /plugins/signalk-units-preference/unit-convert
+      // POST /plugins/signalk-units-preference/units/conversions
       // Convert a value using base unit and target unit directly
-      router.post('/unit-convert', (req: Request, res: Response) => {
+      router.post('/units/conversions', (req: Request, res: Response) => {
         try {
           const { baseUnit, targetUnit, value, displayFormat, useLocalTime } = req.body || {}
 
@@ -446,8 +437,8 @@ module.exports = (app: ServerAPI): Plugin => {
         }
       })
 
-      // GET /plugins/signalk-units-preference/unit-convert
-      router.get('/unit-convert', (req: Request, res: Response) => {
+      // GET /plugins/signalk-units-preference/units/conversions
+      router.get('/units/conversions', (req: Request, res: Response) => {
         try {
           const baseUnitParam = Array.isArray(req.query.baseUnit)
             ? req.query.baseUnit[0]
@@ -499,49 +490,9 @@ module.exports = (app: ServerAPI): Plugin => {
         }
       })
 
-      router.get('/convert/:path(*)', (req: Request, res: Response) => {
-        try {
-          const rawPathParam = req.params.path
-          const typeParam = Array.isArray(req.query.type) ? req.query.type[0] : req.query.type
-
-          let resolvedPath = rawPathParam
-          let valueParam = Array.isArray(req.query.value) ? req.query.value[0] : req.query.value
-
-          if (valueParam === undefined && typeof rawPathParam === 'string') {
-            const firstSlashIndex = rawPathParam.indexOf('/')
-            if (firstSlashIndex !== -1) {
-              resolvedPath = rawPathParam.substring(0, firstSlashIndex)
-              valueParam = rawPathParam.substring(firstSlashIndex + 1)
-            }
-          }
-
-          if (!resolvedPath) {
-            throw createBadRequestError('Missing path parameter')
-          }
-
-          if (valueParam === undefined) {
-            throw createBadRequestError('Missing value query parameter')
-          }
-
-          const result = buildDeltaResponse(resolvedPath, valueParam, {
-            typeHint: typeof typeParam === 'string' ? toSupportedValueType(typeParam) : undefined
-          })
-          res.json(result)
-        } catch (error) {
-          if ((error as any).status === 400) {
-            return res.status(400).json({
-              error: (error as Error).message,
-              details: (error as any).details
-            })
-          }
-          app.error(`Error converting value via GET: ${error}`)
-          res.status(500).json({ error: 'Internal server error' })
-        }
-      })
-
-      // POST /plugins/signalk-units-preference/convert
+      // POST /plugins/signalk-units-preference/conversions
       // Convert any value type (number, boolean, string, date)
-      router.post('/convert', (req: Request, res: Response) => {
+      router.post('/conversions', (req: Request, res: Response) => {
         try {
           // Support both JSON and form data
           const path = req.body.path
@@ -629,13 +580,12 @@ module.exports = (app: ServerAPI): Plugin => {
       // Add a new base unit
       router.post('/unit-definitions', async (req: Request, res: Response) => {
         try {
-          const { baseUnit, category, description, conversions } = req.body
+          const { baseUnit, conversions } = req.body
           if (!baseUnit) {
             return res.status(400).json({ error: 'baseUnit is required' })
           }
           await unitsManager.addUnitDefinition(baseUnit, {
             baseUnit,
-            category: category || description || baseUnit,
             conversions: conversions || {}
           })
           res.json({ success: true, baseUnit })
@@ -702,9 +652,9 @@ module.exports = (app: ServerAPI): Plugin => {
         }
       )
 
-      // GET /plugins/signalk-units-preference/current-preset
+      // GET /plugins/signalk-units-preference/presets/current
       // Get current preset information
-      router.get('/current-preset', (req: Request, res: Response) => {
+      router.get('/presets/current', (req: Request, res: Response) => {
         try {
           const preferences = unitsManager.getPreferences()
           res.json(preferences.currentPreset || null)
@@ -959,37 +909,52 @@ module.exports = (app: ServerAPI): Plugin => {
         }
       })
 
-      // POST /plugins/signalk-units-preference/presets/:presetType
-      // Apply a unit system preset (metric, imperial-us, imperial-uk)
-      router.post('/presets/:presetType', async (req: Request, res: Response) => {
+      // PUT /plugins/signalk-units-preference/presets/current
+      // Apply a preset (built-in or custom)
+      router.put('/presets/current', async (req: Request, res: Response) => {
         try {
-          const presetType = req.params.presetType
+          const { presetType } = req.body
 
-          // Read preset from JSON file
-          const presetPath = path.join(__dirname, '..', 'presets', `${presetType}.json`)
+          if (!presetType || typeof presetType !== 'string') {
+            return res.status(400).json({ error: 'presetType is required' })
+          }
 
-          if (!fs.existsSync(presetPath)) {
-            return res.status(400).json({
-              error: 'Invalid preset type',
-              validPresets: ['metric', 'imperial-us', 'imperial-uk']
-            })
+          // Check if it's a custom preset first
+          const customPresetPath = path.join(
+            __dirname,
+            '..',
+            'presets',
+            'custom',
+            `${presetType}.json`
+          )
+          let presetPath: string
+          let isCustom = false
+
+          if (fs.existsSync(customPresetPath)) {
+            presetPath = customPresetPath
+            isCustom = true
+          } else {
+            // Try built-in preset
+            presetPath = path.join(__dirname, '..', 'presets', `${presetType}.json`)
+            if (!fs.existsSync(presetPath)) {
+              return res.status(400).json({
+                error: 'Invalid preset type',
+                validPresets: ['metric', 'imperial-us', 'imperial-uk', 'or any custom preset']
+              })
+            }
           }
 
           const presetData = JSON.parse(fs.readFileSync(presetPath, 'utf-8'))
           const preset = presetData.categories
-          const preferences = unitsManager.getPreferences()
           let updatedCount = 0
 
-          // Update each category that exists in both the preset and current preferences
+          // Update all categories from the preset (create if missing, update if exists)
           for (const [category, settings] of Object.entries(preset)) {
-            if (preferences.categories[category]) {
-              // Only update targetUnit and displayFormat, keep existing baseUnit
-              await unitsManager.updateCategoryPreference(category, {
-                targetUnit: (settings as any).targetUnit,
-                displayFormat: (settings as any).displayFormat
-              })
-              updatedCount++
-            }
+            await unitsManager.updateCategoryPreference(category, {
+              targetUnit: (settings as any).targetUnit,
+              displayFormat: (settings as any).displayFormat
+            })
+            updatedCount++
           }
 
           // Update current preset information
@@ -1000,6 +965,7 @@ module.exports = (app: ServerAPI): Plugin => {
             presetType,
             presetName: presetData.name,
             version: presetData.version,
+            isCustom,
             categoriesUpdated: updatedCount
           })
         } catch (error) {
@@ -1141,53 +1107,6 @@ module.exports = (app: ServerAPI): Plugin => {
         }
       })
 
-      // POST /plugins/signalk-units-preference/presets/custom/:name/apply
-      // Apply a custom preset
-      router.post('/presets/custom/:name/apply', async (req: Request, res: Response) => {
-        try {
-          const presetName = req.params.name
-          const presetPath = path.join(__dirname, '..', 'presets', 'custom', `${presetName}.json`)
-
-          if (!fs.existsSync(presetPath)) {
-            return res.status(404).json({ error: 'Custom preset not found' })
-          }
-
-          const presetData = JSON.parse(fs.readFileSync(presetPath, 'utf-8'))
-          const preset = presetData.categories
-          const preferences = unitsManager.getPreferences()
-          let updatedCount = 0
-
-          // Update each category that exists in both the preset and current preferences
-          for (const [category, settings] of Object.entries(preset)) {
-            if (preferences.categories[category]) {
-              await unitsManager.updateCategoryPreference(category, {
-                targetUnit: (settings as any).targetUnit,
-                displayFormat: (settings as any).displayFormat
-              })
-              updatedCount++
-            }
-          }
-
-          // Update current preset information
-          await unitsManager.updateCurrentPreset(presetName, presetData.name, presetData.version)
-
-          res.json({
-            success: true,
-            presetName,
-            displayName: presetData.name,
-            version: presetData.version,
-            categoriesUpdated: updatedCount
-          })
-        } catch (error) {
-          app.error(`Error applying custom preset: ${error}`)
-          res
-            .status(500)
-            .json({ error: error instanceof Error ? error.message : 'Internal server error' })
-        }
-      })
-
-      // DELETE /plugins/signalk-units-preference/presets/custom/:name
-      // Delete a custom preset
       // GET /plugins/signalk-units-preference/presets/custom/:name
       // Download a specific custom preset file
       router.get('/presets/custom/:name', async (req: Request, res: Response) => {
@@ -1270,9 +1189,9 @@ module.exports = (app: ServerAPI): Plugin => {
         }
       })
 
-      // GET /plugins/signalk-units-preference/backup
+      // GET /plugins/signalk-units-preference/backups
       // Download a complete backup of all configuration files
-      router.get('/backup', async (req: Request, res: Response) => {
+      router.get('/backups', async (req: Request, res: Response) => {
         try {
           const dataDir = app.getDataDirPath()
           const archive = archiver('zip', { zlib: { level: 9 } })
@@ -1345,9 +1264,9 @@ module.exports = (app: ServerAPI): Plugin => {
         }
       })
 
-      // POST /plugins/signalk-units-preference/restore
+      // POST /plugins/signalk-units-preference/backups
       // Restore configuration from a backup zip file
-      router.post('/restore', async (req: Request, res: Response) => {
+      router.post('/backups', async (req: Request, res: Response) => {
         try {
           if (!req.body || !req.body.zipData) {
             return res.status(400).json({ error: 'No zip data provided' })
@@ -1408,9 +1327,9 @@ module.exports = (app: ServerAPI): Plugin => {
         }
       })
 
-      // GET /plugins/signalk-units-preference/definition-file/:fileType
+      // GET /plugins/signalk-units-preference/files/definitions/:fileType
       // Download individual definition file (standard-units, categories, date-formats)
-      router.get('/definition-file/:fileType', (req: Request, res: Response) => {
+      router.get('/files/definitions/:fileType', (req: Request, res: Response) => {
         try {
           const fileType = req.params.fileType
 
@@ -1423,7 +1342,7 @@ module.exports = (app: ServerAPI): Plugin => {
           // Map to actual file names
           const fileNameMap: Record<string, string> = {
             'standard-units': 'standard-units-definitions.json',
-            'categories': 'categories.json',
+            categories: 'categories.json',
             'date-formats': 'date-formats.json'
           }
           const fileName = fileNameMap[fileType]
@@ -1444,9 +1363,9 @@ module.exports = (app: ServerAPI): Plugin => {
         }
       })
 
-      // POST /plugins/signalk-units-preference/definition-file/:fileType
+      // PUT /plugins/signalk-units-preference/files/definitions/:fileType
       // Upload individual definition file (standard-units, categories, date-formats)
-      router.post('/definition-file/:fileType', (req: Request, res: Response) => {
+      router.put('/files/definitions/:fileType', (req: Request, res: Response) => {
         try {
           const fileType = req.params.fileType
 
@@ -1463,7 +1382,7 @@ module.exports = (app: ServerAPI): Plugin => {
           // Map to actual file names
           const fileNameMap: Record<string, string> = {
             'standard-units': 'standard-units-definitions.json',
-            'categories': 'categories.json',
+            categories: 'categories.json',
             'date-formats': 'date-formats.json'
           }
           const fileName = fileNameMap[fileType]
@@ -1489,9 +1408,9 @@ module.exports = (app: ServerAPI): Plugin => {
         }
       })
 
-      // GET /plugins/signalk-units-preference/config-file/:fileType
+      // GET /plugins/signalk-units-preference/files/configs/:fileType
       // Download built-in preset or runtime data file
-      router.get('/config-file/:fileType', (req: Request, res: Response) => {
+      router.get('/files/configs/:fileType', (req: Request, res: Response) => {
         try {
           const fileType = req.params.fileType
           const dataDir = app.getDataDirPath()
@@ -1534,9 +1453,9 @@ module.exports = (app: ServerAPI): Plugin => {
         }
       })
 
-      // POST /plugins/signalk-units-preference/config-file/:fileType
+      // PUT /plugins/signalk-units-preference/files/configs/:fileType
       // Upload built-in preset or runtime data file
-      router.post('/config-file/:fileType', async (req: Request, res: Response) => {
+      router.put('/files/configs/:fileType', async (req: Request, res: Response) => {
         try {
           const fileType = req.params.fileType
           const dataDir = app.getDataDirPath()
@@ -1600,7 +1519,8 @@ module.exports = (app: ServerAPI): Plugin => {
             // units-preferences.json should contain preferences structure
             if (!data.categories && !data.pathOverrides && !data.pathPatterns) {
               return res.status(400).json({
-                error: 'Invalid structure: units-preferences.json must contain at least one of: categories, pathOverrides, or pathPatterns'
+                error:
+                  'Invalid structure: units-preferences.json must contain at least one of: categories, pathOverrides, or pathPatterns'
               })
             }
 
@@ -1619,7 +1539,8 @@ module.exports = (app: ServerAPI): Plugin => {
             }
             if (hasUnitDefStructure) {
               return res.status(400).json({
-                error: 'Invalid structure: This looks like units-definitions.json. Please upload the correct file.'
+                error:
+                  'Invalid structure: This looks like units-definitions.json. Please upload the correct file.'
               })
             }
           } else if (['imperial-us', 'imperial-uk', 'metric'].includes(fileType)) {

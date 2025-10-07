@@ -5,6 +5,7 @@ import {
   UnitsMetadataStore,
   UnitsPreferences,
   UnitMetadata,
+  BaseUnitDefinition,
   ConversionResponse,
   CategoryPreference,
   ConversionDefinition,
@@ -122,7 +123,7 @@ const DEFAULT_PATH_PATTERNS: PathPatternRule[] = [
 export class UnitsManager {
   private metadata: UnitsMetadataStore
   private preferences: UnitsPreferences
-  private unitDefinitions: Record<string, UnitMetadata>
+  private unitDefinitions: Record<string, BaseUnitDefinition>
   private signalKMetadata: Record<string, SignalKPathMetadata> // path -> full metadata
   private preferencesPath: string
   private customDefinitionsPath: string
@@ -462,11 +463,6 @@ export class UnitsManager {
       return null
     }
 
-    // Custom unit definitions override everything else
-    if (this.unitDefinitions[baseUnit]?.category) {
-      return this.unitDefinitions[baseUnit].category
-    }
-
     // Check current metadata store
     const metadataEntry = Object.values(this.metadata).find(meta => meta.baseUnit === baseUnit)
     if (metadataEntry?.category) {
@@ -482,6 +478,8 @@ export class UnitsManager {
     }
 
     // Fallback to category-to-base mapping (may be many-to-one, choose first)
+    // WARNING: This returns the FIRST matching category when multiple categories
+    // use the same baseUnit (e.g., 'm' is used by distance, depth, length)
     const categoryMatch = Object.entries(this.getCategoryToBaseUnitMap()).find(
       ([, unit]) => unit === baseUnit
     )
@@ -532,7 +530,6 @@ export class UnitsManager {
       metadata = {
         baseUnit,
         category:
-          customDef?.category ||
           builtInDef?.category ||
           this.getCategoryFromBaseUnit(baseUnit) ||
           'custom',
@@ -573,7 +570,6 @@ export class UnitsManager {
           metadata = {
             baseUnit,
             category:
-              customDef?.category ||
               builtInDef?.category ||
               this.getCategoryFromBaseUnit(baseUnit) ||
               'custom',
@@ -986,7 +982,11 @@ export class UnitsManager {
    */
   async saveUnitDefinitions(): Promise<void> {
     try {
-      fs.writeFileSync(this.customDefinitionsPath, JSON.stringify(this.unitDefinitions, null, 2), 'utf-8')
+      fs.writeFileSync(
+        this.customDefinitionsPath,
+        JSON.stringify(this.unitDefinitions, null, 2),
+        'utf-8'
+      )
       this.app.debug('Saved custom unit definitions')
     } catch (error) {
       this.app.error(`Failed to save custom unit definitions: ${error}`)
@@ -997,9 +997,9 @@ export class UnitsManager {
   /**
    * Get all unit definitions (built-in + custom)
    */
-  getUnitDefinitions(): Record<string, UnitMetadata & { isCustom?: boolean }> {
+  getUnitDefinitions(): Record<string, BaseUnitDefinition & { isCustom?: boolean }> {
     // Extract base unit definitions from JSON or TypeScript fallback
-    const baseUnitDefs: Record<string, UnitMetadata & { isCustom?: boolean }> = {}
+    const baseUnitDefs: Record<string, BaseUnitDefinition & { isCustom?: boolean }> = {}
 
     // Use JSON data if available, otherwise fall back to TypeScript
     const sourceData =
@@ -1012,7 +1012,6 @@ export class UnitsManager {
       for (const [baseUnit, data] of Object.entries(sourceData)) {
         baseUnitDefs[baseUnit] = {
           baseUnit,
-          category: data.category || baseUnit,
           conversions: data.conversions || {},
           isCustom: false
         }
@@ -1023,7 +1022,6 @@ export class UnitsManager {
         if (meta.baseUnit && !baseUnitDefs[meta.baseUnit]) {
           baseUnitDefs[meta.baseUnit] = {
             baseUnit: meta.baseUnit,
-            category: meta.category || meta.baseUnit,
             conversions: meta.conversions || {},
             isCustom: false
           }
@@ -1053,9 +1051,11 @@ export class UnitsManager {
       if (
         typeof customDef !== 'object' ||
         customDef === null ||
-        (!customDef.category && !customDef.conversions)
+        !customDef.conversions
       ) {
-        this.app.error(`Skipping invalid unit definition for "${baseUnit}" - missing required properties`)
+        this.app.error(
+          `Skipping invalid unit definition for "${baseUnit}" - must have conversions property`
+        )
         continue
       }
 
@@ -1063,7 +1063,6 @@ export class UnitsManager {
         // This is an extension of a built-in base unit - merge conversions
         baseUnitDefs[baseUnit] = {
           baseUnit,
-          category: baseUnitDefs[baseUnit].category,
           conversions: {
             ...baseUnitDefs[baseUnit].conversions,
             ...customDef.conversions
@@ -1085,7 +1084,7 @@ export class UnitsManager {
   /**
    * Add or update a unit definition
    */
-  async addUnitDefinition(baseUnit: string, definition: UnitMetadata): Promise<void> {
+  async addUnitDefinition(baseUnit: string, definition: BaseUnitDefinition): Promise<void> {
     this.unitDefinitions[baseUnit] = definition
     await this.saveUnitDefinitions()
   }
@@ -1117,7 +1116,6 @@ export class UnitsManager {
         // Create a custom extension for this built-in base unit
         this.unitDefinitions[baseUnit] = {
           baseUnit: baseUnit,
-          category: builtInDef.category,
           conversions: {}
         }
       } else {
@@ -1321,7 +1319,11 @@ export class UnitsManager {
     }
 
     if (customDef) {
-      return this.cloneMetadata(customDef)
+      // Custom definition without built-in - infer category
+      return this.cloneMetadata({
+        ...customDef,
+        category: this.getCategoryFromBaseUnit(baseUnit) || 'custom'
+      })
     }
 
     return null
@@ -1913,6 +1915,11 @@ export class UnitsManager {
     // Track which categories are core (from the static schema)
     const coreCategories = this.getCoreCategories()
 
+    // Add all core categories to the set (so they always appear even if no paths use them)
+    for (const category of coreCategories) {
+      categoriesSet.add(category)
+    }
+
     // Scan custom categories from preferences
     for (const [category, pref] of Object.entries(this.preferences.categories || {})) {
       if (pref.baseUnit) {
@@ -1929,7 +1936,28 @@ export class UnitsManager {
       }
     }
 
-    // Scan custom unit definitions
+    // Scan standard unit definitions
+    const sourceData =
+      Object.keys(this.standardUnitsData).length > 0
+        ? this.standardUnitsData
+        : comprehensiveDefaultUnits
+
+    if (sourceData === this.standardUnitsData) {
+      // JSON format (baseUnit as keys)
+      for (const [baseUnit, data] of Object.entries(sourceData)) {
+        baseUnitsSet.add(baseUnit)
+        if (data.conversions) {
+          if (!targetUnitsByBase[baseUnit]) {
+            targetUnitsByBase[baseUnit] = new Set()
+          }
+          for (const targetUnit of Object.keys(data.conversions)) {
+            targetUnitsByBase[baseUnit].add(targetUnit)
+          }
+        }
+      }
+    }
+
+    // Scan custom unit definitions (override/extend standard)
     for (const [baseUnit, def] of Object.entries(this.unitDefinitions)) {
       baseUnitsSet.add(baseUnit)
 
@@ -1943,7 +1971,8 @@ export class UnitsManager {
       }
     }
 
-    // Scan all metadata (including comprehensive defaults)
+    // Scan all metadata to discover categories (but NOT to add conversions)
+    // Path-specific metadata conversions shouldn't pollute the global schema
     const allMetadata = { ...comprehensiveDefaultUnits, ...this.metadata }
 
     for (const [, meta] of Object.entries(allMetadata)) {
@@ -1959,14 +1988,25 @@ export class UnitsManager {
         }
       }
 
-      if (meta.conversions) {
-        if (!targetUnitsByBase[meta.baseUnit]) {
-          targetUnitsByBase[meta.baseUnit] = new Set()
-        }
-        for (const targetUnit of Object.keys(meta.conversions)) {
-          targetUnitsByBase[meta.baseUnit].add(targetUnit)
-        }
+      // NOTE: We do NOT add path-specific conversions to targetUnitsByBase
+      // Those are only for specific paths, not global schema
+    }
+
+    // Add date formats as target units for dateTime/epoch base units
+    if (this.dateFormatsData?.formats) {
+      const dateFormatNames = Object.keys(this.dateFormatsData.formats)
+
+      // Add to RFC 3339 (UTC) base unit
+      if (!targetUnitsByBase['RFC 3339 (UTC)']) {
+        targetUnitsByBase['RFC 3339 (UTC)'] = new Set()
       }
+      dateFormatNames.forEach(format => targetUnitsByBase['RFC 3339 (UTC)'].add(format))
+
+      // Add to Epoch Seconds base unit
+      if (!targetUnitsByBase['Epoch Seconds']) {
+        targetUnitsByBase['Epoch Seconds'] = new Set()
+      }
+      dateFormatNames.forEach(format => targetUnitsByBase['Epoch Seconds'].add(format))
     }
 
     // Convert sets to arrays and create labeled base units

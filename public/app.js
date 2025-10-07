@@ -306,7 +306,7 @@ async function loadData() {
       fetch(`${API_BASE}/overrides`),
       fetch(`${API_BASE}/patterns`),
       fetch(`${API_BASE}/metadata`),
-      fetch(`${API_BASE}/current-preset`)
+      fetch(`${API_BASE}/presets/current`)
     ])
 
     if (!categoriesRes.ok || !overridesRes.ok || !patternsRes.ok || !metaRes.ok || !presetRes.ok) {
@@ -965,7 +965,7 @@ function renderMetadataTable(pathInfo) {
   const tbody = document.getElementById('metadataTableBody')
   tbody.innerHTML = pathInfo
     .map(info => {
-      const conversionUrl = `${API_BASE}/conversion/${info.path}`
+      const conversionUrl = `${API_BASE}/conversions/${info.path}`
       const details = getCurrentValueDetails(info.path)
       const currentValue = details?.value
 
@@ -973,7 +973,7 @@ function renderMetadataTable(pathInfo) {
       let testLink = ''
       if (currentValue !== undefined && currentValue !== null) {
         if (info.valueType === 'number') {
-          const convertUrl = `${API_BASE}/convert/${info.path}/${currentValue}`
+          const convertUrl = `${API_BASE}/conversions/${info.path}?value=${encodeURIComponent(currentValue)}`
           testLink = `<a href="${convertUrl}" target="_blank" title="Run conversion test - convert current value (${currentValue}) and see result in new tab" style="color: #2ecc71; margin-left: 4px; text-decoration: none; font-size: 14px;">▶️</a>`
         } else {
           const formId = `convert-form-${info.path.replace(/\./g, '-')}`
@@ -984,7 +984,7 @@ function renderMetadataTable(pathInfo) {
                 ? currentValue
                 : JSON.stringify(currentValue)
 
-          testLink = `<form id="${formId}" method="POST" action="${API_BASE}/convert" target="_blank" style="display: inline; margin: 0;">
+          testLink = `<form id="${formId}" method="POST" action="${API_BASE}/conversions" target="_blank" style="display: inline; margin: 0;">
         <input type="hidden" name="path" value="${info.path}">
         <input type="hidden" name="value" value="${serializedValue.replace(/"/g, '&quot;')}">
         <input type="hidden" name="type" value="${info.valueType}">
@@ -999,7 +999,7 @@ function renderMetadataTable(pathInfo) {
       const encodedCurrentValue = canUseGetLink ? encodeURIComponent(String(currentValue)) : null
 
       const getLink = canUseGetLink
-        ? `<a href="${API_BASE}/convert/${info.path}/${encodedCurrentValue}" target="_blank" title="Open conversion in new tab - test GET endpoint with current value (${currentValue})" style="color: #e67e22; margin-left: 4px; text-decoration: none; font-size: 14px;">🔗</a>`
+        ? `<a href="${API_BASE}/conversions/${info.path}?value=${encodedCurrentValue}" target="_blank" title="Open conversion in new tab - test GET endpoint with current value (${currentValue})" style="color: #e67e22; margin-left: 4px; text-decoration: none; font-size: 14px;">🔗</a>`
         : ''
 
       // Add pattern icon if not already a pattern or auto-assigned
@@ -1275,8 +1275,10 @@ async function applyCustomPreset(presetId, presetName) {
   }
 
   try {
-    const res = await fetch(`${API_BASE}/presets/custom/${presetId}/apply`, {
-      method: 'POST'
+    const res = await fetch(`${API_BASE}/presets/current`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ presetType: presetId })
     })
 
     if (!res.ok) throw new Error('Failed to apply custom preset')
@@ -1377,8 +1379,10 @@ async function applyUnitPreset(presetType) {
   }
 
   try {
-    const res = await fetch(`${API_BASE}/presets/${presetType}`, {
-      method: 'POST'
+    const res = await fetch(`${API_BASE}/presets/current`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ presetType })
     })
 
     if (!res.ok) throw new Error('Failed to apply preset')
@@ -2227,7 +2231,6 @@ let unitDefinitions = {}
 // Add a new base unit
 async function addBaseUnit() {
   const symbol = document.getElementById('newBaseUnitSymbol').value.trim()
-  const description = document.getElementById('newBaseUnitDesc').value.trim()
 
   if (!symbol) {
     showStatus('Please enter a base unit symbol', 'error')
@@ -2240,7 +2243,6 @@ async function addBaseUnit() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         baseUnit: symbol,
-        category: description || symbol,
         conversions: {}
       })
     })
@@ -2251,7 +2253,6 @@ async function addBaseUnit() {
 
     // Clear form
     document.getElementById('newBaseUnitSymbol').value = ''
-    document.getElementById('newBaseUnitDesc').value = ''
 
     // Reload schema and unit definitions
     await loadSchema()
@@ -2368,8 +2369,7 @@ function renderUnitDefinitions() {
       <div class="unit-definition-item" style="padding: 12px 16px; background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 6px; margin-bottom: 8px;">
         <div class="collapsible-header" onclick="toggleUnitItem('${baseUnit}')" style="cursor: pointer;">
           <div style="display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0;">
-            <span style="font-family: monospace; font-weight: 500;">${baseUnit}${badge}</span>
-            <span style="color: #7f8c8d; font-size: 13px;">${def.category || baseUnit}</span>
+            <span style="font-family: monospace; font-weight: 600; font-size: 18px; color: #2c3e50;">${baseUnit}${badge}</span>
             <span style="color: #95a5a6; font-size: 13px;">${conversions.length} conversion${conversions.length !== 1 ? 's' : ''}</span>
           </div>
           <div style="display: flex; align-items: center; gap: 10px;">
@@ -2535,34 +2535,24 @@ function toggleUnitItem(baseUnit) {
 
 // Edit base unit
 function editBaseUnit(baseUnit) {
-  const def = unitDefinitions[baseUnit] || {}
-  const description = def.category || ''
   const safeBaseUnit = sanitizeIdSegment(baseUnit)
 
   const viewDiv = document.getElementById(`unit-view-${safeBaseUnit}`)
   const editDiv = document.getElementById(`unit-edit-${safeBaseUnit}`)
 
   const symbolInputId = `edit-unit-symbol-${safeBaseUnit}`
-  const descInputId = `edit-unit-desc-${safeBaseUnit}`
 
   // Build edit form
   editDiv.innerHTML = `
     <div style="background: #fff3cd; padding: 15px; border-radius: 4px; border: 1px dashed #ffc107; margin-top: 10px;">
       <h4 style="margin: 0 0 15px 0; color: #856404; font-size: 14px;">Edit Base Unit: ${baseUnit}</h4>
-      <div class="form-group" style="margin-bottom: 15px;">
-        <div class="input-group">
-          <label>Base Unit Symbol</label>
-          <input type="text" id="${symbolInputId}" value="${baseUnit}" placeholder="e.g., L/h, bar" readonly style="background: #f5f5f5;">
-          <small style="color: #666; display: block; margin-top: 3px;">Symbol cannot be changed</small>
-        </div>
-        <div class="input-group">
-          <label>Description</label>
-          <input type="text" id="${descInputId}" value="${description}" placeholder="e.g., Liters per hour">
-        </div>
+      <div class="input-group" style="margin-bottom: 15px;">
+        <label>Base Unit Symbol</label>
+        <input type="text" id="${symbolInputId}" value="${baseUnit}" placeholder="e.g., L/h, bar" readonly style="background: #f5f5f5;">
+        <small style="color: #666; display: block; margin-top: 3px;">Symbol cannot be changed. Use this form to verify the base unit or add conversions below.</small>
       </div>
       <div style="display: flex; gap: 10px;">
-        <button class="btn-success" onclick="saveEditBaseUnit('${baseUnit}')" style="padding: 8px 16px;">Save Changes</button>
-        <button class="btn-secondary" onclick="cancelEditBaseUnit('${baseUnit}')" style="padding: 8px 16px;">Cancel</button>
+        <button class="btn-secondary" onclick="cancelEditBaseUnit('${baseUnit}')" style="padding: 8px 16px;">Close</button>
       </div>
     </div>
   `
@@ -2577,63 +2567,6 @@ function editBaseUnit(baseUnit) {
   if (content.classList.contains('collapsed')) {
     content.classList.remove('collapsed')
     icon.classList.remove('collapsed')
-  }
-}
-
-// Save edited base unit
-async function saveEditBaseUnit(baseUnit) {
-  const safeBaseUnit = sanitizeIdSegment(baseUnit)
-  const descInputId = `edit-unit-desc-${safeBaseUnit}`
-  const description = document.getElementById(descInputId).value.trim()
-
-  try {
-    // Get the existing unit definition and update only the category (description)
-    const existingDef = unitDefinitions[baseUnit] || { conversions: {} }
-    const updatedDef = {
-      baseUnit: baseUnit,
-      category: description || baseUnit,
-      conversions: existingDef.conversions || {}
-    }
-
-    console.log('Saving base unit:', updatedDef)
-
-    const res = await fetch(`${API_BASE}/unit-definitions`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updatedDef)
-    })
-
-    if (!res.ok) {
-      const errorText = await res.text()
-      console.error('Failed to update base unit:', errorText)
-      throw new Error('Failed to update base unit')
-    }
-
-    const result = await res.json()
-    console.log('Save result:', result)
-
-    showStatus(`Updated base unit: ${baseUnit}`, 'success')
-
-    // Update local unitDefinitions to reflect the change immediately
-    if (unitDefinitions[baseUnit]) {
-      unitDefinitions[baseUnit].category = description
-    }
-
-    // Reload schema and unit definitions
-    await loadSchema()
-    await loadUnitDefinitions()
-
-    console.log('Updated unitDefinitions:', unitDefinitions[baseUnit])
-
-    renderUnitDefinitions()
-
-    initializePatternDropdowns()
-    initializeCustomCategoryDropdowns()
-    initializeUnitDefinitionsDropdowns()
-    initializePathOverridesDropdowns()
-  } catch (error) {
-    console.error('Error updating base unit:', error)
-    showStatus('Failed to update base unit: ' + error.message, 'error')
   }
 }
 
@@ -2850,9 +2783,9 @@ function renderPathOverrides() {
 
   container.innerHTML = overrides
     .map(override => {
-      const conversionUrl = `${API_BASE}/conversion/${override.path}`
+      const conversionUrl = `${API_BASE}/conversions/${override.path}`
       const currentValue = getCurrentValue(override.path) || 0
-      const convertUrl = `${API_BASE}/convert/${override.path}/${currentValue}`
+      const convertUrl = `${API_BASE}/conversions/${override.path}?value=${encodeURIComponent(currentValue)}`
       const baseUnit = override.baseUnit || 'auto'
       const targetUnit = override.targetUnit || 'none'
       const displayFormat = override.displayFormat || '0.0'
@@ -2895,7 +2828,7 @@ async function editPathOverride(path) {
   let baseUnit = override.baseUnit
   if (!baseUnit || baseUnit === 'auto') {
     try {
-      const res = await fetch(`${API_BASE}/conversion/${path}`)
+      const res = await fetch(`${API_BASE}/conversions/${path}`)
       if (res.ok) {
         const conversion = await res.json()
         baseUnit = conversion.baseUnit || 'auto'
@@ -3273,7 +3206,7 @@ async function downloadBackup() {
     statusEl.innerHTML =
       '<div style="color: #667eea; padding: 10px; background: #f0f4ff; border-radius: 4px;">Creating backup...</div>'
 
-    const res = await fetch(`${API_BASE}/backup`)
+    const res = await fetch(`${API_BASE}/backups`)
     if (!res.ok) throw new Error('Failed to create backup')
 
     const blob = await res.blob()
@@ -3320,7 +3253,7 @@ async function restoreBackup(event) {
     const arrayBuffer = await file.arrayBuffer()
     const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)))
 
-    const res = await fetch(`${API_BASE}/restore`, {
+    const res = await fetch(`${API_BASE}/backups`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ zipData: base64 })
@@ -3401,7 +3334,7 @@ async function uploadFile(event, endpoint, fileType) {
     const json = JSON.parse(text) // Validate JSON
 
     const response = await fetch(`${API_BASE}/${endpoint}/${fileType}`, {
-      method: 'POST',
+      method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(json)
     })

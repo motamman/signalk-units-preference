@@ -1,6 +1,6 @@
 # SignalK Units Preference Manager
 
-A comprehensive SignalK server plugin for managing unit conversions and display preferences across all data paths. Convert any SignalK data point to your preferred units with flexible pattern matching, custom formulas, and a full-featured web interface.
+A SignalK server for managing unit conversions and display preferences across all data paths. Convert any SignalK data point to your preferred units with flexible pattern matching, custom formulas, and a full-featured web interface and REST API.
 
 > **Important:** This plugin only changes how conversions are managed inside the tool and its REST endpoints. It doesn’t modify existing SignalK applications yet—we’re trialing it as a possible built-in conversion manager for future apps.
 
@@ -266,40 +266,25 @@ Enhanced warnings when deleting critical items:
 
 ### Conversion Endpoints
 
-#### Get Conversion Information
+#### Get Conversion Information / Convert a Value
 ```http
-GET /plugins/signalk-units-preference/conversion/:path
+GET /plugins/signalk-units-preference/conversions/:path
+GET /plugins/signalk-units-preference/conversions/:path?value=X
 ```
 
-Returns conversion metadata for a path.
+Returns conversion metadata for a path. If the `value` query parameter is provided, returns the conversion result instead.
 
-**Example Response:**
-```json
-{
-  "path": "navigation.speedOverGround",
-  "baseUnit": "m/s",
-  "targetUnit": "knots",
-  "formula": "value * 1.94384",
-  "inverseFormula": "value * 0.514444",
-  "displayFormat": "0.0",
-  "symbol": "kn",
-  "category": "speed"
-}
-```
-
-#### Convert a Value (GET)
+**Example (metadata only):**
 ```http
-GET /plugins/signalk-units-preference/convert/:path/:value
+GET /plugins/signalk-units-preference/conversions/navigation.speedOverGround
 ```
 
-Converts a value for a path. URL-encode reserved characters (quotes, braces, commas, etc.).
-
-**Example Request:**
+**Example (convert value):**
 ```http
-GET /plugins/signalk-units-preference/convert/navigation.speedOverGround/5.14
+GET /plugins/signalk-units-preference/conversions/navigation.speedOverGround?value=5.14
 ```
 
-**Example Response:**
+**Response (with value):**
 ```json
 {
   "context": "vessels.self",
@@ -324,9 +309,13 @@ GET /plugins/signalk-units-preference/convert/navigation.speedOverGround/5.14
 }
 ```
 
+Optional query parameters:
+- `value` – the value to convert
+- `type` – type hint: `number`, `boolean`, `string`, `date`, `object`
+
 #### Convert a Value (POST - All Types)
 ```http
-POST /plugins/signalk-units-preference/convert
+POST /plugins/signalk-units-preference/conversions
 ```
 
 Converts any value type (number, boolean, string, date). Accepts both JSON and form data.
@@ -366,12 +355,18 @@ Converts any value type (number, boolean, string, date). Accepts both JSON and f
 
 #### Convert by Base Unit
 ```http
-POST /plugins/signalk-units-preference/unit-convert
+GET /plugins/signalk-units-preference/units/conversions?baseUnit=X&targetUnit=Y&value=Z
+POST /plugins/signalk-units-preference/units/conversions
 ```
 
 Convert a single value directly from a base unit to a target unit without referencing a SignalK path.
 
-**Request Body:**
+**GET Request:**
+```http
+GET /plugins/signalk-units-preference/units/conversions?baseUnit=m/s&targetUnit=knots&value=5.14
+```
+
+**POST Request Body:**
 ```json
 {
   "baseUnit": "m/s",
@@ -387,7 +382,7 @@ Convert a single value directly from a base unit to a target unit without refere
   "targetUnit": "knots",
   "original": 5.14,
   "result": {
-    "convertedValue": 9.999, 
+    "convertedValue": 9.999,
     "formatted": "10.0 kn",
     "symbol": "kn",
     "displayFormat": "0.0",
@@ -424,17 +419,12 @@ Date/time conversions use ISO-8601 strings and support the same formats as the `
 
 If the base unit, target unit, or value is invalid, the API responds with a `400` error describing the mismatch.
 
-```http
-GET /plugins/signalk-units-preference/unit-convert?baseUnit=m/s&targetUnit=knots&value=5.14
-```
-
-The GET variant accepts the same parameters via query string. Optional parameters:
-
+Optional parameters (GET query params or POST body):
 - `displayFormat` – override numeric formatting (e.g., `0.00`)
 - `useLocalTime` – optional override for date/time conversions (defaults to the target unit suffix, e.g. `*-local`)
 
 ```bash
-curl "http://localhost:3000/plugins/signalk-units-preference/unit-convert?baseUnit=RFC%203339%20(UTC)&targetUnit=time-am/pm-local&value=2025-10-04T00:17:48.000Z"
+curl "http://localhost:3000/plugins/signalk-units-preference/units/conversions?baseUnit=RFC%203339%20(UTC)&targetUnit=time-am/pm-local&value=2025-10-04T00:17:48.000Z"
 ```
 
 ### Schema & Metadata
@@ -619,7 +609,7 @@ Apply a built-in preset: `metric`, `imperial-us`, or `imperial-uk`.
 
 #### Get Current Preset
 ```http
-GET /plugins/signalk-units-preference/current-preset
+GET /plugins/signalk-units-preference/presets/current
 ```
 
 Returns the currently applied preset information or `null` if none.
@@ -779,7 +769,7 @@ This plugin provides a centralized unit conversion service that other SignalK ap
 
 ```javascript
 // Get conversion info for a path
-const response = await fetch('/plugins/signalk-units-preference/conversion/navigation.speedOverGround')
+const response = await fetch('/plugins/signalk-units-preference/conversions/navigation.speedOverGround')
 const conversion = await response.json()
 
 // conversion contains:
@@ -811,7 +801,7 @@ const conversionCache = {}
 
 async function getConversion(path) {
   if (!conversionCache[path]) {
-    const response = await fetch(`/plugins/signalk-units-preference/conversion/${path}`)
+    const response = await fetch(`/plugins/signalk-units-preference/conversions/${path}`)
     conversionCache[path] = await response.json()
   }
   return conversionCache[path]
@@ -830,7 +820,7 @@ ws.onmessage = async (event) => {
       const conversion = await getConversion(path)
 
       // Convert the value using POST endpoint (supports all types)
-      const response = await fetch('/plugins/signalk-units-preference/convert', {
+      const response = await fetch('/plugins/signalk-units-preference/conversions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ path, value: rawValue })
@@ -840,7 +830,7 @@ ws.onmessage = async (event) => {
 
       // Alternative: Use GET endpoint for numbers only
       // if (conversion.valueType === 'number' && typeof rawValue === 'number') {
-      //   const response = await fetch(`/plugins/signalk-units-preference/convert/${path}/${rawValue}`)
+      //   const response = await fetch(`/plugins/signalk-units-preference/conversions/${path}?value=${encodeURIComponent(rawValue)}`)
       //   const result = await response.json()
       //   displayValue(path, result.formatted)
       // }
@@ -893,7 +883,7 @@ const paths = extractPaths(data.vessels[data.self])
 const conversions = {}
 for (const path of paths) {
   try {
-    const response = await fetch(`/plugins/signalk-units-preference/conversion/${path}`)
+    const response = await fetch(`/plugins/signalk-units-preference/conversions/${path}`)
     conversions[path] = await response.json()
   } catch (e) {
     console.warn(`No conversion for ${path}`)
@@ -917,7 +907,7 @@ const userInput = 20
 const path = 'navigation.speedOverGround'
 
 // Get conversion info
-const response = await fetch(`/plugins/signalk-units-preference/conversion/${path}`)
+const response = await fetch(`/plugins/signalk-units-preference/conversions/${path}`)
 const conversion = await response.json()
 
 // conversion.inverseFormula = "value * 0.514444"
@@ -939,7 +929,7 @@ await fetch(`/signalk/v1/api/vessels/self/${path.replace(/\./g, '/')}`, {
 
 ```javascript
 async function createInputForPath(path) {
-  const response = await fetch(`/plugins/signalk-units-preference/conversion/${path}`)
+  const response = await fetch(`/plugins/signalk-units-preference/conversions/${path}`)
   const conversion = await response.json()
 
   let input
@@ -1025,7 +1015,7 @@ class SignalKValueWidget {
 
   async init() {
     // Get conversion info
-    const response = await fetch(`/plugins/signalk-units-preference/conversion/${this.path}`)
+    const response = await fetch(`/plugins/signalk-units-preference/conversions/${this.path}`)
     this.conversion = await response.json()
 
     // Subscribe to SignalK updates
@@ -1061,7 +1051,7 @@ class SignalKValueWidget {
 
     // Use POST endpoint for all types
     try {
-      const response = await fetch('/plugins/signalk-units-preference/convert', {
+      const response = await fetch('/plugins/signalk-units-preference/conversions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ path: this.path, value: rawValue })
@@ -1100,7 +1090,7 @@ class SignalKConverter {
   async init(paths) {
     // Pre-fetch conversion info for all paths
     for (const path of paths) {
-      const response = await fetch(`/plugins/signalk-units-preference/conversion/${path}`)
+      const response = await fetch(`/plugins/signalk-units-preference/conversions/${path}`)
       this.conversions[path] = await response.json()
     }
 
@@ -1164,7 +1154,7 @@ class SignalKConverter {
           this.onValueUpdate(path, `${formatted} ${conversion.symbol}`)
 
           // Option 2: Use REST API (simpler, slower)
-          // const response = await fetch(`/plugins/signalk-units-preference/convert/${path}/${rawValue}`)
+          // const response = await fetch(`/plugins/signalk-units-preference/conversions/${path}?value=${encodeURIComponent(rawValue)}`)
           // const result = await response.json()
           // this.onValueUpdate(path, result.formatted)
         }
@@ -1260,13 +1250,13 @@ const display = `${formatted} ${conversion.symbol}`
 ```javascript
 // Slower - REST call per value
 
-// For numbers (GET endpoint):
-const response = await fetch(`/plugins/signalk-units-preference/convert/${path}/${rawValue}`)
+// For numbers (GET endpoint with query param):
+const response = await fetch(`/plugins/signalk-units-preference/conversions/${path}?value=${encodeURIComponent(rawValue)}`)
 const result = await response.json()
 const display = result.formatted
 
 // For all types (POST endpoint):
-const response = await fetch('/plugins/signalk-units-preference/convert', {
+const response = await fetch('/plugins/signalk-units-preference/conversions', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({ path, value: rawValue })
@@ -1305,7 +1295,7 @@ const tempPattern = patterns.find(p => p.category === 'temperature')
 
 #### Discovering Writable Paths
 ```javascript
-const conversion = await fetch('/plugins/signalk-units-preference/conversion/some.path').then(r => r.json())
+const conversion = await fetch('/plugins/signalk-units-preference/conversions/some.path').then(r => r.json())
 if (conversion.supportsPut) {
   // Show edit controls
 }
@@ -1686,11 +1676,12 @@ Apache-2.0
   - **Custom Presets Storage**: Saved to `presets/custom/` directory
   - **Custom Presets Management**: View, apply, and delete custom presets in Settings tab
 - **Preset API Endpoints**:
-  - `POST /presets/:presetType` - Apply built-in preset
-  - `GET /current-preset` - Get currently applied preset
+  - `PUT /presets/current` - Apply any preset (built-in or custom)
+  - `GET /presets/current` - Get currently applied preset
   - `POST /presets/custom/:name` - Save custom preset
   - `GET /presets/custom` - List all custom presets
-  - `POST /presets/custom/:name/apply` - Apply custom preset
+  - `GET /presets/custom/:name` - Download custom preset
+  - `PUT /presets/custom/:name` - Upload/update custom preset
   - `DELETE /presets/custom/:name` - Delete custom preset
 - **Unit Definitions Tab**: Create custom base units and conversion formulas globally
 - **Path Patterns**: Wildcard pattern matching with priority system
