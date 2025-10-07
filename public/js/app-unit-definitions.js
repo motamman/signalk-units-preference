@@ -398,9 +398,13 @@ function renderUnitDefinitions() {
       const fileConversions = def.conversions || {}
 
       // Merge: show all from schema, fill in details from file where available
-      const conversionsToDisplay = schemaTargets.length > 0
-        ? schemaTargets.map(target => [target, fileConversions[target] || { formula: 'value', inverseFormula: 'value', symbol: '' }])
-        : Object.entries(fileConversions)
+      const conversionsToDisplay =
+        schemaTargets.length > 0
+          ? schemaTargets.map(target => [
+              target,
+              fileConversions[target] || { formula: 'value', inverseFormula: 'value', symbol: '' }
+            ])
+          : Object.entries(fileConversions)
 
       const conversions = conversionsToDisplay.sort((a, b) =>
         a[0].toLowerCase().localeCompare(b[0].toLowerCase())
@@ -449,7 +453,8 @@ function renderUnitDefinitions() {
                     ${conversions
                       .map(([target, conv]) => {
                         // Check if this specific conversion is custom (editable)
-                        const isConversionCustom = isCustom || (def.customConversions || []).includes(target)
+                        const isConversionCustom =
+                          isCustom || (def.customConversions || []).includes(target)
                         return `
                       <tr id="${buildConversionId('conversion-row', baseUnit, target)}" style="border-bottom: 1px solid #f0f0f0;">
                         <td style="padding: 8px; font-family: monospace;">${target}</td>

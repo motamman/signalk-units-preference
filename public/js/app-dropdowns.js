@@ -75,7 +75,13 @@ function createTargetUnitDropdown(id, baseUnit = '', selectedValue = '', include
  * - Many-to-one: show filtered options
  * - No mapping: show all categories
  */
-async function populateSmartCategoryDropdown(baseUnit, containerId, selectId, currentCategory = '', includeCustom = false) {
+async function populateSmartCategoryDropdown(
+  baseUnit,
+  containerId,
+  selectId,
+  currentCategory = '',
+  includeCustom = false
+) {
   const container = document.getElementById(containerId)
   if (!container) return
 
@@ -87,7 +93,9 @@ async function populateSmartCategoryDropdown(baseUnit, containerId, selectId, cu
 
   try {
     // Fetch categories for this base unit
-    const response = await fetch(`/plugins/signalk-units-preference/categories-for-base-unit?baseUnit=${encodeURIComponent(baseUnit)}`)
+    const response = await fetch(
+      `/plugins/signalk-units-preference/categories-for-base-unit?baseUnit=${encodeURIComponent(baseUnit)}`
+    )
     if (!response.ok) throw new Error('Failed to fetch categories')
 
     const data = await response.json()

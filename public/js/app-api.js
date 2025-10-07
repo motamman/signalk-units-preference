@@ -74,7 +74,9 @@ async function apiLoadAllData() {
 }
 
 async function apiGetCategoriesForBaseUnit(baseUnit) {
-  const response = await fetch(`/plugins/signalk-units-preference/categories-for-base-unit?baseUnit=${encodeURIComponent(baseUnit)}`)
+  const response = await fetch(
+    `/plugins/signalk-units-preference/categories-for-base-unit?baseUnit=${encodeURIComponent(baseUnit)}`
+  )
   if (!response.ok) throw new Error('Failed to fetch categories')
   return await response.json()
 }

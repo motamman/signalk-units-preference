@@ -42,7 +42,13 @@ function initializePatternDropdowns() {
     }
 
     // Use helper function to populate smart category dropdown
-    await populateSmartCategoryDropdown(baseUnit, 'newPatternCategoryContainer', 'newPatternCategory', '', true)
+    await populateSmartCategoryDropdown(
+      baseUnit,
+      'newPatternCategoryContainer',
+      'newPatternCategory',
+      '',
+      true
+    )
     categoryCustomInput.style.display = 'none'
     attachCategoryHandler()
   })
@@ -331,7 +337,9 @@ async function editPattern(index) {
         `<option value="${opt.value}" ${opt.value === pattern.baseUnit ? 'selected' : ''}>${opt.label}</option>`
     )
     .join('')
-  const baseUnitLabel = pattern.baseUnit ? `-- None (uses category default) --` : `-- Use Category Default --`
+  const baseUnitLabel = pattern.baseUnit
+    ? `-- None (uses category default) --`
+    : `-- Use Category Default --`
   const emptySelected = !pattern.baseUnit ? 'selected' : ''
   document.getElementById(`edit-pattern-base-container-${index}`).innerHTML = `
     <select id="edit-pattern-base-${index}">
@@ -365,7 +373,7 @@ async function editPattern(index) {
   `
 
   // Handle base unit change to update category and target units
-  document.getElementById(`edit-pattern-base-${index}`).addEventListener('change', async (e) => {
+  document.getElementById(`edit-pattern-base-${index}`).addEventListener('change', async e => {
     const selectedBase = e.target.value
 
     // Update category dropdown

@@ -466,6 +466,37 @@ export class UnitsManager {
   }
 
   /**
+   * Infer category from path name alone (for paths with no metadata)
+   * Checks if the last path element contains any known category name.
+   */
+  private inferCategoryFromPath(pathStr: string): string | null {
+    if (!pathStr) {
+      return null
+    }
+
+    const pathElements = pathStr.split('.')
+    const lastElement = pathElements[pathElements.length - 1].toLowerCase()
+
+    // Get all known categories
+    const allCategories = [
+      ...this.getCoreCategories(),
+      ...Object.keys(this.preferences.categories || {})
+    ]
+
+    // Check if last element contains any category name
+    const match = allCategories.find(cat => lastElement.includes(cat.toLowerCase()))
+
+    if (match) {
+      this.app.debug(
+        `Inferred category from path: ${pathStr} → category "${match}" (matched "${lastElement}")`
+      )
+      return match
+    }
+
+    return null
+  }
+
+  /**
    * Infer a category from a base unit by looking at custom definitions,
    * built-in metadata, or category defaults.
    *
@@ -511,19 +542,20 @@ export class UnitsManager {
       const lastElement = pathElements[pathElements.length - 1].toLowerCase()
 
       // Check if last element contains any category name
-      const match = matchingCategories.find(cat =>
-        lastElement.includes(cat.toLowerCase()) ||
-        cat.toLowerCase().includes(lastElement)
-      )
+      const match = matchingCategories.find(cat => lastElement.includes(cat.toLowerCase()))
 
       if (match) {
-        this.app.debug(`Smart category assignment: ${pathStr} + base unit "${baseUnit}" → category "${match}" (matched "${lastElement}")`)
+        this.app.debug(
+          `Smart category assignment: ${pathStr} + base unit "${baseUnit}" → category "${match}" (matched "${lastElement}")`
+        )
         return match
       }
     }
 
     // Fallback: return first matching category
-    this.app.debug(`Default category assignment: base unit "${baseUnit}" → category "${matchingCategories[0]}" (first of ${matchingCategories.length})`)
+    this.app.debug(
+      `Default category assignment: base unit "${baseUnit}" → category "${matchingCategories[0]}" (first of ${matchingCategories.length})`
+    )
     return matchingCategories[0]
   }
 
@@ -567,9 +599,7 @@ export class UnitsManager {
       metadata = {
         baseUnit,
         category:
-          builtInDef?.category ||
-          this.getCategoryFromBaseUnit(baseUnit, pathStr) ||
-          'custom',
+          builtInDef?.category || this.getCategoryFromBaseUnit(baseUnit, pathStr) || 'custom',
         conversions
       }
     }
@@ -607,9 +637,7 @@ export class UnitsManager {
           metadata = {
             baseUnit,
             category:
-              builtInDef?.category ||
-              this.getCategoryFromBaseUnit(baseUnit, pathStr) ||
-              'custom',
+              builtInDef?.category || this.getCategoryFromBaseUnit(baseUnit, pathStr) || 'custom',
             conversions
           }
         }
@@ -1085,11 +1113,7 @@ export class UnitsManager {
       }
 
       // Validate that customDef has the expected structure
-      if (
-        typeof customDef !== 'object' ||
-        customDef === null ||
-        !customDef.conversions
-      ) {
+      if (typeof customDef !== 'object' || customDef === null || !customDef.conversions) {
         this.app.error(
           `Skipping invalid unit definition for "${baseUnit}" - must have conversions property`
         )
@@ -1716,12 +1740,32 @@ export class UnitsManager {
             targetUnit = undefined
           }
         } else {
-          status = 'none'
-          source = 'None'
-          baseUnit = '-'
-          category = '-'
-          displayUnit = '-'
-          targetUnit = undefined
+          // No metadata at all - try to infer category from path name
+          const inferredCategory = this.inferCategoryFromPath(path)
+
+          if (inferredCategory) {
+            status = 'inferred'
+            source = 'Inferred from path'
+            baseUnit = this.getBaseUnitForCategory(inferredCategory) || '-'
+            category = inferredCategory
+
+            // Check if inferred category has preferences
+            const categoryPref = this.preferences.categories?.[inferredCategory]
+            if (categoryPref?.targetUnit && baseUnit !== '-') {
+              targetUnit = categoryPref.targetUnit
+              displayUnit = targetUnit
+            } else {
+              displayUnit = baseUnit
+              targetUnit = undefined
+            }
+          } else {
+            status = 'none'
+            source = 'None'
+            baseUnit = '-'
+            category = '-'
+            displayUnit = '-'
+            targetUnit = undefined
+          }
         }
 
         // Get value details if available

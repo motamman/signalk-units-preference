@@ -170,7 +170,13 @@ async function editPathOverride(path) {
   )
 
   // Populate category dropdown using helper
-  await populateSmartCategoryDropdown(baseUnit, `${categorySelectId}-container`, categorySelectId, '', false)
+  await populateSmartCategoryDropdown(
+    baseUnit,
+    `${categorySelectId}-container`,
+    categorySelectId,
+    '',
+    false
+  )
 
   document.getElementById(`${targetSelectId}-container`).innerHTML = createTargetUnitDropdown(
     targetSelectId,
@@ -180,11 +186,17 @@ async function editPathOverride(path) {
   )
 
   // Handle base unit change to update category and target units
-  document.getElementById(baseSelectId).addEventListener('change', async (e) => {
+  document.getElementById(baseSelectId).addEventListener('change', async e => {
     const newBaseUnit = e.target.value
 
     // Update category dropdown
-    await populateSmartCategoryDropdown(newBaseUnit, `${categorySelectId}-container`, categorySelectId, '', false)
+    await populateSmartCategoryDropdown(
+      newBaseUnit,
+      `${categorySelectId}-container`,
+      categorySelectId,
+      '',
+      false
+    )
 
     // Update target units
     document.getElementById(`${targetSelectId}-container`).innerHTML = createTargetUnitDropdown(
@@ -297,7 +309,13 @@ function initializePathOverridesDropdowns() {
       const targetContainer = document.getElementById('overrideTargetUnitContainer')
 
       if (!baseUnit) {
-        await populateSmartCategoryDropdown('', 'overrideCategoryContainer', 'overrideCategory', '', false)
+        await populateSmartCategoryDropdown(
+          '',
+          'overrideCategoryContainer',
+          'overrideCategory',
+          '',
+          false
+        )
         targetContainer.innerHTML = `
           <select id="overrideTargetUnit" disabled>
             <option value="">-- Select Base Unit First --</option>
@@ -307,10 +325,21 @@ function initializePathOverridesDropdowns() {
       }
 
       // Use helper function to populate category dropdown
-      await populateSmartCategoryDropdown(baseUnit, 'overrideCategoryContainer', 'overrideCategory', '', false)
+      await populateSmartCategoryDropdown(
+        baseUnit,
+        'overrideCategoryContainer',
+        'overrideCategory',
+        '',
+        false
+      )
 
       // Update target unit dropdown
-      targetContainer.innerHTML = createTargetUnitDropdown('overrideTargetUnit', baseUnit, '', false)
+      targetContainer.innerHTML = createTargetUnitDropdown(
+        'overrideTargetUnit',
+        baseUnit,
+        '',
+        false
+      )
     })
   }
 
