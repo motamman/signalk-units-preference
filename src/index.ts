@@ -177,7 +177,7 @@ module.exports = (app: ServerAPI): Plugin => {
       const buildDeltaResponse = (
         pathStr: string,
         rawValue: unknown,
-        options?: { typeHint?: SupportedValueType }
+        options?: { typeHint?: SupportedValueType; timestamp?: string }
       ): DeltaResponse => {
         const conversionInfo = unitsManager.getConversion(pathStr)
         const normalized = normalizeValueForConversion(
@@ -188,7 +188,7 @@ module.exports = (app: ServerAPI): Plugin => {
 
         const baseUpdate: DeltaResponse['updates'][number] = {
           $source: conversionInfo.signalkSource || undefined,
-          timestamp: new Date().toISOString(),
+          timestamp: options?.timestamp || new Date().toISOString(),
           values: [] as DeltaValueEntry[]
         }
 
@@ -356,12 +356,14 @@ module.exports = (app: ServerAPI): Plugin => {
           const pathStr = req.params.path
           const valueParam = Array.isArray(req.query.value) ? req.query.value[0] : req.query.value
           const typeParam = Array.isArray(req.query.type) ? req.query.type[0] : req.query.type
+          const timestampParam = Array.isArray(req.query.timestamp) ? req.query.timestamp[0] : req.query.timestamp
 
           // If value query param provided, return conversion result
           if (valueParam !== undefined) {
             app.debug(`Converting value ${valueParam} for path: ${pathStr}`)
             const result = buildDeltaResponse(pathStr, valueParam, {
-              typeHint: typeof typeParam === 'string' ? toSupportedValueType(typeParam) : undefined
+              typeHint: typeof typeParam === 'string' ? toSupportedValueType(typeParam) : undefined,
+              timestamp: typeof timestampParam === 'string' ? timestampParam : undefined
             })
             return res.json(result)
           }
@@ -499,6 +501,7 @@ module.exports = (app: ServerAPI): Plugin => {
           let value = req.body.value
           const typeHintBody =
             typeof req.body.type === 'string' ? toSupportedValueType(req.body.type) : undefined
+          const timestampBody = typeof req.body.timestamp === 'string' ? req.body.timestamp : undefined
 
           // If value is a string from form data, try to parse it as JSON
           if (typeof value === 'string' && value !== '') {
@@ -519,7 +522,8 @@ module.exports = (app: ServerAPI): Plugin => {
           app.debug(`Converting value for path: ${path}, value: ${value}`)
 
           const result = buildDeltaResponse(path, value, {
-            typeHint: typeHintBody
+            typeHint: typeHintBody,
+            timestamp: timestampBody
           })
           return res.json(result)
         } catch (error) {

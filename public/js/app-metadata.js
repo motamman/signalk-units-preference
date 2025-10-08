@@ -436,7 +436,11 @@ function renderMetadataTable(pathInfo) {
       let testLink = ''
       if (currentValue !== undefined && currentValue !== null) {
         if (info.valueType === 'number') {
-          const convertUrl = `${API_BASE}/conversions/${info.path}?value=${encodeURIComponent(currentValue)}`
+          let convertUrl = `${API_BASE}/conversions/${info.path}?value=${encodeURIComponent(currentValue)}`
+          // Add timestamp if available
+          if (details?.timestamp) {
+            convertUrl += `&timestamp=${encodeURIComponent(details.timestamp)}`
+          }
           testLink = `<a href="${convertUrl}" target="_blank" title="Run conversion test - convert current value (${currentValue}) and see result in new tab" style="color: #2ecc71; margin-left: 4px; text-decoration: none; font-size: 14px;">▶️</a>`
         } else {
           const formId = `convert-form-${info.path.replace(/\./g, '-')}`
@@ -447,10 +451,15 @@ function renderMetadataTable(pathInfo) {
                 ? currentValue
                 : JSON.stringify(currentValue)
 
+          const timestampInput = details?.timestamp
+            ? `<input type="hidden" name="timestamp" value="${details.timestamp}">`
+            : ''
+
           testLink = `<form id="${formId}" method="POST" action="${API_BASE}/conversions" target="_blank" style="display: inline; margin: 0;">
         <input type="hidden" name="path" value="${info.path}">
         <input type="hidden" name="value" value="${serializedValue.replace(/"/g, '&quot;')}">
         <input type="hidden" name="type" value="${info.valueType}">
+        ${timestampInput}
         <button type="submit" title="Run conversion test - convert current value and see result in new tab" style="color: #2ecc71; margin-left: 4px; background: none; border: none; cursor: pointer; font-size: 14px; padding: 0;">▶️</button>
       </form>`
         }
