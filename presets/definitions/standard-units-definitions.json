@@ -43,17 +43,19 @@
         "symbol": "K",
         "longName": "kelvin"
       },
-      "°C": {
+      "C": {
         "formula": "value - 273.15",
         "inverseFormula": "value + 273.15",
         "symbol": "°C",
-        "longName": "celsius"
+        "longName": "celsius",
+        "key": "C"
       },
-      "°F": {
+      "F": {
         "formula": "(value - 273.15) * 9/5 + 32",
         "inverseFormula": "(value - 32) * 5/9 + 273.15",
         "symbol": "°F",
-        "longName": "fahrenheit"
+        "longName": "fahrenheit",
+        "key": "F"
       }
     }
   },
@@ -172,11 +174,12 @@
         "symbol": "rad",
         "longName": "radian"
       },
-      "°": {
+      "deg": {
         "formula": "value * 57.2958",
         "inverseFormula": "value * 0.0174533",
         "symbol": "°",
-        "longName": "degree"
+        "longName": "degree",
+        "key": "deg"
       }
     }
   },
@@ -189,11 +192,12 @@
         "symbol": "rad/s",
         "longName": "radians per second"
       },
-      "°/s": {
+      "deg/s": {
         "formula": "value * 57.2958",
         "inverseFormula": "value * 0.0174533",
         "symbol": "°/s",
-        "longName": "degrees per second"
+        "longName": "degrees per second",
+        "key": "deg/s"
       },
       "rpm": {
         "formula": "value * 9.54930",

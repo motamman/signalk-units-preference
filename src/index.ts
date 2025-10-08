@@ -608,7 +608,7 @@ module.exports = (app: ServerAPI): Plugin => {
         async (req: Request, res: Response) => {
           try {
             const baseUnit = req.params.baseUnit
-            const { targetUnit, formula, inverseFormula, symbol, longName } = req.body
+            const { targetUnit, formula, inverseFormula, symbol, longName, key } = req.body
             if (!targetUnit || !formula || !inverseFormula || !symbol) {
               return res.status(400).json({
                 error: 'targetUnit, formula, inverseFormula, and symbol are required'
@@ -618,7 +618,8 @@ module.exports = (app: ServerAPI): Plugin => {
               formula,
               inverseFormula,
               symbol,
-              longName: longName || undefined
+              longName: longName || undefined,
+              key: key || undefined
             })
             res.json({ success: true, baseUnit, targetUnit })
           } catch (error) {

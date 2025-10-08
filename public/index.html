@@ -965,7 +965,16 @@
                             </div>
                             <div class="input-group">
                                 <label>Symbol</label>
-                                <input type="text" id="conversionSymbol" placeholder="e.g., gal/h, °F">
+                                <input type="text" id="conversionSymbol" placeholder="e.g., gal/h, °F" oninput="toggleConversionKeyField()">
+                            </div>
+                        </div>
+                        <div id="conversionKeyFieldContainer" style="display: none; margin-bottom: 15px;">
+                            <div class="input-group">
+                                <label>
+                                    Key (ASCII-safe identifier)
+                                    <span class="tooltip-icon" data-tooltip="Required when symbol contains extended characters (like °, µ). Example: use 'deg' for '°', 'deg_s' for '°/s'">?</span>
+                                </label>
+                                <input type="text" id="conversionKey" placeholder="e.g., deg, deg_s">
                             </div>
                         </div>
                         <button class="btn-success" onclick="addConversion()" style="padding: 10px 24px;">Add Conversion</button>

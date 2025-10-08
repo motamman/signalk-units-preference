@@ -10,6 +10,8 @@ export interface ConversionDefinition {
   symbol: string
   /** Human-readable name for this unit (e.g., "knots", "celsius", "miles per hour") */
   longName?: string
+  /** Optional: ASCII-safe key for symbols with extended characters (e.g., "deg" for "°", "deg_s" for "°/s"). If not provided, defaults to symbol value. */
+  key?: string
   /** Optional: Named date format for date/time conversions */
   dateFormat?: string
   /** Optional: Whether to render using local time zone */
