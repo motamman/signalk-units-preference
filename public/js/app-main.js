@@ -84,7 +84,7 @@ function switchTab(tabName) {
 // Load all data
 async function loadData() {
   try {
-    // Load categories, overrides, patterns, metadata, and current preset separately
+    // Load categories, overrides, patterns, and current preset
     const data = await apiLoadAllData()
 
     // Reconstruct preferences object
@@ -94,7 +94,6 @@ async function loadData() {
       pathPatterns: data.pathPatterns,
       currentPreset: data.currentPreset
     }
-    metadata = data.metadata
 
     const presetType = preferences.currentPreset?.type
     if (presetType && !BUILT_IN_PRESETS.includes(presetType.toLowerCase())) {

@@ -230,7 +230,7 @@ async function renderMetadata() {
   const signalKMetadata = await getAllSignalKMetadata()
 
   // Get resolved metadata from backend (includes path inference)
-  const backendMetadata = await apiLoadMetadata()
+  const backendMetadata = await apiLoadPathsMetadata()
 
   // Build path info with metadata status
   const pathInfo = []
@@ -712,31 +712,44 @@ function handleConversionTemplateChange() {
   }
 }
 
-function selectMetadataPath(path) {
+async function selectMetadataPath(path) {
   document.getElementById('selectedMetadataPath').value = path
   document.getElementById('selectedMetadataDisplay').textContent = path
 
-  // Load existing metadata if available
-  if (metadata[path]) {
-    const baseUnit = metadata[path].baseUnit || ''
-    const baseUnitSelect = document.getElementById('metadataBaseUnit')
+  // Load existing metadata from backend
+  try {
+    const pathsMetadata = await apiLoadPathsMetadata()
+    const pathMeta = pathsMetadata[path]
 
-    // Check if base unit is in dropdown options
-    const option = Array.from(baseUnitSelect.options).find(opt => opt.value === baseUnit)
-    if (option) {
-      baseUnitSelect.value = baseUnit
+    if (pathMeta && pathMeta.baseUnit) {
+      const baseUnit = pathMeta.baseUnit || ''
+      const baseUnitSelect = document.getElementById('metadataBaseUnit')
+
+      // Check if base unit is in dropdown options
+      const option = Array.from(baseUnitSelect.options).find(opt => opt.value === baseUnit)
+      if (option) {
+        baseUnitSelect.value = baseUnit
+      } else {
+        // Custom base unit
+        baseUnitSelect.value = 'custom'
+        document.getElementById('metadataBaseUnitCustom').style.display = 'block'
+        document.getElementById('metadataBaseUnitCustom').value = baseUnit
+      }
+
+      document.getElementById('metadataCategory').value = pathMeta.category || ''
+      currentMetadataConversions = { ...pathMeta.conversions } || {}
+
+      handleBaseUnitChange()
     } else {
-      // Custom base unit
-      baseUnitSelect.value = 'custom'
-      document.getElementById('metadataBaseUnitCustom').style.display = 'block'
-      document.getElementById('metadataBaseUnitCustom').value = baseUnit
+      document.getElementById('metadataBaseUnit').value = ''
+      document.getElementById('metadataCategory').value = ''
+      document.getElementById('metadataBaseUnitCustom').style.display = 'none'
+      document.getElementById('metadataBaseUnitCustom').value = ''
+      currentMetadataConversions = {}
     }
-
-    document.getElementById('metadataCategory').value = metadata[path].category || ''
-    currentMetadataConversions = { ...metadata[path].conversions } || {}
-
-    handleBaseUnitChange()
-  } else {
+  } catch (error) {
+    console.error('Failed to load path metadata:', error)
+    // Reset form on error
     document.getElementById('metadataBaseUnit').value = ''
     document.getElementById('metadataCategory').value = ''
     document.getElementById('metadataBaseUnitCustom').style.display = 'none'

@@ -2068,6 +2068,7 @@ export class UnitsManager {
     targetUnitsByBase: Record<string, string[]>
     categoryToBaseUnit: Record<string, string>
     coreCategories: string[]
+    baseUnitDefinitions: Record<string, { conversions: Record<string, any>; description?: string; isCustom?: boolean }>
   } {
     // Extract unique base units from comprehensive defaults
     const baseUnitsSet = new Set<string>()
@@ -2191,6 +2192,59 @@ export class UnitsManager {
       )
     }
 
+    // Build complete base unit definitions with conversions
+    const baseUnitDefinitions: Record<string, { conversions: Record<string, any>; description?: string; isCustom?: boolean }> = {}
+
+    // Add standard units from JSON or TypeScript fallback
+    const standardSource = Object.keys(this.standardUnitsData).length > 0 ? this.standardUnitsData : comprehensiveDefaultUnits
+
+    if (standardSource === this.standardUnitsData) {
+      // JSON format
+      for (const [baseUnit, data] of Object.entries(standardSource)) {
+        baseUnitDefinitions[baseUnit] = {
+          conversions: data.conversions || {},
+          description: data.description,
+          isCustom: false
+        }
+      }
+    } else {
+      // TypeScript format - extract unique base units
+      const processedBaseUnits = new Set<string>()
+      for (const [, meta] of Object.entries(standardSource)) {
+        if (meta.baseUnit && !processedBaseUnits.has(meta.baseUnit)) {
+          processedBaseUnits.add(meta.baseUnit)
+          baseUnitDefinitions[meta.baseUnit] = {
+            conversions: meta.conversions || {},
+            isCustom: false
+          }
+        } else if (meta.baseUnit && meta.conversions) {
+          // Merge conversions if we've seen this base unit
+          baseUnitDefinitions[meta.baseUnit].conversions = {
+            ...baseUnitDefinitions[meta.baseUnit].conversions,
+            ...meta.conversions
+          }
+        }
+      }
+    }
+
+    // Merge custom unit definitions
+    for (const [baseUnit, customDef] of Object.entries(this.unitDefinitions)) {
+      if (baseUnitDefinitions[baseUnit]) {
+        // Extend existing base unit with custom conversions
+        baseUnitDefinitions[baseUnit].conversions = {
+          ...baseUnitDefinitions[baseUnit].conversions,
+          ...(customDef.conversions || {})
+        }
+      } else {
+        // Purely custom base unit
+        baseUnitDefinitions[baseUnit] = {
+          conversions: customDef.conversions || {},
+          description: customDef.description,
+          isCustom: true
+        }
+      }
+    }
+
     return {
       baseUnits,
       categories: Array.from(categoriesSet).sort((a, b) =>
@@ -2198,7 +2252,8 @@ export class UnitsManager {
       ),
       targetUnitsByBase: targetUnitsMap,
       categoryToBaseUnit: categoryToBaseUnitMap,
-      coreCategories
+      coreCategories,
+      baseUnitDefinitions
     }
   }
 

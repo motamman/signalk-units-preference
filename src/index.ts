@@ -528,18 +528,6 @@ module.exports = (app: ServerAPI): Plugin => {
         }
       })
 
-      // GET /plugins/signalk-units-preference/metadata
-      // Get all metadata
-      router.get('/metadata', (req: Request, res: Response) => {
-        try {
-          const metadata = unitsManager.getMetadata()
-          res.json(metadata)
-        } catch (error) {
-          app.error(`Error getting metadata: ${error}`)
-          res.status(500).json({ error: 'Internal server error' })
-        }
-      })
-
       // GET /plugins/signalk-units-preference/paths
       // Return metadata definitions for all discovered SignalK paths
       router.get('/paths', async (req: Request, res: Response) => {
@@ -1391,7 +1379,7 @@ module.exports = (app: ServerAPI): Plugin => {
 
       // PUT /plugins/signalk-units-preference/files/definitions/:fileType
       // Upload individual definition file (standard-units, categories, date-formats)
-      router.put('/files/definitions/:fileType', (req: Request, res: Response) => {
+      router.put('/files/definitions/:fileType', async (req: Request, res: Response) => {
         try {
           const fileType = req.params.fileType
 
@@ -1422,6 +1410,9 @@ module.exports = (app: ServerAPI): Plugin => {
 
           // Write file
           fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8')
+
+          // Reload units manager to apply changes
+          await unitsManager.initialize()
 
           res.json({ success: true, message: `${fileName} uploaded successfully` })
 
