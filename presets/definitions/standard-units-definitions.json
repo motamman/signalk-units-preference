@@ -319,28 +319,77 @@
     "longName": "second",
     "conversions": {
       "s": {
-        "formula": "value * 1",
-        "inverseFormula": "value * 1",
+        "formula": "value",
+        "inverseFormula": "value",
         "symbol": "s",
-        "longName": "second"
+        "longName": "Seconds"
       },
-      "min": {
-        "formula": "value * 0.0166667",
+      "DD:HH:MM:SS": {
+        "formula": "formatDurationDHMS(value)",
+        "inverseFormula": "value",
+        "symbol": "",
+        "longName": "Days:Hours:Minutes:Seconds",
+        "key": "DD:HH:MM:SS"
+      },
+      "HH:MM:SS": {
+        "formula": "formatDurationHMS(value)",
+        "inverseFormula": "value",
+        "symbol": "",
+        "longName": "Hours:Minutes:Seconds",
+        "key": "HH:MM:SS"
+      },
+      "HH:MM:SS.mmm": {
+        "formula": "formatDurationHMSMillis(value)",
+        "inverseFormula": "value",
+        "symbol": "",
+        "longName": "Hours:Minutes:Seconds.Milliseconds",
+        "key": "HH:MM:SS.mmm"
+      },
+      "MM:SS": {
+        "formula": "formatDurationMS(value)",
+        "inverseFormula": "value",
+        "symbol": "",
+        "longName": "Minutes:Seconds",
+        "key": "MM:SS"
+      },
+      "MM:SS.mmm": {
+        "formula": "formatDurationMSMillis(value)",
+        "inverseFormula": "value",
+        "symbol": "",
+        "longName": "Minutes:Seconds.Milliseconds",
+        "key": "MM:SS.mmm"
+      },
+      "MM.xx": {
+        "formula": "value / 60",
         "inverseFormula": "value * 60",
         "symbol": "min",
-        "longName": "minute"
+        "longName": "Decimal minutes"
       },
-      "hr": {
-        "formula": "value * 0.000277778",
+      "HH.xx": {
+        "formula": "value / 3600",
         "inverseFormula": "value * 3600",
         "symbol": "hr",
-        "longName": "hour"
+        "longName": "Decimal hours"
       },
-      "day": {
-        "formula": "value * 0.0000115741",
+      "DD.xx": {
+        "formula": "value / 86400",
         "inverseFormula": "value * 86400",
-        "symbol": "day",
-        "longName": "day"
+        "symbol": "days",
+        "longName": "Decimal days"
+      },
+      "duration-verbose": {
+        "formula": "formatDurationVerbose(value)",
+        "inverseFormula": "value",
+        "symbol": "",
+        "longName": "Verbose (2 hours 30 minutes 45 seconds)",
+        "key": "duration-verbose"
+      },
+      "duration-compact": {
+        "formula": "formatDurationCompact(value)",
+        "inverseFormula": "value",
+        "symbol": "",
+        "longName": "Compact (2h 30m)",
+        "key": "duration-compact"
       }
     }
   },

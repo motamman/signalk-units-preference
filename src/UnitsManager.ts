@@ -17,7 +17,7 @@ import {
 } from './types'
 import { defaultUnitsMetadata, categoryToBaseUnit } from './defaultUnits'
 import { comprehensiveDefaultUnits } from './comprehensiveDefaults'
-import { evaluateFormula, formatNumber } from './formulaEvaluator'
+import { evaluateFormula, formatNumber, formatDate } from './formulaEvaluator'
 
 class UnitConversionError extends Error {
   constructor(message: string) {
@@ -25,46 +25,6 @@ class UnitConversionError extends Error {
     this.name = 'UnitConversionError'
   }
 }
-
-const MONTH_NAMES_SHORT = [
-  'Jan',
-  'Feb',
-  'Mar',
-  'Apr',
-  'May',
-  'Jun',
-  'Jul',
-  'Aug',
-  'Sep',
-  'Oct',
-  'Nov',
-  'Dec'
-]
-const MONTH_NAMES_LONG = [
-  'January',
-  'February',
-  'March',
-  'April',
-  'May',
-  'June',
-  'July',
-  'August',
-  'September',
-  'October',
-  'November',
-  'December'
-]
-const WEEKDAY_NAMES_LONG = [
-  'Sunday',
-  'Monday',
-  'Tuesday',
-  'Wednesday',
-  'Thursday',
-  'Friday',
-  'Saturday'
-]
-
-const pad2 = (value: number): string => value.toString().padStart(2, '0')
 
 const DEFAULT_CATEGORY_PREFERENCES: Record<string, CategoryPreference & { baseUnit?: string }> = {
   speed: { targetUnit: 'kn', displayFormat: '0.0' },
@@ -149,16 +109,28 @@ export class UnitsManager {
     this.signalKMetadata = {}
   }
 
-  private getDateParts(date: Date, useLocal: boolean) {
-    return {
-      year: useLocal ? date.getFullYear() : date.getUTCFullYear(),
-      monthIndex: useLocal ? date.getMonth() : date.getUTCMonth(),
-      day: useLocal ? date.getDate() : date.getUTCDate(),
-      hours: useLocal ? date.getHours() : date.getUTCHours(),
-      minutes: useLocal ? date.getMinutes() : date.getUTCMinutes(),
-      seconds: useLocal ? date.getSeconds() : date.getUTCSeconds(),
-      weekday: useLocal ? date.getDay() : date.getUTCDay()
+  /**
+   * Map custom date format keys to date-fns format patterns
+   */
+  private getDateFnsPattern(formatKey: string): string | null {
+    const patterns: Record<string, string> = {
+      'short-date': 'MMM d, yyyy',
+      'long-date': 'EEEE, MMMM d, yyyy',
+      'dd/mm/yyyy': 'dd/MM/yyyy',
+      'mm/dd/yyyy': 'MM/dd/yyyy',
+      'mm/yyyy': 'MM/yyyy',
+      'time-24hrs': 'HH:mm:ss',
+      'time-am/pm': 'hh:mm:ss a',
+      'short-date-24hrs': 'MMM d, yyyy HH:mm:ss',
+      'short-date-am/pm': 'MMM d, yyyy hh:mm:ss a',
+      'long-date-24hrs': 'EEEE, MMMM d, yyyy HH:mm:ss',
+      'long-date-am/pm': 'EEEE, MMMM d, yyyy hh:mm:ss a',
+      'dd/mm/yyyy-24hrs': 'dd/MM/yyyy HH:mm:ss',
+      'dd/mm/yyyy-am/pm': 'dd/MM/yyyy hh:mm:ss a',
+      'mm/dd/yyyy-24hrs': 'MM/dd/yyyy HH:mm:ss',
+      'mm/dd/yyyy-am/pm': 'MM/dd/yyyy hh:mm:ss a'
     }
+    return patterns[formatKey] || null
   }
 
   formatDateValue(
@@ -173,11 +145,6 @@ export class UnitsManager {
     useLocalTime: boolean
     dateFormat: string
   } {
-    const date = new Date(isoValue)
-    if (Number.isNaN(date.getTime())) {
-      throw new UnitConversionError('Invalid ISO-8601 date value')
-    }
-
     const normalizedTarget = targetUnit.endsWith('-local')
       ? targetUnit.replace(/-local$/, '')
       : targetUnit
@@ -185,121 +152,55 @@ export class UnitsManager {
     const formatKey = (dateFormat || normalizedTarget || '').toLowerCase()
     const useLocalTime = useLocalOverride ?? targetUnit.endsWith('-local')
 
-    const parts = this.getDateParts(date, useLocalTime)
-    const monthShort = MONTH_NAMES_SHORT[parts.monthIndex] || ''
-    const monthLong = MONTH_NAMES_LONG[parts.monthIndex] || ''
-    const weekdayLong = WEEKDAY_NAMES_LONG[parts.weekday] || ''
-
-    let formatted: string
-    let convertedValue: any
-
-    switch (formatKey) {
-      case 'short-date': {
-        formatted = `${monthShort} ${parts.day}, ${parts.year}`
-        convertedValue = formatted
-        break
+    // Handle epoch-seconds special case
+    if (formatKey === 'epoch-seconds') {
+      const date = new Date(isoValue)
+      if (isNaN(date.getTime())) {
+        throw new UnitConversionError('Invalid ISO-8601 date value')
       }
-      case 'long-date': {
-        formatted = `${weekdayLong}, ${monthLong} ${parts.day}, ${parts.year}`
-        convertedValue = formatted
-        break
-      }
-      case 'dd/mm/yyyy': {
-        formatted = `${pad2(parts.day)}/${pad2(parts.monthIndex + 1)}/${parts.year}`
-        convertedValue = formatted
-        break
-      }
-      case 'mm/dd/yyyy': {
-        formatted = `${pad2(parts.monthIndex + 1)}/${pad2(parts.day)}/${parts.year}`
-        convertedValue = formatted
-        break
-      }
-      case 'mm/yyyy': {
-        formatted = `${pad2(parts.monthIndex + 1)}/${parts.year}`
-        convertedValue = formatted
-        break
-      }
-      case 'time-24hrs': {
-        formatted = `${pad2(parts.hours)}:${pad2(parts.minutes)}:${pad2(parts.seconds)}`
-        convertedValue = formatted
-        break
-      }
-      case 'time-am/pm': {
-        const hours12 = parts.hours % 12 || 12
-        const suffix = parts.hours >= 12 ? 'PM' : 'AM'
-        formatted = `${pad2(hours12)}:${pad2(parts.minutes)}:${pad2(parts.seconds)} ${suffix}`
-        convertedValue = formatted
-        break
-      }
-      case 'short-date-24hrs': {
-        formatted = `${monthShort} ${parts.day}, ${parts.year} ${pad2(parts.hours)}:${pad2(parts.minutes)}:${pad2(parts.seconds)}`
-        convertedValue = formatted
-        break
-      }
-      case 'short-date-am/pm': {
-        const hours12 = parts.hours % 12 || 12
-        const suffix = parts.hours >= 12 ? 'PM' : 'AM'
-        formatted = `${monthShort} ${parts.day}, ${parts.year} ${pad2(hours12)}:${pad2(parts.minutes)}:${pad2(parts.seconds)} ${suffix}`
-        convertedValue = formatted
-        break
-      }
-      case 'long-date-24hrs': {
-        formatted = `${weekdayLong}, ${monthLong} ${parts.day}, ${parts.year} ${pad2(parts.hours)}:${pad2(parts.minutes)}:${pad2(parts.seconds)}`
-        convertedValue = formatted
-        break
-      }
-      case 'long-date-am/pm': {
-        const hours12 = parts.hours % 12 || 12
-        const suffix = parts.hours >= 12 ? 'PM' : 'AM'
-        formatted = `${weekdayLong}, ${monthLong} ${parts.day}, ${parts.year} ${pad2(hours12)}:${pad2(parts.minutes)}:${pad2(parts.seconds)} ${suffix}`
-        convertedValue = formatted
-        break
-      }
-      case 'dd/mm/yyyy-24hrs': {
-        formatted = `${pad2(parts.day)}/${pad2(parts.monthIndex + 1)}/${parts.year} ${pad2(parts.hours)}:${pad2(parts.minutes)}:${pad2(parts.seconds)}`
-        convertedValue = formatted
-        break
-      }
-      case 'dd/mm/yyyy-am/pm': {
-        const hours12 = parts.hours % 12 || 12
-        const suffix = parts.hours >= 12 ? 'PM' : 'AM'
-        formatted = `${pad2(parts.day)}/${pad2(parts.monthIndex + 1)}/${parts.year} ${pad2(hours12)}:${pad2(parts.minutes)}:${pad2(parts.seconds)} ${suffix}`
-        convertedValue = formatted
-        break
-      }
-      case 'mm/dd/yyyy-24hrs': {
-        formatted = `${pad2(parts.monthIndex + 1)}/${pad2(parts.day)}/${parts.year} ${pad2(parts.hours)}:${pad2(parts.minutes)}:${pad2(parts.seconds)}`
-        convertedValue = formatted
-        break
-      }
-      case 'mm/dd/yyyy-am/pm': {
-        const hours12 = parts.hours % 12 || 12
-        const suffix = parts.hours >= 12 ? 'PM' : 'AM'
-        formatted = `${pad2(parts.monthIndex + 1)}/${pad2(parts.day)}/${parts.year} ${pad2(hours12)}:${pad2(parts.minutes)}:${pad2(parts.seconds)} ${suffix}`
-        convertedValue = formatted
-        break
-      }
-      case 'epoch-seconds': {
-        const epochSeconds = Math.floor(date.getTime() / 1000)
-        convertedValue = epochSeconds
-        formatted = String(epochSeconds)
-        break
-      }
-      default: {
-        formatted = isoValue
-        convertedValue = isoValue
-        break
+      const epochSeconds = Math.floor(date.getTime() / 1000)
+      return {
+        convertedValue: epochSeconds,
+        formatted: String(epochSeconds),
+        displayFormat: 'epoch-seconds',
+        useLocalTime: false,
+        dateFormat: 'epoch-seconds'
       }
     }
 
-    const displayFormat = dateFormat || formatKey || 'ISO-8601'
+    // Get date-fns format pattern
+    const dateFnsPattern = this.getDateFnsPattern(formatKey)
 
+    if (dateFnsPattern) {
+      try {
+        // Use date-fns for safe, robust date formatting
+        const timezone = useLocalTime ? Intl.DateTimeFormat().resolvedOptions().timeZone : undefined
+        const formatted = formatDate(isoValue, dateFnsPattern, {
+          useLocalTime,
+          timezone
+        })
+
+        const displayFormat = dateFormat || formatKey || 'ISO-8601'
+
+        return {
+          convertedValue: formatted,
+          formatted,
+          displayFormat,
+          useLocalTime,
+          dateFormat: displayFormat
+        }
+      } catch (error) {
+        throw new UnitConversionError(`Failed to format date: ${error}`)
+      }
+    }
+
+    // Fallback to ISO-8601
     return {
-      convertedValue,
-      formatted,
-      displayFormat,
+      convertedValue: isoValue,
+      formatted: isoValue,
+      displayFormat: dateFormat || formatKey || 'ISO-8601',
       useLocalTime,
-      dateFormat: displayFormat
+      dateFormat: dateFormat || formatKey || 'ISO-8601'
     }
   }
 
@@ -409,10 +310,29 @@ export class UnitsManager {
   private getConversionsForBaseUnit(baseUnit: string): UnitMetadata | null {
     // Try JSON first
     if (this.standardUnitsData[baseUnit]) {
+      const conversions = { ...(this.standardUnitsData[baseUnit].conversions || {}) }
+
+      // For date/time base units, dynamically add date format conversions
+      if ((baseUnit === 'RFC 3339 (UTC)' || baseUnit === 'Epoch Seconds') && this.dateFormatsData?.formats) {
+        for (const [formatKey, formatMeta] of Object.entries(this.dateFormatsData.formats)) {
+          // Skip if already defined in standardUnitsData
+          if (!conversions[formatKey]) {
+            conversions[formatKey] = {
+              formula: 'value',
+              inverseFormula: 'value',
+              symbol: '',
+              longName: (formatMeta as any).description || formatKey,
+              dateFormat: formatKey,
+              useLocalTime: (formatMeta as any).useLocalTime || false
+            }
+          }
+        }
+      }
+
       return {
         baseUnit,
         category: this.standardUnitsData[baseUnit].category || 'custom',
-        conversions: this.standardUnitsData[baseUnit].conversions || {}
+        conversions
       }
     }
 
@@ -1428,17 +1348,19 @@ export class UnitsManager {
     const skMeta = this.signalKMetadata[pathStr]
 
     try {
+      // evaluateFormula can return number or string (for duration formatting)
       const convertedValue = evaluateFormula(conversionInfo.formula, value)
 
-      // Handle string results (e.g., formatted time)
       let formatted: string
       if (typeof convertedValue === 'string') {
+        // Duration formatting - already formatted
         formatted = conversionInfo.symbol
-          ? `${convertedValue} ${conversionInfo.symbol}`
+          ? `${convertedValue} ${conversionInfo.symbol}`.trim()
           : convertedValue
       } else {
+        // Numeric conversion
         const formattedNumber = formatNumber(convertedValue, conversionInfo.displayFormat)
-        formatted = `${formattedNumber} ${conversionInfo.symbol}`
+        formatted = `${formattedNumber} ${conversionInfo.symbol}`.trim()
       }
 
       return {
@@ -1582,22 +1504,24 @@ export class UnitsManager {
       throw new UnitConversionError('Value must be numeric for this conversion')
     }
 
+    // evaluateFormula can return number or string (for duration formatting)
     const convertedValue = evaluateFormula(conversion.formula, numericValue)
 
     const displayFormat = options?.displayFormat || '0.0'
     const symbol = conversion.symbol || ''
 
-    // If formula returns a string (e.g., formatted time), use it directly without number formatting
     let formatted: string
     if (typeof convertedValue === 'string') {
+      // Duration formatting - already formatted
       formatted = symbol ? `${convertedValue} ${symbol}`.trim() : convertedValue
     } else {
+      // Numeric conversion
       const formattedNumber = formatNumber(convertedValue, displayFormat)
       formatted = symbol ? `${formattedNumber} ${symbol}`.trim() : formattedNumber
     }
 
     return {
-      convertedValue,
+      convertedValue: typeof convertedValue === 'number' ? convertedValue : numericValue,
       formatted,
       symbol,
       displayFormat,
