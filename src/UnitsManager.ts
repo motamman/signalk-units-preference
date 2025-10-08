@@ -309,7 +309,9 @@ export class UnitsManager {
    */
   private getConversionsForBaseUnit(baseUnit: string): UnitMetadata | null {
     // Try JSON first
+    this.app.debug(`getConversionsForBaseUnit: baseUnit=${baseUnit}, standardUnitsData keys=${Object.keys(this.standardUnitsData).join(', ')}`)
     if (this.standardUnitsData[baseUnit]) {
+      this.app.debug(`Using JSON conversions for ${baseUnit}`)
       const conversions = { ...(this.standardUnitsData[baseUnit].conversions || {}) }
 
       // For date/time base units, dynamically add date format conversions
@@ -592,7 +594,7 @@ export class UnitsManager {
           metadata = {
             baseUnit,
             category:
-              builtInDef?.category || this.getCategoryFromBaseUnit(baseUnit, pathStr) || 'custom',
+              this.getCategoryFromBaseUnit(baseUnit, pathStr) || builtInDef?.category || 'custom',
             conversions
           }
         }
