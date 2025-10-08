@@ -11,82 +11,30 @@ import {
   ConversionDefinition,
   PathPatternRule,
   ConvertValueResponse,
-  PathValueType,
-  SignalKPathMetadata,
-  PathPreference
+  SignalKPathMetadata
 } from './types'
-import { defaultUnitsMetadata, categoryToBaseUnit } from './defaultUnits'
+import { categoryToBaseUnit } from './defaultUnits'
 import { comprehensiveDefaultUnits } from './comprehensiveDefaults'
-import { evaluateFormula, formatNumber, formatDate } from './formulaEvaluator'
+import { MetadataManager } from './MetadataManager'
+import { ConversionEngine, UnitConversionError } from './ConversionEngine'
+import { PreferencesStore } from './PreferencesStore'
+import { PatternMatcher } from './PatternMatcher'
+import { evaluateFormula, formatNumber } from './formulaEvaluator'
 
-class UnitConversionError extends Error {
-  constructor(message: string) {
-    super(message)
-    this.name = 'UnitConversionError'
-  }
-}
-
-const DEFAULT_CATEGORY_PREFERENCES: Record<string, CategoryPreference & { baseUnit?: string }> = {
-  speed: { targetUnit: 'kn', displayFormat: '0.0' },
-  temperature: { targetUnit: '°C', displayFormat: '0' },
-  pressure: { targetUnit: 'hPa', displayFormat: '0' },
-  distance: { targetUnit: 'nm', displayFormat: '0.0' },
-  depth: { targetUnit: 'm', displayFormat: '0.0' },
-  angle: { targetUnit: '°', displayFormat: '0' },
-  percentage: { targetUnit: '%', displayFormat: '0' },
-  dateTime: { targetUnit: 'time-am/pm-local', displayFormat: 'time-am/pm' },
-  epoch: { targetUnit: 'time-am/pm-local', displayFormat: 'time-am/pm' },
-  volume: { targetUnit: 'gal', displayFormat: '0.0' },
-  length: { targetUnit: 'ft', displayFormat: '0.0' },
-  angularVelocity: { targetUnit: '°/s', displayFormat: '0.0' },
-  voltage: { targetUnit: 'V', displayFormat: '0.00' },
-  current: { targetUnit: 'A', displayFormat: '0.00' },
-  power: { targetUnit: 'W', displayFormat: '0.00' },
-  frequency: { targetUnit: 'rpm', displayFormat: '0.0' },
-  time: { targetUnit: 's', displayFormat: '0.0' },
-  charge: { targetUnit: 'Ah', displayFormat: '0.0' },
-  volumeRate: { targetUnit: 'gal/h', displayFormat: '0.0' },
-  unitless: { targetUnit: 'tr', displayFormat: '0.0' }
-}
-
-const DEFAULT_PATH_PATTERNS: PathPatternRule[] = [
-  {
-    pattern: '*.temperature',
-    category: 'temperature',
-    targetUnit: '°C',
-    displayFormat: '0',
-    priority: 100
-  },
-  {
-    pattern: '*.pressure',
-    category: 'pressure',
-    targetUnit: 'hPa',
-    displayFormat: '0',
-    priority: 100
-  },
-  {
-    pattern: '*.speed*',
-    category: 'speed',
-    targetUnit: 'kn',
-    displayFormat: '0.0',
-    priority: 90
-  },
-  {
-    pattern: '**.timeEpoch',
-    category: 'epoch',
-    targetUnit: 'time-am/pm-local',
-    priority: 100,
-    baseUnit: 'Epoch Seconds'
-  }
-]
-
+/**
+ * UnitsManager orchestrates all unit conversion subsystems.
+ * It delegates responsibilities to specialized classes:
+ * - MetadataManager: path metadata and SignalK integration
+ * - ConversionEngine: core conversion logic
+ * - PreferencesStore: persistence and CRUD operations
+ * - PatternMatcher: path pattern matching logic
+ */
 export class UnitsManager {
-  private metadata: UnitsMetadataStore
-  private preferences: UnitsPreferences
-  private unitDefinitions: Record<string, BaseUnitDefinition>
-  private signalKMetadata: Record<string, SignalKPathMetadata> // path -> full metadata
-  private preferencesPath: string
-  private customDefinitionsPath: string
+  private metadataManager!: MetadataManager
+  private conversionEngine: ConversionEngine
+  private preferencesStore: PreferencesStore
+  private patternMatcher: PatternMatcher
+
   private standardUnitsData: Record<string, any> = {}
   private categoriesData: any = {}
   private dateFormatsData: any = {}
@@ -96,112 +44,13 @@ export class UnitsManager {
     private app: ServerAPI,
     private dataDir: string
   ) {
-    this.preferencesPath = path.join(dataDir, 'units-preferences.json')
-    this.customDefinitionsPath = path.join(dataDir, 'custom-units-definitions.json')
     this.definitionsDir = path.join(__dirname, '..', 'presets', 'definitions')
-    // Use only built-in default metadata (no custom file loading)
-    this.metadata = { ...defaultUnitsMetadata, ...comprehensiveDefaultUnits }
-    this.preferences = {
-      categories: {},
-      pathOverrides: {}
-    }
-    this.unitDefinitions = {}
-    this.signalKMetadata = {}
-  }
 
-  /**
-   * Map custom date format keys to date-fns format patterns
-   */
-  private getDateFnsPattern(formatKey: string): string | null {
-    const patterns: Record<string, string> = {
-      'short-date': 'MMM d, yyyy',
-      'long-date': 'EEEE, MMMM d, yyyy',
-      'dd/mm/yyyy': 'dd/MM/yyyy',
-      'mm/dd/yyyy': 'MM/dd/yyyy',
-      'mm/yyyy': 'MM/yyyy',
-      'time-24hrs': 'HH:mm:ss',
-      'time-am/pm': 'hh:mm:ss a',
-      'short-date-24hrs': 'MMM d, yyyy HH:mm:ss',
-      'short-date-am/pm': 'MMM d, yyyy hh:mm:ss a',
-      'long-date-24hrs': 'EEEE, MMMM d, yyyy HH:mm:ss',
-      'long-date-am/pm': 'EEEE, MMMM d, yyyy hh:mm:ss a',
-      'dd/mm/yyyy-24hrs': 'dd/MM/yyyy HH:mm:ss',
-      'dd/mm/yyyy-am/pm': 'dd/MM/yyyy hh:mm:ss a',
-      'mm/dd/yyyy-24hrs': 'MM/dd/yyyy HH:mm:ss',
-      'mm/dd/yyyy-am/pm': 'MM/dd/yyyy hh:mm:ss a'
-    }
-    return patterns[formatKey] || null
-  }
-
-  formatDateValue(
-    isoValue: string,
-    targetUnit: string,
-    dateFormat?: string,
-    useLocalOverride?: boolean
-  ): {
-    convertedValue: any
-    formatted: string
-    displayFormat: string
-    useLocalTime: boolean
-    dateFormat: string
-  } {
-    const normalizedTarget = targetUnit.endsWith('-local')
-      ? targetUnit.replace(/-local$/, '')
-      : targetUnit
-
-    const formatKey = (dateFormat || normalizedTarget || '').toLowerCase()
-    const useLocalTime = useLocalOverride ?? targetUnit.endsWith('-local')
-
-    // Handle epoch-seconds special case
-    if (formatKey === 'epoch-seconds') {
-      const date = new Date(isoValue)
-      if (isNaN(date.getTime())) {
-        throw new UnitConversionError('Invalid ISO-8601 date value')
-      }
-      const epochSeconds = Math.floor(date.getTime() / 1000)
-      return {
-        convertedValue: epochSeconds,
-        formatted: String(epochSeconds),
-        displayFormat: 'epoch-seconds',
-        useLocalTime: false,
-        dateFormat: 'epoch-seconds'
-      }
-    }
-
-    // Get date-fns format pattern
-    const dateFnsPattern = this.getDateFnsPattern(formatKey)
-
-    if (dateFnsPattern) {
-      try {
-        // Use date-fns for safe, robust date formatting
-        const timezone = useLocalTime ? Intl.DateTimeFormat().resolvedOptions().timeZone : undefined
-        const formatted = formatDate(isoValue, dateFnsPattern, {
-          useLocalTime,
-          timezone
-        })
-
-        const displayFormat = dateFormat || formatKey || 'ISO-8601'
-
-        return {
-          convertedValue: formatted,
-          formatted,
-          displayFormat,
-          useLocalTime,
-          dateFormat: displayFormat
-        }
-      } catch (error) {
-        throw new UnitConversionError(`Failed to format date: ${error}`)
-      }
-    }
-
-    // Fallback to ISO-8601
-    return {
-      convertedValue: isoValue,
-      formatted: isoValue,
-      displayFormat: dateFormat || formatKey || 'ISO-8601',
-      useLocalTime,
-      dateFormat: dateFormat || formatKey || 'ISO-8601'
-    }
+    // Initialize subsystems
+    this.preferencesStore = new PreferencesStore(app, dataDir)
+    this.conversionEngine = new ConversionEngine(app) // Will be updated with dateFormatsData after loading
+    this.patternMatcher = new PatternMatcher(app)
+    // MetadataManager needs standardUnitsData, so we'll initialize it after loading definition files
   }
 
   /**
@@ -255,13 +104,74 @@ export class UnitsManager {
   }
 
   /**
+   * Migrate old file names to new naming convention
+   */
+  private migrateFileNames(): void {
+    // Migrate conversions.json to standard-units-definitions.json
+    const oldStandardPath = path.join(this.definitionsDir, 'conversions.json')
+    const newStandardPath = path.join(this.definitionsDir, 'standard-units-definitions.json')
+    if (fs.existsSync(oldStandardPath) && !fs.existsSync(newStandardPath)) {
+      try {
+        fs.renameSync(oldStandardPath, newStandardPath)
+        this.app.debug('Migrated conversions.json to standard-units-definitions.json')
+      } catch (error) {
+        this.app.error(`Failed to migrate conversions.json: ${error}`)
+      }
+    }
+  }
+
+  /**
+   * Validate that JSON and TypeScript definitions are consistent
+   */
+  private validateDefinitions(): void {
+    // Validate category-to-baseUnit mapping consistency
+    if (this.categoriesData?.categoryToBaseUnit) {
+      const jsonMapping = this.categoriesData.categoryToBaseUnit
+      const tsMapping = categoryToBaseUnit
+
+      for (const [category, jsonBaseUnit] of Object.entries(jsonMapping)) {
+        const tsBaseUnit = tsMapping[category]
+        if (tsBaseUnit && tsBaseUnit !== jsonBaseUnit) {
+          this.app.error(
+            `VALIDATION ERROR: Category "${category}" has inconsistent base units: ` +
+            `JSON=${jsonBaseUnit}, TypeScript=${tsBaseUnit}. Using JSON value.`
+          )
+        }
+      }
+
+      // Check for categories in TypeScript but not in JSON
+      for (const [category, tsBaseUnit] of Object.entries(tsMapping)) {
+        if (!jsonMapping[category]) {
+          this.app.debug(
+            `Category "${category}" exists in TypeScript (${tsBaseUnit}) but not in categories.json`
+          )
+        }
+      }
+    }
+
+    // Validate date format patterns if loaded
+    if (this.dateFormatsData?.formats && Object.keys(this.dateFormatsData.formats).length > 0) {
+      this.app.debug(`Validated ${Object.keys(this.dateFormatsData.formats).length} date format patterns from JSON`)
+    }
+  }
+
+  /**
    * Initialize the manager by loading or creating data files
    */
   async initialize(): Promise<void> {
     this.migrateFileNames()
     this.loadDefinitionFiles()
-    await this.loadPreferences()
-    await this.loadUnitDefinitions()
+
+    // Validate JSON and TypeScript consistency
+    this.validateDefinitions()
+
+    // Now initialize MetadataManager with loaded data
+    this.metadataManager = new MetadataManager(this.app, this.standardUnitsData, this.categoriesData)
+
+    // Update ConversionEngine with loaded date formats data
+    this.conversionEngine.setDateFormatsData(this.dateFormatsData)
+
+    await this.preferencesStore.initialize(this.getCategoryToBaseUnitMap(), this.definitionsDir)
   }
 
   /**
@@ -286,14 +196,13 @@ export class UnitsManager {
 
   /**
    * Get all categories that map to a given base unit
-   * Public API for frontend use
    */
   getCategoriesForBaseUnit(baseUnit: string): string[] {
-    // Start with static categories
     const categoryMap = { ...this.getCategoryToBaseUnitMap() }
+    const preferences = this.preferencesStore.getPreferences()
 
     // Add custom categories that have a baseUnit defined
-    for (const [category, pref] of Object.entries(this.preferences.categories || {})) {
+    for (const [category, pref] of Object.entries(preferences.categories || {})) {
       if (pref.baseUnit) {
         categoryMap[category] = pref.baseUnit
       }
@@ -305,443 +214,65 @@ export class UnitsManager {
   }
 
   /**
-   * Get conversions for a base unit (JSON or TypeScript fallback)
-   */
-  private getConversionsForBaseUnit(baseUnit: string): UnitMetadata | null {
-    // Try JSON first
-    this.app.debug(`getConversionsForBaseUnit: baseUnit=${baseUnit}, standardUnitsData keys=${Object.keys(this.standardUnitsData).join(', ')}`)
-    if (this.standardUnitsData[baseUnit]) {
-      this.app.debug(`Using JSON conversions for ${baseUnit}`)
-      const conversions = { ...(this.standardUnitsData[baseUnit].conversions || {}) }
-
-      // For date/time base units, dynamically add date format conversions
-      if ((baseUnit === 'RFC 3339 (UTC)' || baseUnit === 'Epoch Seconds') && this.dateFormatsData?.formats) {
-        for (const [formatKey, formatMeta] of Object.entries(this.dateFormatsData.formats)) {
-          // Skip if already defined in standardUnitsData
-          if (!conversions[formatKey]) {
-            conversions[formatKey] = {
-              formula: 'value',
-              inverseFormula: 'value',
-              symbol: '',
-              longName: (formatMeta as any).description || formatKey,
-              dateFormat: formatKey,
-              useLocalTime: (formatMeta as any).useLocalTime || false
-            }
-          }
-        }
-      }
-
-      return {
-        baseUnit,
-        category: this.standardUnitsData[baseUnit].category || 'custom',
-        conversions
-      }
-    }
-
-    // Fallback to TypeScript
-    const builtInDef = Object.values(comprehensiveDefaultUnits).find(
-      meta => meta.baseUnit === baseUnit
-    )
-    if (builtInDef) {
-      return builtInDef
-    }
-
-    const defaultDef = Object.values(defaultUnitsMetadata).find(meta => meta.baseUnit === baseUnit)
-    if (defaultDef) {
-      return defaultDef
-    }
-
-    return null
-  }
-
-  /**
    * Set SignalK metadata from frontend
    */
   setSignalKMetadata(metadata: Record<string, SignalKPathMetadata>): void {
-    this.signalKMetadata = metadata
-    this.app.debug(`Received SignalK metadata for ${Object.keys(metadata).length} paths`)
+    this.metadataManager.setSignalKMetadata(metadata)
   }
 
   /**
-   * Detect value type from units or value
+   * Get base unit for a category from preferences or schema
    */
-  private detectValueType(units?: string, value?: any): PathValueType {
-    // Date detection from units
-    if (units === 'RFC 3339 (UTC)' || units === 'ISO-8601 (UTC)') {
-      return 'date'
+  private getBaseUnitForCategory(category: string): string | null {
+    const preferences = this.preferencesStore.getPreferences()
+
+    // Check if category preference has a custom baseUnit
+    const categoryPref = preferences.categories?.[category]
+    if (categoryPref?.baseUnit) {
+      return categoryPref.baseUnit
     }
 
-    // If we have a value, detect from it
-    if (value !== undefined && value !== null) {
-      const valueType = typeof value
-      if (valueType === 'boolean') return 'boolean'
-      if (valueType === 'number') return 'number'
-      if (valueType === 'string') {
-        // Check if string is RFC3339 date
-        const rfc3339 =
-          /^([0-9]+)-(0[1-9]|1[012])-(0[1-9]|[12][0-9]|3[01])[Tt]([01][0-9]|2[0-3]):([0-5][0-9]):([0-5][0-9]|60)(\.[0-9]+)?(([Zz])|([+-]([01][0-9]|2[0-3]):[0-5][0-9]))$/
-        if (rfc3339.test(value)) {
-          return 'date'
-        }
-        return 'string'
-      }
-      if (valueType === 'object') return 'object'
-    }
-
-    // Default: if has units, assume number
-    if (units && units !== '') {
-      return 'number'
-    }
-
-    return 'unknown'
+    // Look up in category mapping
+    const baseUnit = this.getCategoryToBaseUnitMap()[category]
+    return baseUnit || null
   }
 
   /**
-   * Infer category from path name alone (for paths with no metadata)
-   * Checks if the last path element contains any known category name.
+   * Get preference for a path (check overrides first, then patterns, then category)
    */
-  private inferCategoryFromPath(pathStr: string): string | null {
-    if (!pathStr) {
-      return null
+  private getPreferenceForPath(pathStr: string, category: string): CategoryPreference | null {
+    const preferences = this.preferencesStore.getPreferences()
+    this.app.debug(`getPreferenceForPath: path=${pathStr}, category=${category}`)
+    this.app.debug(`Available overrides: ${Object.keys(preferences.pathOverrides).join(', ')}`)
+
+    // 1. Check path-specific override first (highest priority)
+    if (preferences.pathOverrides[pathStr]) {
+      this.app.debug(`Found path override for ${pathStr}`)
+      return preferences.pathOverrides[pathStr]
     }
 
-    const pathElements = pathStr.split('.')
-    const lastElement = pathElements[pathElements.length - 1].toLowerCase()
-
-    // Get all known categories
-    const allCategories = [
-      ...this.getCoreCategories(),
-      ...Object.keys(this.preferences.categories || {})
-    ]
-
-    // Check if last element contains any category name
-    const match = allCategories.find(cat => lastElement.includes(cat.toLowerCase()))
-
-    if (match) {
-      this.app.debug(
-        `Inferred category from path: ${pathStr} → category "${match}" (matched "${lastElement}")`
+    // 2. Check path patterns (sorted by priority)
+    if (preferences.pathPatterns && preferences.pathPatterns.length > 0) {
+      const sortedPatterns = [...preferences.pathPatterns].sort(
+        (a, b) => (b.priority || 0) - (a.priority || 0)
       )
-      return match
-    }
 
-    return null
-  }
+      for (const patternRule of sortedPatterns) {
+        if (this.patternMatcher.matchesPattern(pathStr, patternRule.pattern)) {
+          // Get category defaults
+          const categoryDefault = preferences.categories[category]
 
-  /**
-   * Infer a category from a base unit by looking at custom definitions,
-   * built-in metadata, or category defaults.
-   *
-   * When multiple categories map to the same base unit, uses path heuristic:
-   * checks if the last path element contains any category name.
-   */
-  private getCategoryFromBaseUnit(baseUnit?: string | null, pathStr?: string): string | null {
-    if (!baseUnit) {
-      return null
-    }
-
-    // Check current metadata store (skip 'custom' fallback entries)
-    const metadataEntry = Object.values(this.metadata).find(meta => meta.baseUnit === baseUnit)
-    if (metadataEntry?.category && metadataEntry.category !== 'custom') {
-      return metadataEntry.category
-    }
-
-    // Search comprehensive defaults
-    const comprehensiveEntry = Object.values(comprehensiveDefaultUnits).find(
-      meta => meta.baseUnit === baseUnit
-    )
-    if (comprehensiveEntry?.category) {
-      return comprehensiveEntry.category
-    }
-
-    // Get all categories that map to this base unit
-    const matchingCategories = Object.entries(this.getCategoryToBaseUnitMap())
-      .filter(([, unit]) => unit === baseUnit)
-      .map(([cat]) => cat)
-
-    if (matchingCategories.length === 0) {
-      return null
-    }
-
-    if (matchingCategories.length === 1) {
-      // 1:1 mapping, return the only category
-      return matchingCategories[0]
-    }
-
-    // Many-to-one: Use path element heuristic if path is provided
-    if (pathStr) {
-      const pathElements = pathStr.split('.')
-      const lastElement = pathElements[pathElements.length - 1].toLowerCase()
-
-      // Check if last element contains any category name
-      const match = matchingCategories.find(cat => lastElement.includes(cat.toLowerCase()))
-
-      if (match) {
-        this.app.debug(
-          `Smart category assignment: ${pathStr} + base unit "${baseUnit}" → category "${match}" (matched "${lastElement}")`
-        )
-        return match
-      }
-    }
-
-    // Fallback: return first matching category
-    this.app.debug(
-      `Default category assignment: base unit "${baseUnit}" → category "${matchingCategories[0]}" (first of ${matchingCategories.length})`
-    )
-    return matchingCategories[0]
-  }
-
-  /**
-   * Create a defensive copy of UnitMetadata so callers don't mutate shared references.
-   */
-  private cloneMetadata(meta: UnitMetadata): UnitMetadata {
-    return {
-      baseUnit: meta.baseUnit,
-      category: meta.category,
-      conversions: Object.fromEntries(
-        Object.entries(meta.conversions || {}).map(([target, def]) => [target, { ...def }])
-      )
-    }
-  }
-
-  /**
-   * Resolve metadata for a specific path, taking into account overrides, patterns,
-   * SignalK metadata, and comprehensive defaults.
-   */
-  private resolveMetadataForPath(pathStr: string): UnitMetadata | null {
-    const pathOverridePref = this.preferences.pathOverrides?.[pathStr] as PathPreference | undefined
-
-    let metadata = this.metadata[pathStr]
-    if (metadata) {
-      return this.cloneMetadata(metadata)
-    }
-
-    // Path override takes precedence (highest priority)
-    if (pathOverridePref) {
-      let baseUnit: string | null = null
-      let category: string | null = null
-
-      // If override specifies baseUnit, use it
-      if (pathOverridePref.baseUnit) {
-        baseUnit = pathOverridePref.baseUnit
-      }
-
-      // If override specifies category, always use it
-      if (pathOverridePref.category) {
-        category = pathOverridePref.category
-      }
-
-      // If we have category but no baseUnit yet, get baseUnit from category
-      if (category && !baseUnit) {
-        baseUnit = this.getBaseUnitForCategory(category)
-      }
-
-      // If we have a baseUnit from either source, build metadata
-      if (baseUnit) {
-        const builtInDef = this.getConversionsForBaseUnit(baseUnit)
-        const customDef = this.unitDefinitions[baseUnit]
-
-        // Merge built-in and custom conversions
-        const conversions = {
-          ...(builtInDef?.conversions || {}),
-          ...(customDef?.conversions || {})
-        }
-
-        // Use the override's category if specified, otherwise infer from baseUnit
-        const finalCategory =
-          category ||
-          builtInDef?.category ||
-          this.getCategoryFromBaseUnit(baseUnit, pathStr) ||
-          'custom'
-
-        metadata = {
-          baseUnit,
-          category: finalCategory,
-          conversions
-        }
-      }
-    }
-
-    // Attempt to generate from user-defined patterns if still missing
-    if (!metadata) {
-      const matchingPattern = this.findMatchingPattern(pathStr)
-      if (matchingPattern) {
-        const generated = this.generateMetadataFromPattern(matchingPattern)
-        if (generated) {
-          metadata = generated
-        }
-      }
-    }
-
-    // Fall back to SignalK metadata units
-    if (!metadata) {
-      const skMetadata = this.signalKMetadata[pathStr]
-
-      if (skMetadata?.units) {
-        const inferred = this.inferMetadataFromSignalK(pathStr, skMetadata.units)
-        if (inferred) {
-          metadata = inferred
-        } else {
-          const baseUnit = skMetadata.units
-          const builtInDef = this.getConversionsForBaseUnit(baseUnit)
-          const customDef = this.unitDefinitions[baseUnit]
-
-          // Merge built-in and custom conversions
-          const conversions = {
-            ...(builtInDef?.conversions || {}),
-            ...(customDef?.conversions || {})
-          }
-
-          metadata = {
-            baseUnit,
-            category:
-              this.getCategoryFromBaseUnit(baseUnit, pathStr) || builtInDef?.category || 'custom',
-            conversions
+          return {
+            targetUnit: patternRule.targetUnit || categoryDefault?.targetUnit || '',
+            displayFormat: patternRule.displayFormat || categoryDefault?.displayFormat || '0.0'
           }
         }
       }
     }
 
-    // FINAL FALLBACK: Path-only inference (catches paths not in comprehensive defaults)
-    if (!metadata) {
-      const inferredCategory = this.inferCategoryFromPath(pathStr)
-      if (inferredCategory) {
-        const baseUnit = this.getBaseUnitForCategory(inferredCategory)
-        if (baseUnit) {
-          this.app.debug(
-            `Path-only inference: ${pathStr} → category "${inferredCategory}" → base unit "${baseUnit}"`
-          )
-          const builtInDef = this.getConversionsForBaseUnit(baseUnit)
-          const customDef = this.unitDefinitions[baseUnit]
-
-          const conversions = {
-            ...(builtInDef?.conversions || {}),
-            ...(customDef?.conversions || {})
-          }
-
-          metadata = {
-            baseUnit,
-            category: inferredCategory,
-            conversions
-          }
-        }
-      }
-    }
-
-    if (!metadata) {
-      return null
-    }
-
-    const cloned = this.cloneMetadata(metadata)
-    this.metadata[pathStr] = cloned
-    return this.cloneMetadata(cloned)
-  }
-
-  /**
-   * Collect all SignalK paths by walking the server data model.
-   */
-  private async collectSignalKPaths(): Promise<Set<string>> {
-    const pathsSet = new Set<string>()
-
-    try {
-      let hostname = 'localhost'
-      let port = 3000
-      let protocol = 'http'
-
-      const configSettings = (this.app as any).config?.settings
-      if (configSettings) {
-        hostname = configSettings.hostname || hostname
-        port = configSettings.port || port
-        protocol = configSettings.ssl ? 'https' : protocol
-      }
-
-      const apiUrl = `${protocol}://${hostname}:${port}/signalk/v1/api/`
-
-      const globalFetch = (globalThis as any).fetch
-      if (typeof globalFetch !== 'function') {
-        this.app.error(
-          'Fetch API is unavailable. Unable to load SignalK metadata without native fetch support.'
-        )
-        return pathsSet
-      }
-
-      const fetchFn = globalFetch.bind(globalThis) as (
-        input: string,
-        init?: any
-      ) => Promise<{ ok: boolean; statusText: string; json(): Promise<any> }>
-
-      this.app.debug(`Fetching from SignalK API: ${apiUrl}`)
-      const response = await fetchFn(apiUrl)
-
-      if (!response.ok) {
-        this.app.error(`Failed to fetch from SignalK API: ${response.statusText}`)
-        return pathsSet
-      }
-
-      const data = await response.json()
-
-      const extractPathsRecursive = (obj: any, prefix = ''): void => {
-        if (!obj || typeof obj !== 'object') return
-
-        for (const key in obj) {
-          if (
-            key === 'meta' ||
-            key === 'timestamp' ||
-            key === 'source' ||
-            key === '$source' ||
-            key === 'values' ||
-            key === 'sentence'
-          ) {
-            continue
-          }
-
-          const currentPath = prefix ? `${prefix}.${key}` : key
-
-          if (obj[key] && typeof obj[key] === 'object') {
-            if (obj[key].value !== undefined) {
-              pathsSet.add(currentPath)
-            }
-            extractPathsRecursive(obj[key], currentPath)
-          }
-        }
-      }
-
-      const selfVesselId = data.self
-      const actualSelfId =
-        selfVesselId && selfVesselId.startsWith('vessels.')
-          ? selfVesselId.replace('vessels.', '')
-          : selfVesselId
-
-      if (data.vessels && actualSelfId && data.vessels[actualSelfId]) {
-        this.app.debug(`Extracting paths from vessel: ${actualSelfId}`)
-        extractPathsRecursive(data.vessels[actualSelfId], '')
-        this.app.debug(`Extracted ${pathsSet.size} paths from SignalK API`)
-      }
-    } catch (error) {
-      this.app.error(`Error collecting SignalK paths: ${error}`)
-    }
-
-    return pathsSet
-  }
-
-  /**
-   * Find a conversion by either key (symbol) or longName.
-   * Returns both the matching key and the conversion.
-   */
-  private findConversionByKeyOrLongName(
-    conversions: Record<string, ConversionDefinition>,
-    targetUnit: string
-  ): { key: string; conversion: ConversionDefinition } | null {
-    // First try direct key match
-    if (conversions[targetUnit]) {
-      return { key: targetUnit, conversion: conversions[targetUnit] }
-    }
-
-    // Then try longName match (case-insensitive)
-    const targetLower = targetUnit.toLowerCase()
-    for (const [key, conv] of Object.entries(conversions)) {
-      if (conv.longName?.toLowerCase() === targetLower) {
-        return { key, conversion: conv }
-      }
+    // 3. Fall back to category preference
+    if (preferences.categories[category]) {
+      return preferences.categories[category]
     }
 
     return null
@@ -770,24 +301,26 @@ export class UnitsManager {
       return { preference, targetUnit: null, conversion: null }
     }
 
+    const unitDefinitions = this.preferencesStore.getUnitDefinitions()
+
     // Try to find conversion by key or longName
     let conversionMatch = metadata.conversions
-      ? this.findConversionByKeyOrLongName(metadata.conversions, targetUnit)
+      ? this.conversionEngine.findConversionByKeyOrLongName(metadata.conversions, targetUnit)
       : null
 
     const baseUnit = metadata.baseUnit || preference.baseUnit
 
     if (!conversionMatch && baseUnit) {
-      const unitDef = this.unitDefinitions[baseUnit]
+      const unitDef = unitDefinitions[baseUnit]
       if (unitDef?.conversions) {
-        conversionMatch = this.findConversionByKeyOrLongName(unitDef.conversions, targetUnit)
+        conversionMatch = this.conversionEngine.findConversionByKeyOrLongName(unitDef.conversions, targetUnit)
       }
     }
 
     if (!conversionMatch && baseUnit) {
-      const fallback = this.getConversionsForBaseUnit(baseUnit)
+      const fallback = this.metadataManager.getConversionsForBaseUnit(baseUnit, this.dateFormatsData)
       if (fallback?.conversions) {
-        conversionMatch = this.findConversionByKeyOrLongName(fallback.conversions, targetUnit)
+        conversionMatch = this.conversionEngine.findConversionByKeyOrLongName(fallback.conversions, targetUnit)
       }
     }
 
@@ -799,440 +332,33 @@ export class UnitsManager {
   }
 
   /**
-   * Load preferences from file or create default
-   */
-  private async loadPreferences(): Promise<void> {
-    try {
-      if (fs.existsSync(this.preferencesPath)) {
-        const data = fs.readFileSync(this.preferencesPath, 'utf-8')
-        this.preferences = JSON.parse(data)
-        this.app.debug('Loaded units preferences from file')
-
-        let preferencesChanged = false
-
-        if (!this.preferences.categories) {
-          this.preferences.categories = {}
-          preferencesChanged = true
-        }
-
-        if (!this.preferences.pathOverrides) {
-          this.preferences.pathOverrides = {}
-          preferencesChanged = true
-        }
-
-        if (!this.preferences.pathPatterns) {
-          this.preferences.pathPatterns = []
-          preferencesChanged = true
-        }
-
-        preferencesChanged = this.ensureCategoryDefaults() || preferencesChanged
-        preferencesChanged = this.ensureDefaultPathPatterns() || preferencesChanged
-
-        if (preferencesChanged) {
-          await this.savePreferences()
-        }
-      } else {
-        this.preferences = {
-          categories: {},
-          pathOverrides: {},
-          pathPatterns: DEFAULT_PATH_PATTERNS.map(rule => ({ ...rule }))
-        }
-
-        this.ensureCategoryDefaults()
-        this.ensureDefaultPathPatterns()
-
-        // Apply Imperial US preset by default on virgin install
-        try {
-          const presetPath = path.join(__dirname, '..', 'presets', 'imperial-us.json')
-          if (fs.existsSync(presetPath)) {
-            const presetData = JSON.parse(fs.readFileSync(presetPath, 'utf-8'))
-            const preset = presetData.categories
-
-            // Apply preset categories (create missing categories automatically)
-            for (const [category, settings] of Object.entries(preset)) {
-              const castSettings = settings as {
-                targetUnit?: string
-                displayFormat?: string
-                baseUnit?: string
-              }
-
-              const existing = this.preferences.categories[category]
-              if (existing) {
-                this.preferences.categories[category] = {
-                  targetUnit: castSettings.targetUnit || existing.targetUnit || '',
-                  displayFormat: castSettings.displayFormat || existing.displayFormat || '0.0'
-                }
-              } else {
-                const schemaBaseUnit = this.getCategoryToBaseUnitMap()[category]
-                const presetBaseUnit = castSettings.baseUnit
-
-                const newCategoryPref: CategoryPreference = {
-                  targetUnit: castSettings.targetUnit || '',
-                  displayFormat: castSettings.displayFormat || '0.0'
-                }
-
-                if (presetBaseUnit && (!schemaBaseUnit || schemaBaseUnit !== presetBaseUnit)) {
-                  newCategoryPref.baseUnit = presetBaseUnit
-                }
-
-                this.preferences.categories[category] = newCategoryPref
-              }
-            }
-
-            // Set current preset info
-            this.preferences.currentPreset = {
-              type: 'imperial-us',
-              name: presetData.name,
-              version: presetData.version,
-              appliedDate: new Date().toISOString()
-            }
-
-            this.app.debug('Applied Imperial (US) preset as default for virgin install')
-          }
-        } catch (error) {
-          this.app.error(`Failed to apply default preset: ${error}`)
-        }
-
-        this.ensureCategoryDefaults()
-        this.ensureDefaultPathPatterns()
-        await this.savePreferences()
-        this.app.debug('Created default units preferences file')
-      }
-    } catch (error) {
-      this.app.error(`Failed to load preferences: ${error}`)
-      throw error
-    }
-  }
-
-  private ensureCategoryDefaults(): boolean {
-    let updated = false
-
-    if (!this.preferences.categories) {
-      this.preferences.categories = {}
-      updated = true
-    }
-
-    for (const [category, defaults] of Object.entries(DEFAULT_CATEGORY_PREFERENCES)) {
-      const existing = this.preferences.categories[category]
-      const { targetUnit, displayFormat, baseUnit } = defaults
-
-      if (!existing) {
-        this.preferences.categories[category] = {
-          targetUnit,
-          displayFormat,
-          ...(baseUnit ? { baseUnit } : {})
-        }
-        updated = true
-        continue
-      }
-
-      // Only add baseUnit if this is a custom category (not in the static schema)
-      // Core categories get their baseUnit from the categoryToBaseUnit map
-      const isCoreCategory = !!this.getCategoryToBaseUnitMap()[category]
-      if (baseUnit && !existing.baseUnit && !isCoreCategory) {
-        existing.baseUnit = baseUnit
-        updated = true
-      }
-
-      if (!existing.targetUnit && targetUnit) {
-        existing.targetUnit = targetUnit
-        updated = true
-      }
-
-      if (!existing.displayFormat && displayFormat) {
-        existing.displayFormat = displayFormat
-        updated = true
-      }
-    }
-
-    return updated
-  }
-
-  private ensureDefaultPathPatterns(): boolean {
-    let updated = false
-
-    if (!this.preferences.pathPatterns) {
-      this.preferences.pathPatterns = []
-      updated = true
-    }
-
-    for (const defaultRule of DEFAULT_PATH_PATTERNS) {
-      const existing = this.preferences.pathPatterns.find(
-        rule => rule.pattern === defaultRule.pattern
-      )
-
-      if (!existing) {
-        this.preferences.pathPatterns.push({ ...defaultRule })
-        updated = true
-        continue
-      }
-
-      if (defaultRule.category && !existing.category) {
-        existing.category = defaultRule.category
-        updated = true
-      }
-
-      if (defaultRule.baseUnit && !existing.baseUnit) {
-        existing.baseUnit = defaultRule.baseUnit
-        updated = true
-      }
-
-      if (defaultRule.targetUnit && !existing.targetUnit) {
-        existing.targetUnit = defaultRule.targetUnit
-        updated = true
-      }
-
-      if (defaultRule.displayFormat && !existing.displayFormat) {
-        existing.displayFormat = defaultRule.displayFormat
-        updated = true
-      }
-
-      if (defaultRule.priority !== undefined && existing.priority === undefined) {
-        existing.priority = defaultRule.priority
-        updated = true
-      }
-    }
-
-    return updated
-  }
-
-  /**
-   * Save preferences to file
-   */
-  async savePreferences(): Promise<void> {
-    try {
-      fs.writeFileSync(this.preferencesPath, JSON.stringify(this.preferences, null, 2), 'utf-8')
-      this.app.debug('Saved units preferences')
-    } catch (error) {
-      this.app.error(`Failed to save preferences: ${error}`)
-      throw error
-    }
-  }
-
-  /**
-   * Migrate old file names to new naming convention
-   */
-  private migrateFileNames(): void {
-    // Migrate units-definitions.json to custom-units-definitions.json
-    const oldCustomPath = path.join(this.dataDir, 'units-definitions.json')
-    if (fs.existsSync(oldCustomPath) && !fs.existsSync(this.customDefinitionsPath)) {
-      try {
-        fs.renameSync(oldCustomPath, this.customDefinitionsPath)
-        this.app.debug('Migrated units-definitions.json to custom-units-definitions.json')
-      } catch (error) {
-        this.app.error(`Failed to migrate units-definitions.json: ${error}`)
-      }
-    }
-
-    // Migrate conversions.json to standard-units-definitions.json
-    const oldStandardPath = path.join(this.definitionsDir, 'conversions.json')
-    const newStandardPath = path.join(this.definitionsDir, 'standard-units-definitions.json')
-    if (fs.existsSync(oldStandardPath) && !fs.existsSync(newStandardPath)) {
-      try {
-        fs.renameSync(oldStandardPath, newStandardPath)
-        this.app.debug('Migrated conversions.json to standard-units-definitions.json')
-      } catch (error) {
-        this.app.error(`Failed to migrate conversions.json: ${error}`)
-      }
-    }
-  }
-
-  /**
-   * Load unit definitions from file
-   */
-  private async loadUnitDefinitions(): Promise<void> {
-    try {
-      if (fs.existsSync(this.customDefinitionsPath)) {
-        const data = fs.readFileSync(this.customDefinitionsPath, 'utf-8')
-        this.unitDefinitions = JSON.parse(data)
-        this.app.debug('Loaded custom unit definitions from file')
-      } else {
-        this.unitDefinitions = {}
-        await this.saveUnitDefinitions()
-        this.app.debug('Created default custom unit definitions file')
-      }
-    } catch (error) {
-      this.app.error(`Failed to load custom unit definitions: ${error}`)
-      throw error
-    }
-  }
-
-  /**
-   * Save unit definitions to file
-   */
-  async saveUnitDefinitions(): Promise<void> {
-    try {
-      fs.writeFileSync(
-        this.customDefinitionsPath,
-        JSON.stringify(this.unitDefinitions, null, 2),
-        'utf-8'
-      )
-      this.app.debug('Saved custom unit definitions')
-    } catch (error) {
-      this.app.error(`Failed to save custom unit definitions: ${error}`)
-      throw error
-    }
-  }
-
-  /**
-   * Get all unit definitions (built-in + custom)
-   */
-  getUnitDefinitions(): Record<string, BaseUnitDefinition & { isCustom?: boolean }> {
-    // Extract base unit definitions from JSON or TypeScript fallback
-    const baseUnitDefs: Record<string, BaseUnitDefinition & { isCustom?: boolean }> = {}
-
-    // Use JSON data if available, otherwise fall back to TypeScript
-    const sourceData =
-      Object.keys(this.standardUnitsData).length > 0
-        ? this.standardUnitsData
-        : comprehensiveDefaultUnits
-
-    // Handle JSON format (baseUnit as keys)
-    if (sourceData === this.standardUnitsData) {
-      for (const [baseUnit, data] of Object.entries(sourceData)) {
-        baseUnitDefs[baseUnit] = {
-          baseUnit,
-          conversions: data.conversions || {},
-          isCustom: false
-        }
-      }
-    } else {
-      // Handle TypeScript format (path-based entries)
-      for (const [, meta] of Object.entries(sourceData)) {
-        if (meta.baseUnit && !baseUnitDefs[meta.baseUnit]) {
-          baseUnitDefs[meta.baseUnit] = {
-            baseUnit: meta.baseUnit,
-            conversions: meta.conversions || {},
-            isCustom: false
-          }
-        } else if (meta.baseUnit && meta.conversions) {
-          // Merge conversions if we've seen this base unit before
-          baseUnitDefs[meta.baseUnit].conversions = {
-            ...baseUnitDefs[meta.baseUnit].conversions,
-            ...meta.conversions
-          }
-        }
-      }
-    }
-
-    // Merge custom units with built-in units
-    // Filter out invalid keys that don't belong in unit definitions
-    const invalidKeys = ['categories', 'pathOverrides', 'pathPatterns', 'currentPreset']
-    for (const [baseUnit, customDef] of Object.entries(this.unitDefinitions)) {
-      // Skip keys that are preferences properties, not unit definitions
-      if (invalidKeys.includes(baseUnit)) {
-        this.app.error(
-          `Skipping invalid key "${baseUnit}" in units-definitions.json - this belongs in units-preferences.json`
-        )
-        continue
-      }
-
-      // Validate that customDef has the expected structure
-      if (typeof customDef !== 'object' || customDef === null || !customDef.conversions) {
-        this.app.error(
-          `Skipping invalid unit definition for "${baseUnit}" - must have conversions property`
-        )
-        continue
-      }
-
-      if (baseUnitDefs[baseUnit]) {
-        // This is an extension of a built-in base unit - merge conversions
-        const coreConversions = baseUnitDefs[baseUnit].conversions
-        const customConvs = customDef.conversions || {}
-
-        // Only mark conversions as custom if they DON'T exist in the core definition
-        const customConversionNames = Object.keys(customConvs).filter(
-          conv => !coreConversions[conv]
-        )
-
-        baseUnitDefs[baseUnit] = {
-          baseUnit,
-          conversions: {
-            ...coreConversions,
-            ...customConvs
-          },
-          isCustom: false, // Mark as not custom since it's extending a built-in
-          customConversions: customConversionNames // Only truly custom conversions
-        }
-      } else {
-        // This is a purely custom base unit
-        baseUnitDefs[baseUnit] = {
-          ...customDef,
-          isCustom: true,
-          customConversions: Object.keys(customDef.conversions || {}) // All conversions are custom
-        }
-      }
-    }
-
-    return baseUnitDefs
-  }
-
-  /**
-   * Add or update a unit definition
-   */
-  async addUnitDefinition(baseUnit: string, definition: BaseUnitDefinition): Promise<void> {
-    this.unitDefinitions[baseUnit] = definition
-    await this.saveUnitDefinitions()
-  }
-
-  /**
-   * Delete a unit definition
-   */
-  async deleteUnitDefinition(baseUnit: string): Promise<void> {
-    delete this.unitDefinitions[baseUnit]
-    await this.saveUnitDefinitions()
-  }
-
-  /**
-   * Add a conversion to a unit definition
-   */
-  async addConversionToUnit(
-    baseUnit: string,
-    targetUnit: string,
-    conversion: ConversionDefinition
-  ): Promise<void> {
-    // If this base unit doesn't exist in custom definitions, create it
-    if (!this.unitDefinitions[baseUnit]) {
-      // Check if it exists in built-in definitions
-      const builtInDef = Object.values(comprehensiveDefaultUnits).find(
-        meta => meta.baseUnit === baseUnit
-      )
-
-      if (builtInDef) {
-        // Create a custom extension for this built-in base unit
-        this.unitDefinitions[baseUnit] = {
-          baseUnit: baseUnit,
-          conversions: {}
-        }
-      } else {
-        throw new Error(`Base unit "${baseUnit}" not found`)
-      }
-    }
-
-    if (!this.unitDefinitions[baseUnit].conversions) {
-      this.unitDefinitions[baseUnit].conversions = {}
-    }
-
-    this.unitDefinitions[baseUnit].conversions[targetUnit] = conversion
-    await this.saveUnitDefinitions()
-  }
-
-  /**
-   * Delete a conversion from a unit definition
-   */
-  async deleteConversionFromUnit(baseUnit: string, targetUnit: string): Promise<void> {
-    if (this.unitDefinitions[baseUnit]?.conversions[targetUnit]) {
-      delete this.unitDefinitions[baseUnit].conversions[targetUnit]
-      await this.saveUnitDefinitions()
-    }
-  }
-
-  /**
    * Get conversion information for a path
    */
   getConversion(pathStr: string): ConversionResponse {
     this.app.debug(`getConversion called for: ${pathStr}`)
-    const metadata = this.resolveMetadataForPath(pathStr)
+
+    const preferences = this.preferencesStore.getPreferences()
+    const unitDefinitions = this.preferencesStore.getUnitDefinitions()
+
+    const metadata = this.metadataManager.resolveMetadataForPath(
+      pathStr,
+      preferences,
+      unitDefinitions,
+      {
+        findMatchingPattern: (path: string) =>
+          this.patternMatcher.findMatchingPattern(path, preferences.pathPatterns || []),
+        generateMetadataFromPattern: (pattern: PathPatternRule) =>
+          this.patternMatcher.generateMetadataFromPattern(
+            pattern,
+            unitDefinitions,
+            (baseUnit: string) => this.metadataManager.getConversionsForBaseUnit(baseUnit, this.dateFormatsData),
+            (category: string) => this.getBaseUnitForCategory(category)
+          )
+      },
+      () => this.getCategoryToBaseUnitMap(),
+      (category: string) => this.getBaseUnitForCategory(category),
+      this.dateFormatsData
+    )
 
     if (!metadata) {
       this.app.debug(`No metadata resolved for ${pathStr}, returning pass-through conversion.`)
@@ -1252,8 +378,8 @@ export class UnitsManager {
       return this.getPassThroughConversion(pathStr, metadata.baseUnit || undefined)
     }
 
-    const skMeta = this.signalKMetadata[pathStr]
-    const valueType = this.detectValueType(
+    const skMeta = this.metadataManager.getSignalKMetadata(pathStr)
+    const valueType = this.metadataManager.detectValueType(
       skMeta?.units || metadata.baseUnit || undefined,
       skMeta?.value
     )
@@ -1287,18 +413,14 @@ export class UnitsManager {
 
   /**
    * Get a pass-through conversion (no conversion applied)
-   * If path has SignalK metadata with units, use that as baseUnit/targetUnit
    */
   private getPassThroughConversion(pathStr: string, signalKUnit?: string): ConversionResponse {
-    // Get SignalK metadata
-    const skMeta = this.signalKMetadata[pathStr]
+    const skMeta = this.metadataManager.getSignalKMetadata(pathStr)
     let unit = signalKUnit
 
     if (!unit) {
-      // First check the metadata from frontend
       unit = skMeta?.units
       if (!unit) {
-        // Fallback to app.getMetadata
         const appMetadata = this.app.getMetadata(pathStr)
         if (appMetadata?.units) {
           unit = appMetadata.units
@@ -1306,10 +428,8 @@ export class UnitsManager {
       }
     }
 
-    // Detect value type
-    const valueType = this.detectValueType(unit, skMeta?.value)
+    const valueType = this.metadataManager.detectValueType(unit, skMeta?.value)
 
-    // For booleans and dates, use appropriate display format
     let displayFormat = '0.0'
     let symbol = ''
 
@@ -1332,7 +452,7 @@ export class UnitsManager {
       inverseFormula: 'value',
       displayFormat: displayFormat,
       symbol: symbol,
-      category: this.getCategoryFromBaseUnit(unit, pathStr) || 'none',
+      category: this.metadataManager.getCategoryFromBaseUnit(unit, this.getCategoryToBaseUnitMap(), pathStr) || 'none',
       valueType: valueType,
       dateFormat: valueType === 'date' ? 'ISO-8601' : undefined,
       useLocalTime: valueType === 'date' ? false : undefined,
@@ -1347,86 +467,43 @@ export class UnitsManager {
    */
   convertValue(pathStr: string, value: number): ConvertValueResponse {
     const conversionInfo = this.getConversion(pathStr)
-    const skMeta = this.signalKMetadata[pathStr]
+    const skMeta = this.metadataManager.getSignalKMetadata(pathStr)
 
-    try {
-      // evaluateFormula can return number or string (for duration formatting)
-      const convertedValue = evaluateFormula(conversionInfo.formula, value)
+    const result = this.conversionEngine.convertWithFormula(
+      value,
+      conversionInfo.formula,
+      conversionInfo.symbol || '',
+      conversionInfo.displayFormat
+    )
 
-      let formatted: string
-      if (typeof convertedValue === 'string') {
-        // Duration formatting - already formatted
-        formatted = conversionInfo.symbol
-          ? `${convertedValue} ${conversionInfo.symbol}`.trim()
-          : convertedValue
-      } else {
-        // Numeric conversion
-        const formattedNumber = formatNumber(convertedValue, conversionInfo.displayFormat)
-        formatted = `${formattedNumber} ${conversionInfo.symbol}`.trim()
-      }
-
-      return {
-        originalValue: value,
-        convertedValue: typeof convertedValue === 'number' ? convertedValue : value,
-        symbol: conversionInfo.symbol,
-        formatted,
-        displayFormat: conversionInfo.displayFormat,
-        signalkTimestamp: skMeta?.timestamp,
-        signalkSource: skMeta?.$source || skMeta?.source
-      }
-    } catch (error) {
-      this.app.error(`Error converting value: ${error}`)
-      // Return pass-through on error
-      return {
-        originalValue: value,
-        convertedValue: value,
-        symbol: '',
-        formatted: `${value}`,
-        displayFormat: '0.0',
-        signalkTimestamp: skMeta?.timestamp,
-        signalkSource: skMeta?.$source || skMeta?.source
-      }
+    return {
+      ...result,
+      signalkTimestamp: skMeta?.timestamp,
+      signalkSource: skMeta?.$source || skMeta?.source
     }
   }
 
-  private findUnitDefinition(baseUnit: string): UnitMetadata | null {
-    if (!baseUnit) {
-      return null
-    }
-
-    // Get built-in conversions (from JSON or TypeScript fallback)
-    const builtInDef = this.getConversionsForBaseUnit(baseUnit)
-
-    // Merge with custom definitions if they exist
-    const customDef = this.unitDefinitions[baseUnit]
-    if (builtInDef && customDef) {
-      // Merge conversions from built-in and custom (custom conversions take priority)
-      return this.cloneMetadata({
-        baseUnit,
-        category: builtInDef.category,
-        conversions: {
-          ...builtInDef.conversions,
-          ...customDef.conversions
-        }
-      })
-    }
-
-    // Return built-in or custom (whichever exists)
-    if (builtInDef) {
-      return this.cloneMetadata(builtInDef)
-    }
-
-    if (customDef) {
-      // Custom definition without built-in - infer category
-      return this.cloneMetadata({
-        ...customDef,
-        category: this.getCategoryFromBaseUnit(baseUnit) || 'custom'
-      })
-    }
-
-    return null
+  /**
+   * Format a date value according to target unit and format
+   */
+  formatDateValue(
+    isoValue: string,
+    targetUnit: string,
+    dateFormat?: string,
+    useLocalOverride?: boolean
+  ): {
+    convertedValue: any
+    formatted: string
+    displayFormat: string
+    useLocalTime: boolean
+    dateFormat: string
+  } {
+    return this.conversionEngine.formatDateValue(isoValue, targetUnit, dateFormat, useLocalOverride)
   }
 
+  /**
+   * Convert a unit value from base unit to target unit
+   */
   convertUnitValue(
     baseUnit: string,
     targetUnit: string,
@@ -1437,266 +514,21 @@ export class UnitsManager {
     formatted: string
     symbol: string
     displayFormat: string
-    valueType: PathValueType
+    valueType: any
     dateFormat?: string
     useLocalTime?: boolean
   } {
-    const definition = this.findUnitDefinition(baseUnit)
+    const unitDefinitions = this.preferencesStore.getUnitDefinitions()
 
-    if (!definition) {
-      throw new UnitConversionError(`Unknown base unit: ${baseUnit}`)
-    }
-
-    const conversion = definition.conversions?.[targetUnit]
-    if (!conversion) {
-      throw new UnitConversionError(`No conversion defined from ${baseUnit} to ${targetUnit}`)
-    }
-
-    const normalizedBaseUnit = (baseUnit || '').toLowerCase()
-    const isDateConversion =
-      normalizedBaseUnit.includes('rfc 3339') ||
-      normalizedBaseUnit.includes('epoch') ||
-      !!conversion.dateFormat
-
-    if (isDateConversion) {
-      let isoString: string
-
-      if (typeof rawValue === 'string') {
-        isoString = rawValue
-      } else if (typeof rawValue === 'number') {
-        const isEpochBase = (baseUnit || '').toLowerCase().includes('epoch')
-        const date = new Date(rawValue * (isEpochBase ? 1000 : 1))
-        if (Number.isNaN(date.getTime())) {
-          throw new UnitConversionError('Invalid epoch value supplied for date conversion')
-        }
-        isoString = date.toISOString()
-      } else {
-        throw new UnitConversionError('Date conversions require ISO-8601 string or epoch value')
-      }
-
-      const dateResult = this.formatDateValue(
-        isoString,
-        targetUnit,
-        conversion.dateFormat,
-        options?.useLocalTime ?? conversion.useLocalTime
-      )
-
-      return {
-        convertedValue: dateResult.convertedValue,
-        formatted: dateResult.formatted,
-        symbol: conversion.symbol || '',
-        displayFormat: dateResult.displayFormat,
-        valueType: 'date',
-        dateFormat: dateResult.dateFormat,
-        useLocalTime: dateResult.useLocalTime
-      }
-    }
-
-    let numericValue: number
-
-    if (typeof rawValue === 'number') {
-      numericValue = rawValue
-    } else if (typeof rawValue === 'string' && rawValue.trim() !== '') {
-      const parsed = Number(rawValue)
-      if (Number.isNaN(parsed)) {
-        throw new UnitConversionError('Value must be numeric for this conversion')
-      }
-      numericValue = parsed
-    } else {
-      throw new UnitConversionError('Value must be numeric for this conversion')
-    }
-
-    // evaluateFormula can return number or string (for duration formatting)
-    const convertedValue = evaluateFormula(conversion.formula, numericValue)
-
-    const displayFormat = options?.displayFormat || '0.0'
-    const symbol = conversion.symbol || ''
-
-    let formatted: string
-    if (typeof convertedValue === 'string') {
-      // Duration formatting - already formatted
-      formatted = symbol ? `${convertedValue} ${symbol}`.trim() : convertedValue
-    } else {
-      // Numeric conversion
-      const formattedNumber = formatNumber(convertedValue, displayFormat)
-      formatted = symbol ? `${formattedNumber} ${symbol}`.trim() : formattedNumber
-    }
-
-    return {
-      convertedValue: typeof convertedValue === 'number' ? convertedValue : numericValue,
-      formatted,
-      symbol,
-      displayFormat,
-      valueType: typeof convertedValue === 'string' ? 'string' : 'number'
-    }
-  }
-
-  /**
-   * Check if a path matches a pattern (supports wildcards)
-   */
-  private matchesPattern(path: string, pattern: string): boolean {
-    // Convert wildcard pattern to regex
-    // * matches any characters except dots
-    // ** matches any characters including dots
-    const regexPattern = pattern
-      .replace(/\./g, '\\.')
-      .replace(/\*\*/g, '___DOUBLE_STAR___')
-      .replace(/\*/g, '[^.]+')
-      .replace(/___DOUBLE_STAR___/g, '.*')
-
-    const regex = new RegExp(`^${regexPattern}$`)
-    return regex.test(path)
-  }
-
-  /**
-   * Find the highest priority matching pattern for a path
-   */
-  private findMatchingPattern(pathStr: string): PathPatternRule | null {
-    if (!this.preferences.pathPatterns || this.preferences.pathPatterns.length === 0) {
-      return null
-    }
-
-    const sortedPatterns = [...this.preferences.pathPatterns].sort(
-      (a, b) => (b.priority || 0) - (a.priority || 0)
+    return this.conversionEngine.convertUnitValue(
+      baseUnit,
+      targetUnit,
+      rawValue,
+      unitDefinitions,
+      (bu: string) => this.metadataManager.getConversionsForBaseUnit(bu, this.dateFormatsData),
+      (bu: string) => this.metadataManager.getCategoryFromBaseUnit(bu, this.getCategoryToBaseUnitMap()),
+      options
     )
-
-    for (const pattern of sortedPatterns) {
-      if (this.matchesPattern(pathStr, pattern.pattern)) {
-        return pattern
-      }
-    }
-
-    return null
-  }
-
-  /**
-   * Generate metadata from a pattern rule using comprehensive defaults
-   */
-  private generateMetadataFromPattern(pattern: PathPatternRule): UnitMetadata | null {
-    // Use pattern's baseUnit if provided, otherwise derive from category
-    const baseUnit = pattern.baseUnit || this.getBaseUnitForCategory(pattern.category)
-    this.app.debug(
-      `generateMetadataFromPattern - pattern: ${pattern.pattern}, category: ${pattern.category}, baseUnit: ${baseUnit}`
-    )
-
-    if (!baseUnit) {
-      this.app.debug(`No base unit found for category: ${pattern.category}`)
-      return null
-    }
-
-    // Check unit definitions first
-    if (this.unitDefinitions[baseUnit]) {
-      this.app.debug(`Found in unitDefinitions: ${baseUnit}`)
-      return {
-        baseUnit: baseUnit,
-        category: pattern.category,
-        conversions: this.unitDefinitions[baseUnit].conversions
-      }
-    }
-
-    // Try to find default conversions for this base unit
-    const defaultsForBaseUnit = this.getConversionsForBaseUnit(baseUnit)
-
-    if (!defaultsForBaseUnit) {
-      this.app.debug(`No default conversions found for base unit: ${baseUnit}`)
-      return null
-    }
-
-    this.app.debug(
-      `Found conversions for ${baseUnit}: ${Object.keys(defaultsForBaseUnit.conversions).join(', ')}`
-    )
-
-    return {
-      baseUnit: baseUnit,
-      category: pattern.category,
-      conversions: defaultsForBaseUnit.conversions
-    }
-  }
-
-  /**
-   * Get base unit for a category from preferences or schema
-   */
-  private getBaseUnitForCategory(category: string): string | null {
-    // Check if category preference has a custom baseUnit
-    const categoryPref = this.preferences.categories?.[category]
-    if (categoryPref?.baseUnit) {
-      return categoryPref.baseUnit
-    }
-
-    // Look up in category mapping
-    const baseUnit = this.getCategoryToBaseUnitMap()[category]
-    return baseUnit || null
-  }
-
-  /**
-   * Get preference for a path (check overrides first, then patterns, then category)
-   */
-  private getPreferenceForPath(pathStr: string, category: string): CategoryPreference | null {
-    this.app.debug(`getPreferenceForPath: path=${pathStr}, category=${category}`)
-    this.app.debug(`Available overrides: ${Object.keys(this.preferences.pathOverrides).join(', ')}`)
-
-    // 1. Check path-specific override first (highest priority)
-    if (this.preferences.pathOverrides[pathStr]) {
-      this.app.debug(`Found path override for ${pathStr}`)
-      return this.preferences.pathOverrides[pathStr]
-    }
-
-    // 2. Check path patterns (sorted by priority)
-    if (this.preferences.pathPatterns && this.preferences.pathPatterns.length > 0) {
-      const sortedPatterns = [...this.preferences.pathPatterns].sort(
-        (a, b) => (b.priority || 0) - (a.priority || 0)
-      )
-
-      for (const patternRule of sortedPatterns) {
-        if (this.matchesPattern(pathStr, patternRule.pattern)) {
-          // Get category defaults
-          const categoryDefault = this.preferences.categories[category]
-
-          return {
-            targetUnit: patternRule.targetUnit || categoryDefault?.targetUnit || '',
-            displayFormat: patternRule.displayFormat || categoryDefault?.displayFormat || '0.0'
-          }
-        }
-      }
-    }
-
-    // 3. Fall back to category preference
-    if (this.preferences.categories[category]) {
-      return this.preferences.categories[category]
-    }
-
-    return null
-  }
-
-  /**
-   * Infer metadata from SignalK metadata
-   */
-  private inferMetadataFromSignalK(_pathStr: string, units: string): UnitMetadata | null {
-    // Try to find a matching base unit and category
-    const category = Object.entries(this.getCategoryToBaseUnitMap()).find(
-      ([, baseUnit]) => baseUnit === units
-    )?.[0]
-
-    if (!category) {
-      // Unknown unit - return null so fallback can handle it
-      return null
-    }
-
-    // Try to get conversions for this base unit
-    const conversions = this.getConversionsForBaseUnit(units)
-    if (conversions && conversions.category === category) {
-      return conversions
-    }
-
-    // Found category but no conversions - return null to let fallback code handle it
-    return null
-  }
-
-  /**
-   * Get all metadata
-   */
-  getMetadata(): UnitsMetadataStore {
-    return this.metadata
   }
 
   /**
@@ -1704,9 +536,10 @@ export class UnitsManager {
    */
   async getAllPathsInfo(): Promise<any[]> {
     const pathsInfo: any[] = []
+    const preferences = this.preferencesStore.getPreferences()
 
     try {
-      const pathsSet = await this.collectSignalKPaths()
+      const pathsSet = await this.metadataManager.collectSignalKPaths()
       const paths = Array.from(pathsSet)
       this.app.debug(`Processing ${paths.length} total unique paths`)
 
@@ -1715,12 +548,32 @@ export class UnitsManager {
         return []
       }
 
+      const unitDefinitions = this.preferencesStore.getUnitDefinitions()
+
       // Build info for each path
       for (const path of paths) {
-        const pathOverride = this.preferences.pathOverrides?.[path]
-        const matchingPattern = this.findMatchingPattern(path)
-        const skMetadata = this.signalKMetadata[path]
-        const metadataEntry = this.resolveMetadataForPath(path)
+        const pathOverride = preferences.pathOverrides?.[path]
+        const matchingPattern = this.patternMatcher.findMatchingPattern(path, preferences.pathPatterns || [])
+        const skMetadata = this.metadataManager.getSignalKMetadata(path)
+        const metadataEntry = this.metadataManager.resolveMetadataForPath(
+          path,
+          preferences,
+          unitDefinitions,
+          {
+            findMatchingPattern: (p: string) =>
+              this.patternMatcher.findMatchingPattern(p, preferences.pathPatterns || []),
+            generateMetadataFromPattern: (pattern: PathPatternRule) =>
+              this.patternMatcher.generateMetadataFromPattern(
+                pattern,
+                unitDefinitions,
+                (baseUnit: string) => this.metadataManager.getConversionsForBaseUnit(baseUnit, this.dateFormatsData),
+                (category: string) => this.getBaseUnitForCategory(category)
+              )
+          },
+          () => this.getCategoryToBaseUnitMap(),
+          (category: string) => this.getBaseUnitForCategory(category),
+          this.dateFormatsData
+        )
 
         let status: string
         let source: string
@@ -1739,7 +592,11 @@ export class UnitsManager {
             overrideCategory ||
             matchingPattern?.category ||
             metadataEntry?.category ||
-            this.getCategoryFromBaseUnit(pathOverride.baseUnit || skMetadata?.units, path) ||
+            this.metadataManager.getCategoryFromBaseUnit(
+              pathOverride.baseUnit || skMetadata?.units,
+              this.getCategoryToBaseUnitMap(),
+              path
+            ) ||
             '-'
           displayUnit = pathOverride.targetUnit
           targetUnit = pathOverride.targetUnit
@@ -1750,34 +607,35 @@ export class UnitsManager {
             matchingPattern.baseUnit || this.getBaseUnitForCategory(matchingPattern.category)
           baseUnit = patternBaseUnit || '-'
           category = matchingPattern.category
-          const categoryPref = this.preferences.categories?.[matchingPattern.category]
+          const categoryPref = preferences.categories?.[matchingPattern.category]
           targetUnit = matchingPattern.targetUnit || categoryPref?.targetUnit
           displayUnit = targetUnit || baseUnit || '-'
         } else if (skMetadata?.units) {
-          // Try to auto-assign category from SignalK base unit
           baseUnit = skMetadata.units
           category =
-            metadataEntry?.category || this.getCategoryFromBaseUnit(skMetadata.units, path) || '-'
+            metadataEntry?.category ||
+            this.metadataManager.getCategoryFromBaseUnit(skMetadata.units, this.getCategoryToBaseUnitMap(), path) ||
+            '-'
 
-          // Check if this category has a preference (auto-assign to category)
-          const categoryPref = category !== '-' ? this.preferences.categories?.[category] : null
+          const categoryPref = category !== '-' ? preferences.categories?.[category] : null
 
           if (categoryPref && categoryPref.targetUnit) {
-            // Category has preferences - use them (auto-category assignment)
             status = 'auto'
             source = 'SignalK Auto'
             targetUnit = categoryPref.targetUnit
             displayUnit = targetUnit || baseUnit
           } else {
-            // No category preference - SignalK only (pass-through)
             status = 'signalk'
             source = 'SignalK Only'
             displayUnit = baseUnit
             targetUnit = undefined
           }
         } else {
-          // No metadata at all - try to infer category from path name
-          const inferredCategory = this.inferCategoryFromPath(path)
+          const allCategories = [
+            ...this.getCoreCategories(),
+            ...Object.keys(preferences.categories || {})
+          ]
+          const inferredCategory = this.metadataManager.inferCategoryFromPath(path, allCategories)
 
           if (inferredCategory) {
             status = 'inferred'
@@ -1785,8 +643,7 @@ export class UnitsManager {
             baseUnit = this.getBaseUnitForCategory(inferredCategory) || '-'
             category = inferredCategory
 
-            // Check if inferred category has preferences
-            const categoryPref = this.preferences.categories?.[inferredCategory]
+            const categoryPref = preferences.categories?.[inferredCategory]
             if (categoryPref?.targetUnit && baseUnit !== '-') {
               targetUnit = categoryPref.targetUnit
               displayUnit = targetUnit
@@ -1804,9 +661,8 @@ export class UnitsManager {
           }
         }
 
-        // Get value details if available
         const value = this.app.getSelfPath(path)
-        const valueType = this.detectValueType(skMetadata?.units, value)
+        const valueType = this.metadataManager.detectValueType(skMetadata?.units, value)
 
         pathsInfo.push({
           path,
@@ -1836,7 +692,28 @@ export class UnitsManager {
    * Get resolved metadata for a specific path (includes all conversions)
    */
   getMetadataForPath(pathStr: string): UnitMetadata | null {
-    return this.resolveMetadataForPath(pathStr)
+    const preferences = this.preferencesStore.getPreferences()
+    const unitDefinitions = this.preferencesStore.getUnitDefinitions()
+
+    return this.metadataManager.resolveMetadataForPath(
+      pathStr,
+      preferences,
+      unitDefinitions,
+      {
+        findMatchingPattern: (path: string) =>
+          this.patternMatcher.findMatchingPattern(path, preferences.pathPatterns || []),
+        generateMetadataFromPattern: (pattern: PathPatternRule) =>
+          this.patternMatcher.generateMetadataFromPattern(
+            pattern,
+            unitDefinitions,
+            (baseUnit: string) => this.metadataManager.getConversionsForBaseUnit(baseUnit, this.dateFormatsData),
+            (category: string) => this.getBaseUnitForCategory(category)
+          )
+      },
+      () => this.getCategoryToBaseUnitMap(),
+      (category: string) => this.getBaseUnitForCategory(category),
+      this.dateFormatsData
+    )
   }
 
   /**
@@ -1844,16 +721,35 @@ export class UnitsManager {
    */
   async getPathsMetadata(): Promise<Record<string, UnitMetadata>> {
     const result: Record<string, UnitMetadata> = {}
+    const preferences = this.preferencesStore.getPreferences()
+    const unitDefinitions = this.preferencesStore.getUnitDefinitions()
 
     try {
-      // Use paths from signalKMetadata (sent by frontend) instead of stale API snapshot
-      const pathsSet = new Set<string>(Object.keys(this.signalKMetadata))
+      const allSignalKMeta = this.metadataManager.getAllSignalKMetadata()
+      const pathsSet = new Set<string>(Object.keys(allSignalKMeta))
 
-      // Include any overrides even if not currently present in the SignalK data
-      Object.keys(this.preferences.pathOverrides || {}).forEach(path => pathsSet.add(path))
+      Object.keys(preferences.pathOverrides || {}).forEach(path => pathsSet.add(path))
 
       for (const path of pathsSet) {
-        const metadata = this.resolveMetadataForPath(path)
+        const metadata = this.metadataManager.resolveMetadataForPath(
+          path,
+          preferences,
+          unitDefinitions,
+          {
+            findMatchingPattern: (p: string) =>
+              this.patternMatcher.findMatchingPattern(p, preferences.pathPatterns || []),
+            generateMetadataFromPattern: (pattern: PathPatternRule) =>
+              this.patternMatcher.generateMetadataFromPattern(
+                pattern,
+                unitDefinitions,
+                (baseUnit: string) => this.metadataManager.getConversionsForBaseUnit(baseUnit, this.dateFormatsData),
+                (category: string) => this.getBaseUnitForCategory(category)
+              )
+          },
+          () => this.getCategoryToBaseUnitMap(),
+          (category: string) => this.getBaseUnitForCategory(category),
+          this.dateFormatsData
+        )
 
         if (metadata) {
           const { targetUnit, conversion } = this.resolveSelectedConversion(path, metadata)
@@ -1879,7 +775,7 @@ export class UnitsManager {
           const baseUnit = skMeta?.units || null
           result[path] = {
             baseUnit,
-            category: this.getCategoryFromBaseUnit(baseUnit, path) || 'none',
+            category: this.metadataManager.getCategoryFromBaseUnit(baseUnit, this.getCategoryToBaseUnitMap(), path) || 'none',
             conversions: {}
           }
         }
@@ -1893,132 +789,103 @@ export class UnitsManager {
   }
 
   /**
-   * Extract all paths from SignalK data object
+   * Get all metadata
    */
-  private extractAllPaths(obj: any, prefix = ''): string[] {
-    const paths: string[] = []
-
-    if (!obj || typeof obj !== 'object') {
-      return paths
-    }
-
-    for (const key in obj) {
-      // Skip meta keys
-      if (
-        key === 'meta' ||
-        key === 'timestamp' ||
-        key === 'source' ||
-        key === '$source' ||
-        key === 'values' ||
-        key === 'sentence'
-      ) {
-        continue
-      }
-
-      const currentPath = prefix ? `${prefix}.${key}` : key
-      const value = obj[key]
-
-      if (value && typeof value === 'object') {
-        // If it has a 'value' property, it's a leaf node
-        if ('value' in value) {
-          paths.push(currentPath)
-        }
-        // Recurse into nested objects
-        paths.push(...this.extractAllPaths(value, currentPath))
-      }
-    }
-
-    return paths
+  getMetadata(): UnitsMetadataStore {
+    return this.metadataManager.getMetadata()
   }
 
   /**
    * Get all preferences
    */
   getPreferences(): UnitsPreferences {
-    return this.preferences
+    return this.preferencesStore.getPreferences()
   }
 
   /**
-   * Update category preference
+   * Get all unit definitions (built-in + custom)
    */
-  async updateCategoryPreference(category: string, preference: CategoryPreference): Promise<void> {
-    this.preferences.categories[category] = preference
-    await this.savePreferences()
-  }
+  getUnitDefinitions(): Record<string, BaseUnitDefinition & { isCustom?: boolean }> {
+    const unitDefinitions = this.preferencesStore.getUnitDefinitions()
+    const baseUnitDefs: Record<string, BaseUnitDefinition & { isCustom?: boolean }> = {}
 
-  /**
-   * Delete category preference
-   */
-  async deleteCategoryPreference(category: string): Promise<void> {
-    if (this.preferences.categories[category]) {
-      delete this.preferences.categories[category]
-      await this.savePreferences()
+    // Use JSON data if available, otherwise fall back to TypeScript
+    const sourceData =
+      Object.keys(this.standardUnitsData).length > 0
+        ? this.standardUnitsData
+        : comprehensiveDefaultUnits
+
+    // Handle JSON format (baseUnit as keys)
+    if (sourceData === this.standardUnitsData) {
+      for (const [baseUnit, data] of Object.entries(sourceData)) {
+        baseUnitDefs[baseUnit] = {
+          baseUnit,
+          conversions: data.conversions || {},
+          isCustom: false
+        }
+      }
+    } else {
+      // Handle TypeScript format (path-based entries)
+      for (const [, meta] of Object.entries(sourceData)) {
+        if (meta.baseUnit && !baseUnitDefs[meta.baseUnit]) {
+          baseUnitDefs[meta.baseUnit] = {
+            baseUnit: meta.baseUnit,
+            conversions: meta.conversions || {},
+            isCustom: false
+          }
+        } else if (meta.baseUnit && meta.conversions) {
+          baseUnitDefs[meta.baseUnit].conversions = {
+            ...baseUnitDefs[meta.baseUnit].conversions,
+            ...meta.conversions
+          }
+        }
+      }
     }
-  }
 
-  /**
-   * Update current preset information
-   */
-  async updateCurrentPreset(type: string, name: string, version: string): Promise<void> {
-    this.preferences.currentPreset = {
-      type,
-      name,
-      version,
-      appliedDate: new Date().toISOString()
+    // Merge custom units with built-in units
+    const invalidKeys = ['categories', 'pathOverrides', 'pathPatterns', 'currentPreset']
+    for (const [baseUnit, customDef] of Object.entries(unitDefinitions)) {
+      if (invalidKeys.includes(baseUnit)) {
+        this.app.error(
+          `Skipping invalid key "${baseUnit}" in units-definitions.json - this belongs in units-preferences.json`
+        )
+        continue
+      }
+
+      if (typeof customDef !== 'object' || customDef === null || !customDef.conversions) {
+        this.app.error(
+          `Skipping invalid unit definition for "${baseUnit}" - must have conversions property`
+        )
+        continue
+      }
+
+      if (baseUnitDefs[baseUnit]) {
+        const coreConversions = baseUnitDefs[baseUnit].conversions
+        const customConvs = customDef.conversions || {}
+
+        const customConversionNames = Object.keys(customConvs).filter(
+          conv => !coreConversions[conv]
+        )
+
+        baseUnitDefs[baseUnit] = {
+          baseUnit,
+          conversions: {
+            ...coreConversions,
+            ...customConvs
+          },
+          isCustom: false,
+          customConversions: customConversionNames
+        }
+      } else {
+        baseUnitDefs[baseUnit] = {
+          ...customDef,
+          isCustom: true,
+          customConversions: Object.keys(customDef.conversions || {})
+        }
+      }
     }
-    await this.savePreferences()
-  }
 
-  /**
-   * Update path override
-   */
-  async updatePathOverride(pathStr: string, preference: CategoryPreference): Promise<void> {
-    this.preferences.pathOverrides[pathStr] = {
-      path: pathStr,
-      ...preference
-    }
-    await this.savePreferences()
-  }
-
-  /**
-   * Delete path override
-   */
-  async deletePathOverride(pathStr: string): Promise<void> {
-    delete this.preferences.pathOverrides[pathStr]
-    await this.savePreferences()
-  }
-
-  /**
-   * Add path pattern rule
-   */
-  async addPathPattern(pattern: PathPatternRule): Promise<void> {
-    if (!this.preferences.pathPatterns) {
-      this.preferences.pathPatterns = []
-    }
-    this.preferences.pathPatterns.push(pattern)
-    await this.savePreferences()
-  }
-
-  /**
-   * Update path pattern rule
-   */
-  async updatePathPattern(index: number, pattern: PathPatternRule): Promise<void> {
-    if (!this.preferences.pathPatterns || index >= this.preferences.pathPatterns.length) {
-      throw new Error(`Pattern at index ${index} not found`)
-    }
-    this.preferences.pathPatterns[index] = pattern
-    await this.savePreferences()
-  }
-
-  /**
-   * Delete path pattern rule
-   */
-  async deletePathPattern(index: number): Promise<void> {
-    if (!this.preferences.pathPatterns || index >= this.preferences.pathPatterns.length) {
-      throw new Error(`Pattern at index ${index} not found`)
-    }
-    this.preferences.pathPatterns.splice(index, 1)
-    await this.savePreferences()
+    return baseUnitDefs
   }
 
   /**
@@ -2035,32 +902,27 @@ export class UnitsManager {
       { conversions: Record<string, any>; description?: string; isCustom?: boolean }
     >
   } {
-    // Extract unique base units from comprehensive defaults
+    const preferences = this.preferencesStore.getPreferences()
+    const unitDefinitions = this.preferencesStore.getUnitDefinitions()
+
     const baseUnitsSet = new Set<string>()
     const categoriesSet = new Set<string>()
     const targetUnitsByBase: Record<string, Set<string>> = {}
 
-    // Start with the static category-to-baseUnit mapping from defaultUnits
-    // This ensures standard SignalK categories use the correct base units
     const categoryToBaseUnitMap: Record<string, string> = { ...this.getCategoryToBaseUnitMap() }
-
-    // Track which categories are core (from the static schema)
     const coreCategories = this.getCoreCategories()
 
-    // Add all core categories to the set (so they always appear even if no paths use them)
     for (const category of coreCategories) {
       categoriesSet.add(category)
     }
 
     // Scan custom categories from preferences
-    for (const [category, pref] of Object.entries(this.preferences.categories || {})) {
+    for (const [category, pref] of Object.entries(preferences.categories || {})) {
       if (pref.baseUnit) {
-        // This is a custom category
         categoriesSet.add(category)
         baseUnitsSet.add(pref.baseUnit)
         categoryToBaseUnitMap[category] = pref.baseUnit
 
-        // Add the target unit to the targetUnitsByBase mapping
         if (!targetUnitsByBase[pref.baseUnit]) {
           targetUnitsByBase[pref.baseUnit] = new Set()
         }
@@ -2075,7 +937,6 @@ export class UnitsManager {
         : comprehensiveDefaultUnits
 
     if (sourceData === this.standardUnitsData) {
-      // JSON format (baseUnit as keys)
       for (const [baseUnit, data] of Object.entries(sourceData)) {
         baseUnitsSet.add(baseUnit)
         if (data.conversions) {
@@ -2089,8 +950,8 @@ export class UnitsManager {
       }
     }
 
-    // Scan custom unit definitions (override/extend standard)
-    for (const [baseUnit, def] of Object.entries(this.unitDefinitions)) {
+    // Scan custom unit definitions
+    for (const [baseUnit, def] of Object.entries(unitDefinitions)) {
       baseUnitsSet.add(baseUnit)
 
       if (def.conversions) {
@@ -2103,9 +964,8 @@ export class UnitsManager {
       }
     }
 
-    // Scan all metadata to discover categories (but NOT to add conversions)
-    // Path-specific metadata conversions shouldn't pollute the global schema
-    const allMetadata = { ...comprehensiveDefaultUnits, ...this.metadata }
+    // Scan all metadata to discover categories
+    const allMetadata = { ...comprehensiveDefaultUnits, ...this.metadataManager.getMetadata() }
 
     for (const [, meta] of Object.entries(allMetadata)) {
       if (!meta.baseUnit) continue
@@ -2114,34 +974,27 @@ export class UnitsManager {
 
       if (meta.category && meta.category !== 'custom') {
         categoriesSet.add(meta.category)
-        // For custom categories not in the static mapping, add them
         if (!categoryToBaseUnitMap[meta.category]) {
           categoryToBaseUnitMap[meta.category] = meta.baseUnit
         }
       }
-
-      // NOTE: We do NOT add path-specific conversions to targetUnitsByBase
-      // Those are only for specific paths, not global schema
     }
 
-    // Add date formats as target units for dateTime/epoch base units
+    // Add date formats as target units
     if (this.dateFormatsData?.formats) {
       const dateFormatNames = Object.keys(this.dateFormatsData.formats)
 
-      // Add to RFC 3339 (UTC) base unit
       if (!targetUnitsByBase['RFC 3339 (UTC)']) {
         targetUnitsByBase['RFC 3339 (UTC)'] = new Set()
       }
       dateFormatNames.forEach(format => targetUnitsByBase['RFC 3339 (UTC)'].add(format))
 
-      // Add to Epoch Seconds base unit
       if (!targetUnitsByBase['Epoch Seconds']) {
         targetUnitsByBase['Epoch Seconds'] = new Set()
       }
       dateFormatNames.forEach(format => targetUnitsByBase['Epoch Seconds'].add(format))
     }
 
-    // Convert sets to arrays and create labeled base units
     const baseUnitsArray = Array.from(baseUnitsSet).sort((a, b) =>
       a.toLowerCase().localeCompare(b.toLowerCase())
     )
@@ -2157,20 +1010,18 @@ export class UnitsManager {
       )
     }
 
-    // Build complete base unit definitions with conversions
+    // Build complete base unit definitions
     const baseUnitDefinitions: Record<
       string,
       { conversions: Record<string, any>; description?: string; isCustom?: boolean }
     > = {}
 
-    // Add standard units from JSON or TypeScript fallback
     const standardSource =
       Object.keys(this.standardUnitsData).length > 0
         ? this.standardUnitsData
         : comprehensiveDefaultUnits
 
     if (standardSource === this.standardUnitsData) {
-      // JSON format
       for (const [baseUnit, data] of Object.entries(standardSource)) {
         baseUnitDefinitions[baseUnit] = {
           conversions: data.conversions || {},
@@ -2179,7 +1030,6 @@ export class UnitsManager {
         }
       }
     } else {
-      // TypeScript format - extract unique base units
       const processedBaseUnits = new Set<string>()
       for (const [, meta] of Object.entries(standardSource)) {
         if (meta.baseUnit && !processedBaseUnits.has(meta.baseUnit)) {
@@ -2189,7 +1039,6 @@ export class UnitsManager {
             isCustom: false
           }
         } else if (meta.baseUnit && meta.conversions) {
-          // Merge conversions if we've seen this base unit
           baseUnitDefinitions[meta.baseUnit].conversions = {
             ...baseUnitDefinitions[meta.baseUnit].conversions,
             ...meta.conversions
@@ -2199,15 +1048,13 @@ export class UnitsManager {
     }
 
     // Merge custom unit definitions
-    for (const [baseUnit, customDef] of Object.entries(this.unitDefinitions)) {
+    for (const [baseUnit, customDef] of Object.entries(unitDefinitions)) {
       if (baseUnitDefinitions[baseUnit]) {
-        // Extend existing base unit with custom conversions
         baseUnitDefinitions[baseUnit].conversions = {
           ...baseUnitDefinitions[baseUnit].conversions,
           ...(customDef.conversions || {})
         }
       } else {
-        // Purely custom base unit
         baseUnitDefinitions[baseUnit] = {
           conversions: customDef.conversions || {},
           description: customDef.description,
@@ -2232,6 +1079,8 @@ export class UnitsManager {
    * Get a human-readable label for a base unit
    */
   private getBaseUnitLabel(unit: string): string {
+    const unitDefinitions = this.preferencesStore.getUnitDefinitions()
+
     // Try to get longName from standard units data
     const standardDef = this.standardUnitsData[unit]
     if (standardDef?.longName) {
@@ -2239,12 +1088,12 @@ export class UnitsManager {
     }
 
     // Try custom definitions
-    const customDef = this.unitDefinitions[unit]
+    const customDef = unitDefinitions[unit]
     if (customDef?.longName) {
       return `${customDef.longName} (${unit})`
     }
 
-    // Fallback to hardcoded labels for backward compatibility
+    // Fallback to hardcoded labels
     const labels: Record<string, string> = {
       'm/s': 'm/s (speed)',
       K: 'K (temperature)',
@@ -2266,5 +1115,76 @@ export class UnitsManager {
       tr: 'tr (tabula rasa - blank slate for custom transformations)'
     }
     return labels[unit] || unit
+  }
+
+  // ===== Delegation methods for PreferencesStore CRUD =====
+
+  async savePreferences(): Promise<void> {
+    return this.preferencesStore.savePreferences()
+  }
+
+  async updateCategoryPreference(category: string, preference: CategoryPreference): Promise<void> {
+    return this.preferencesStore.updateCategoryPreference(category, preference)
+  }
+
+  async deleteCategoryPreference(category: string): Promise<void> {
+    return this.preferencesStore.deleteCategoryPreference(category)
+  }
+
+  async updateCurrentPreset(type: string, name: string, version: string): Promise<void> {
+    return this.preferencesStore.updateCurrentPreset(type, name, version)
+  }
+
+  async updatePathOverride(pathStr: string, preference: CategoryPreference): Promise<void> {
+    return this.preferencesStore.updatePathOverride(pathStr, preference)
+  }
+
+  async deletePathOverride(pathStr: string): Promise<void> {
+    return this.preferencesStore.deletePathOverride(pathStr)
+  }
+
+  async addPathPattern(pattern: PathPatternRule): Promise<void> {
+    return this.preferencesStore.addPathPattern(pattern)
+  }
+
+  async updatePathPattern(index: number, pattern: PathPatternRule): Promise<void> {
+    return this.preferencesStore.updatePathPattern(index, pattern)
+  }
+
+  async deletePathPattern(index: number): Promise<void> {
+    return this.preferencesStore.deletePathPattern(index)
+  }
+
+  async addUnitDefinition(baseUnit: string, definition: BaseUnitDefinition): Promise<void> {
+    return this.preferencesStore.addUnitDefinition(baseUnit, definition)
+  }
+
+  async deleteUnitDefinition(baseUnit: string): Promise<void> {
+    return this.preferencesStore.deleteUnitDefinition(baseUnit)
+  }
+
+  async addConversionToUnit(
+    baseUnit: string,
+    targetUnit: string,
+    conversion: ConversionDefinition
+  ): Promise<void> {
+    const unitDefinitions = this.preferencesStore.getUnitDefinitions()
+
+    // If base unit doesn't exist in custom definitions, check built-in
+    if (!unitDefinitions[baseUnit]) {
+      const builtInDef = Object.values(comprehensiveDefaultUnits).find(
+        meta => meta.baseUnit === baseUnit
+      )
+
+      if (!builtInDef) {
+        throw new Error(`Base unit "${baseUnit}" not found`)
+      }
+    }
+
+    return this.preferencesStore.addConversionToUnit(baseUnit, targetUnit, conversion)
+  }
+
+  async deleteConversionFromUnit(baseUnit: string, targetUnit: string): Promise<void> {
+    return this.preferencesStore.deleteConversionFromUnit(baseUnit, targetUnit)
   }
 }
