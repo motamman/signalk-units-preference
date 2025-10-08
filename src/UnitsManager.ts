@@ -1393,13 +1393,23 @@ export class UnitsManager {
 
     try {
       const convertedValue = evaluateFormula(conversionInfo.formula, value)
-      const formatted = formatNumber(convertedValue, conversionInfo.displayFormat)
+
+      // Handle string results (e.g., formatted time)
+      let formatted: string
+      if (typeof convertedValue === 'string') {
+        formatted = conversionInfo.symbol
+          ? `${convertedValue} ${conversionInfo.symbol}`
+          : convertedValue
+      } else {
+        const formattedNumber = formatNumber(convertedValue, conversionInfo.displayFormat)
+        formatted = `${formattedNumber} ${conversionInfo.symbol}`
+      }
 
       return {
         originalValue: value,
-        convertedValue,
+        convertedValue: typeof convertedValue === 'number' ? convertedValue : value,
         symbol: conversionInfo.symbol,
-        formatted: `${formatted} ${conversionInfo.symbol}`,
+        formatted,
         displayFormat: conversionInfo.displayFormat,
         signalkTimestamp: skMeta?.timestamp,
         signalkSource: skMeta?.$source || skMeta?.source
@@ -1539,16 +1549,23 @@ export class UnitsManager {
     const convertedValue = evaluateFormula(conversion.formula, numericValue)
 
     const displayFormat = options?.displayFormat || '0.0'
-    const formattedNumber = formatNumber(convertedValue, displayFormat)
     const symbol = conversion.symbol || ''
-    const formatted = symbol ? `${formattedNumber} ${symbol}`.trim() : formattedNumber
+
+    // If formula returns a string (e.g., formatted time), use it directly without number formatting
+    let formatted: string
+    if (typeof convertedValue === 'string') {
+      formatted = symbol ? `${convertedValue} ${symbol}`.trim() : convertedValue
+    } else {
+      const formattedNumber = formatNumber(convertedValue, displayFormat)
+      formatted = symbol ? `${formattedNumber} ${symbol}`.trim() : formattedNumber
+    }
 
     return {
       convertedValue,
       formatted,
       symbol,
       displayFormat,
-      valueType: 'number'
+      valueType: typeof convertedValue === 'string' ? 'string' : 'number'
     }
   }
 
