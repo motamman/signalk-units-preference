@@ -41,10 +41,12 @@ function isConversionFormDirty() {
   if (!conversionFormOriginalState || !currentlyEditingConversion) return false
 
   const { baseUnit, targetUnit } = currentlyEditingConversion
+  const longNameInputId = buildConversionId('edit-conv-longname', baseUnit, targetUnit)
   const formulaInputId = buildConversionId('edit-conv-formula', baseUnit, targetUnit)
   const inverseInputId = buildConversionId('edit-conv-inverse', baseUnit, targetUnit)
   const symbolInputId = buildConversionId('edit-conv-symbol', baseUnit, targetUnit)
 
+  const longNameInput = document.getElementById(longNameInputId)
   const formulaInput = document.getElementById(formulaInputId)
   const inverseInput = document.getElementById(inverseInputId)
   const symbolInput = document.getElementById(symbolInputId)
@@ -52,6 +54,7 @@ function isConversionFormDirty() {
   if (!formulaInput || !inverseInput || !symbolInput) return false
 
   return (
+    (longNameInput ? longNameInput.value : '') !== (conversionFormOriginalState.longName || '') ||
     formulaInput.value !== conversionFormOriginalState.formula ||
     inverseInput.value !== conversionFormOriginalState.inverseFormula ||
     symbolInput.value !== conversionFormOriginalState.symbol
@@ -308,28 +311,29 @@ function cancelEditBaseUnit(baseUnit) {
 async function addConversion() {
   const baseSelect = document.getElementById('conversionBaseUnit')
   const baseUnit = baseSelect.value.trim()
-  const targetUnit = document.getElementById('conversionTargetUnit').value.trim()
+  const longName = document.getElementById('conversionLongName').value.trim()
   const formula = document.getElementById('conversionFormula').value.trim()
   const inverseFormula = document.getElementById('conversionInverseFormula').value.trim()
   const symbol = document.getElementById('conversionSymbol').value.trim()
 
-  if (!baseUnit || !targetUnit || !formula || !inverseFormula || !symbol) {
-    showStatus('Please fill in all conversion fields', 'error')
+  if (!baseUnit || !formula || !inverseFormula || !symbol) {
+    showStatus('Please fill in base unit, formula, inverse formula, and symbol fields', 'error')
     return
   }
 
   try {
     await apiCreateConversion(baseUnit, {
-      targetUnit,
+      targetUnit: symbol, // Use symbol as the key
       formula,
       inverseFormula,
-      symbol
+      symbol,
+      longName: longName || undefined // Optional description
     })
 
-    showStatus(`Added conversion: ${baseUnit} → ${targetUnit}`, 'success')
+    showStatus(`Added conversion: ${baseUnit} → ${symbol}`, 'success')
 
     // Clear form
-    document.getElementById('conversionTargetUnit').value = ''
+    document.getElementById('conversionLongName').value = ''
     document.getElementById('conversionFormula').value = ''
     document.getElementById('conversionInverseFormula').value = ''
     document.getElementById('conversionSymbol').value = ''
@@ -432,6 +436,7 @@ function editConversion(baseUnit, targetUnit) {
 
   const editRowId = buildConversionId('conversion-edit', baseUnit, targetUnit)
   const targetInputId = buildConversionId('edit-conv-target', baseUnit, targetUnit)
+  const longNameInputId = buildConversionId('edit-conv-longname', baseUnit, targetUnit)
   const formulaInputId = buildConversionId('edit-conv-formula', baseUnit, targetUnit)
   const inverseInputId = buildConversionId('edit-conv-inverse', baseUnit, targetUnit)
   const symbolInputId = buildConversionId('edit-conv-symbol', baseUnit, targetUnit)
@@ -442,11 +447,17 @@ function editConversion(baseUnit, targetUnit) {
   editRow.innerHTML = `
     <td colspan="5" style="padding: 15px; background: #fff3cd;">
       <h5 style="margin: 0 0 10px 0; color: #856404; font-size: 13px;">Edit Conversion: ${baseUnit} → ${targetUnit}</h5>
-      <div style="display: grid; grid-template-columns: 1fr 2fr 2fr 1fr; gap: 10px; margin-bottom: 10px;">
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
         <div>
           <label style="font-size: 12px; color: #666; display: block; margin-bottom: 3px;">Target Unit</label>
           <input type="text" id="${targetInputId}" value="${targetUnit}" readonly style="background: #f5f5f5; padding: 6px; width: 100%; border: 1px solid #ddd; border-radius: 4px; font-family: monospace;">
         </div>
+        <div>
+          <label style="font-size: 12px; color: #666; display: block; margin-bottom: 3px;">Description (optional)</label>
+          <input type="text" id="${longNameInputId}" value="${conv.longName || ''}" placeholder="e.g., gallons per hour, fahrenheit" style="padding: 6px; width: 100%; border: 1px solid #ddd; border-radius: 4px;">
+        </div>
+      </div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 10px;">
         <div>
           <label style="font-size: 12px; color: #666; display: block; margin-bottom: 3px;">Formula (base → target)</label>
           <input type="text" id="${formulaInputId}" value="${conv.formula}" placeholder="e.g., value * 0.264" style="padding: 6px; width: 100%; border: 1px solid #ddd; border-radius: 4px; font-family: monospace;">
@@ -474,11 +485,13 @@ function editConversion(baseUnit, targetUnit) {
   // Store original state for dirty checking AFTER form is populated
   currentlyEditingConversion = { baseUnit, targetUnit }
   setTimeout(() => {
+    const longNameInput = document.getElementById(longNameInputId)
     const formulaInput = document.getElementById(formulaInputId)
     const inverseInput = document.getElementById(inverseInputId)
     const symbolInput = document.getElementById(symbolInputId)
 
     conversionFormOriginalState = {
+      longName: longNameInput?.value || '',
       formula: formulaInput?.value || '',
       inverseFormula: inverseInput?.value || '',
       symbol: symbolInput?.value || ''
@@ -488,10 +501,12 @@ function editConversion(baseUnit, targetUnit) {
 
 // Save edited conversion
 async function saveEditConversion(baseUnit, targetUnit) {
+  const longNameInputId = buildConversionId('edit-conv-longname', baseUnit, targetUnit)
   const formulaInputId = buildConversionId('edit-conv-formula', baseUnit, targetUnit)
   const inverseInputId = buildConversionId('edit-conv-inverse', baseUnit, targetUnit)
   const symbolInputId = buildConversionId('edit-conv-symbol', baseUnit, targetUnit)
 
+  const longName = document.getElementById(longNameInputId).value.trim()
   const formula = document.getElementById(formulaInputId).value.trim()
   const inverseFormula = document.getElementById(inverseInputId).value.trim()
   const symbol = document.getElementById(symbolInputId).value.trim()
@@ -507,7 +522,8 @@ async function saveEditConversion(baseUnit, targetUnit) {
       targetUnit,
       formula,
       inverseFormula,
-      symbol
+      symbol,
+      longName: longName || undefined
     })
 
     showStatus(`Updated conversion: ${baseUnit} → ${targetUnit}`, 'success')

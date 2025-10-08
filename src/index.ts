@@ -608,7 +608,7 @@ module.exports = (app: ServerAPI): Plugin => {
         async (req: Request, res: Response) => {
           try {
             const baseUnit = req.params.baseUnit
-            const { targetUnit, formula, inverseFormula, symbol } = req.body
+            const { targetUnit, formula, inverseFormula, symbol, longName } = req.body
             if (!targetUnit || !formula || !inverseFormula || !symbol) {
               return res.status(400).json({
                 error: 'targetUnit, formula, inverseFormula, and symbol are required'
@@ -617,7 +617,8 @@ module.exports = (app: ServerAPI): Plugin => {
             await unitsManager.addConversionToUnit(baseUnit, targetUnit, {
               formula,
               inverseFormula,
-              symbol
+              symbol,
+              longName: longName || undefined
             })
             res.json({ success: true, baseUnit, targetUnit })
           } catch (error) {

@@ -517,9 +517,9 @@ export class UnitsManager {
       return null
     }
 
-    // Check current metadata store
+    // Check current metadata store (skip 'custom' fallback entries)
     const metadataEntry = Object.values(this.metadata).find(meta => meta.baseUnit === baseUnit)
-    if (metadataEntry?.category) {
+    if (metadataEntry?.category && metadataEntry.category !== 'custom') {
       return metadataEntry.category
     }
 
@@ -2186,7 +2186,7 @@ export class UnitsManager {
 
       baseUnitsSet.add(meta.baseUnit)
 
-      if (meta.category) {
+      if (meta.category && meta.category !== 'custom') {
         categoriesSet.add(meta.category)
         // For custom categories not in the static mapping, add them
         if (!categoryToBaseUnitMap[meta.category]) {
