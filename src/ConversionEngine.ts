@@ -6,7 +6,6 @@ import {
   PathValueType,
   ConvertValueResponse
 } from './types'
-import { comprehensiveDefaultUnits } from './comprehensiveDefaults'
 import { evaluateFormula, formatNumber, formatDate } from './formulaEvaluator'
 
 export class UnitConversionError extends Error {

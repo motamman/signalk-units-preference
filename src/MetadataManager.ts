@@ -8,8 +8,7 @@ import {
   UnitsPreferences,
   PathPatternRule
 } from './types'
-import { defaultUnitsMetadata, categoryToBaseUnit } from './defaultUnits'
-import { comprehensiveDefaultUnits } from './comprehensiveDefaults'
+import { builtInUnits, categoryToBaseUnit } from './builtInUnits'
 
 /**
  * MetadataManager handles path metadata resolution and SignalK integration.
@@ -32,7 +31,7 @@ export class MetadataManager {
     categoriesData: any = {}
   ) {
     // Use only built-in default metadata (no custom file loading)
-    this.metadata = { ...defaultUnitsMetadata, ...comprehensiveDefaultUnits }
+    this.metadata = { ...builtInUnits }
     this.standardUnitsData = standardUnitsData
     this.categoriesData = categoriesData
   }
@@ -143,12 +142,12 @@ export class MetadataManager {
       return metadataEntry.category
     }
 
-    // Search comprehensive defaults
-    const comprehensiveEntry = Object.values(comprehensiveDefaultUnits).find(
+    // Search built-in defaults
+    const builtInEntry = Object.values(builtInUnits).find(
       meta => meta.baseUnit === baseUnit
     )
-    if (comprehensiveEntry?.category) {
-      return comprehensiveEntry.category
+    if (builtInEntry?.category) {
+      return builtInEntry.category
     }
 
     // Get all categories that map to this base unit
@@ -235,17 +234,12 @@ export class MetadataManager {
       }
     }
 
-    // Fallback to TypeScript
-    const builtInDef = Object.values(comprehensiveDefaultUnits).find(
+    // Fallback to TypeScript built-in units
+    const builtInDef = Object.values(builtInUnits).find(
       meta => meta.baseUnit === baseUnit
     )
     if (builtInDef) {
       return builtInDef
-    }
-
-    const defaultDef = Object.values(defaultUnitsMetadata).find(meta => meta.baseUnit === baseUnit)
-    if (defaultDef) {
-      return defaultDef
     }
 
     return null

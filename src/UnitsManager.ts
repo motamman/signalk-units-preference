@@ -13,8 +13,7 @@ import {
   ConvertValueResponse,
   SignalKPathMetadata
 } from './types'
-import { categoryToBaseUnit } from './defaultUnits'
-import { comprehensiveDefaultUnits } from './comprehensiveDefaults'
+import { categoryToBaseUnit, builtInUnits } from './builtInUnits'
 import { MetadataManager } from './MetadataManager'
 import { ConversionEngine, UnitConversionError } from './ConversionEngine'
 import { PreferencesStore } from './PreferencesStore'
@@ -813,7 +812,7 @@ export class UnitsManager {
     const sourceData =
       Object.keys(this.standardUnitsData).length > 0
         ? this.standardUnitsData
-        : comprehensiveDefaultUnits
+        : builtInUnits
 
     // Handle JSON format (baseUnit as keys)
     if (sourceData === this.standardUnitsData) {
@@ -934,7 +933,7 @@ export class UnitsManager {
     const sourceData =
       Object.keys(this.standardUnitsData).length > 0
         ? this.standardUnitsData
-        : comprehensiveDefaultUnits
+        : builtInUnits
 
     if (sourceData === this.standardUnitsData) {
       for (const [baseUnit, data] of Object.entries(sourceData)) {
@@ -965,7 +964,7 @@ export class UnitsManager {
     }
 
     // Scan all metadata to discover categories
-    const allMetadata = { ...comprehensiveDefaultUnits, ...this.metadataManager.getMetadata() }
+    const allMetadata = { ...builtInUnits, ...this.metadataManager.getMetadata() }
 
     for (const [, meta] of Object.entries(allMetadata)) {
       if (!meta.baseUnit) continue
@@ -1019,7 +1018,7 @@ export class UnitsManager {
     const standardSource =
       Object.keys(this.standardUnitsData).length > 0
         ? this.standardUnitsData
-        : comprehensiveDefaultUnits
+        : builtInUnits
 
     if (standardSource === this.standardUnitsData) {
       for (const [baseUnit, data] of Object.entries(standardSource)) {
@@ -1172,7 +1171,7 @@ export class UnitsManager {
 
     // If base unit doesn't exist in custom definitions, check built-in
     if (!unitDefinitions[baseUnit]) {
-      const builtInDef = Object.values(comprehensiveDefaultUnits).find(
+      const builtInDef = Object.values(builtInUnits).find(
         meta => meta.baseUnit === baseUnit
       )
 
