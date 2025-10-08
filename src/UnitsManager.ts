@@ -67,18 +67,18 @@ const WEEKDAY_NAMES_LONG = [
 const pad2 = (value: number): string => value.toString().padStart(2, '0')
 
 const DEFAULT_CATEGORY_PREFERENCES: Record<string, CategoryPreference & { baseUnit?: string }> = {
-  speed: { targetUnit: 'knots', displayFormat: '0.0' },
-  temperature: { targetUnit: 'celsius', displayFormat: '0' },
+  speed: { targetUnit: 'kn', displayFormat: '0.0' },
+  temperature: { targetUnit: '°C', displayFormat: '0' },
   pressure: { targetUnit: 'hPa', displayFormat: '0' },
   distance: { targetUnit: 'nm', displayFormat: '0.0' },
   depth: { targetUnit: 'm', displayFormat: '0.0' },
-  angle: { targetUnit: 'deg', displayFormat: '0' },
-  percentage: { targetUnit: 'percent', displayFormat: '0' },
+  angle: { targetUnit: '°', displayFormat: '0' },
+  percentage: { targetUnit: '%', displayFormat: '0' },
   dateTime: { targetUnit: 'time-am/pm-local', displayFormat: 'time-am/pm' },
   epoch: { targetUnit: 'time-am/pm-local', displayFormat: 'time-am/pm' },
   volume: { targetUnit: 'gal', displayFormat: '0.0' },
   length: { targetUnit: 'ft', displayFormat: '0.0' },
-  angularVelocity: { targetUnit: 'deg/s', displayFormat: '0.0' },
+  angularVelocity: { targetUnit: '°/s', displayFormat: '0.0' },
   voltage: { targetUnit: 'V', displayFormat: '0.00' },
   current: { targetUnit: 'A', displayFormat: '0.00' },
   power: { targetUnit: 'W', displayFormat: '0.00' },
@@ -93,7 +93,7 @@ const DEFAULT_PATH_PATTERNS: PathPatternRule[] = [
   {
     pattern: '*.temperature',
     category: 'temperature',
-    targetUnit: 'celsius',
+    targetUnit: '°C',
     displayFormat: '0',
     priority: 100
   },
@@ -107,7 +107,7 @@ const DEFAULT_PATH_PATTERNS: PathPatternRule[] = [
   {
     pattern: '*.speed*',
     category: 'speed',
-    targetUnit: 'knots',
+    targetUnit: 'kn',
     displayFormat: '0.0',
     priority: 90
   },
@@ -625,7 +625,11 @@ export class UnitsManager {
         }
 
         // Use the override's category if specified, otherwise infer from baseUnit
-        const finalCategory = category || builtInDef?.category || this.getCategoryFromBaseUnit(baseUnit, pathStr) || 'custom'
+        const finalCategory =
+          category ||
+          builtInDef?.category ||
+          this.getCategoryFromBaseUnit(baseUnit, pathStr) ||
+          'custom'
 
         metadata = {
           baseUnit,
@@ -798,6 +802,30 @@ export class UnitsManager {
   }
 
   /**
+   * Find a conversion by either key (symbol) or longName.
+   * Returns both the matching key and the conversion.
+   */
+  private findConversionByKeyOrLongName(
+    conversions: Record<string, ConversionDefinition>,
+    targetUnit: string
+  ): { key: string; conversion: ConversionDefinition } | null {
+    // First try direct key match
+    if (conversions[targetUnit]) {
+      return { key: targetUnit, conversion: conversions[targetUnit] }
+    }
+
+    // Then try longName match (case-insensitive)
+    const targetLower = targetUnit.toLowerCase()
+    for (const [key, conv] of Object.entries(conversions)) {
+      if (conv.longName?.toLowerCase() === targetLower) {
+        return { key, conversion: conv }
+      }
+    }
+
+    return null
+  }
+
+  /**
    * Resolve the selected conversion for a path based on current preferences.
    */
   private resolveSelectedConversion(
@@ -820,24 +848,32 @@ export class UnitsManager {
       return { preference, targetUnit: null, conversion: null }
     }
 
-    let conversion = metadata.conversions?.[targetUnit] || null
+    // Try to find conversion by key or longName
+    let conversionMatch = metadata.conversions
+      ? this.findConversionByKeyOrLongName(metadata.conversions, targetUnit)
+      : null
+
     const baseUnit = metadata.baseUnit || preference.baseUnit
 
-    if (!conversion && baseUnit) {
+    if (!conversionMatch && baseUnit) {
       const unitDef = this.unitDefinitions[baseUnit]
-      if (unitDef?.conversions?.[targetUnit]) {
-        conversion = unitDef.conversions[targetUnit]
+      if (unitDef?.conversions) {
+        conversionMatch = this.findConversionByKeyOrLongName(unitDef.conversions, targetUnit)
       }
     }
 
-    if (!conversion && baseUnit) {
+    if (!conversionMatch && baseUnit) {
       const fallback = this.getConversionsForBaseUnit(baseUnit)
-      if (fallback?.conversions?.[targetUnit]) {
-        conversion = fallback.conversions[targetUnit]
+      if (fallback?.conversions) {
+        conversionMatch = this.findConversionByKeyOrLongName(fallback.conversions, targetUnit)
       }
     }
 
-    return { preference, targetUnit, conversion: conversion || null }
+    return {
+      preference,
+      targetUnit: conversionMatch?.key || targetUnit,
+      conversion: conversionMatch?.conversion || null
+    }
   }
 
   /**
@@ -2068,7 +2104,10 @@ export class UnitsManager {
     targetUnitsByBase: Record<string, string[]>
     categoryToBaseUnit: Record<string, string>
     coreCategories: string[]
-    baseUnitDefinitions: Record<string, { conversions: Record<string, any>; description?: string; isCustom?: boolean }>
+    baseUnitDefinitions: Record<
+      string,
+      { conversions: Record<string, any>; description?: string; isCustom?: boolean }
+    >
   } {
     // Extract unique base units from comprehensive defaults
     const baseUnitsSet = new Set<string>()
@@ -2193,10 +2232,16 @@ export class UnitsManager {
     }
 
     // Build complete base unit definitions with conversions
-    const baseUnitDefinitions: Record<string, { conversions: Record<string, any>; description?: string; isCustom?: boolean }> = {}
+    const baseUnitDefinitions: Record<
+      string,
+      { conversions: Record<string, any>; description?: string; isCustom?: boolean }
+    > = {}
 
     // Add standard units from JSON or TypeScript fallback
-    const standardSource = Object.keys(this.standardUnitsData).length > 0 ? this.standardUnitsData : comprehensiveDefaultUnits
+    const standardSource =
+      Object.keys(this.standardUnitsData).length > 0
+        ? this.standardUnitsData
+        : comprehensiveDefaultUnits
 
     if (standardSource === this.standardUnitsData) {
       // JSON format
@@ -2261,6 +2306,19 @@ export class UnitsManager {
    * Get a human-readable label for a base unit
    */
   private getBaseUnitLabel(unit: string): string {
+    // Try to get longName from standard units data
+    const standardDef = this.standardUnitsData[unit]
+    if (standardDef?.longName) {
+      return `${standardDef.longName} (${unit})`
+    }
+
+    // Try custom definitions
+    const customDef = this.unitDefinitions[unit]
+    if (customDef?.longName) {
+      return `${customDef.longName} (${unit})`
+    }
+
+    // Fallback to hardcoded labels for backward compatibility
     const labels: Record<string, string> = {
       'm/s': 'm/s (speed)',
       K: 'K (temperature)',
@@ -2278,6 +2336,7 @@ export class UnitsManager {
       deg: 'deg (latitude/longitude)',
       'm3/s': 'm³/s (volume rate)',
       'RFC 3339 (UTC)': 'RFC 3339 (UTC) (date/time)',
+      'Epoch Seconds': 'Epoch Seconds (Unix timestamp)',
       tr: 'tr (tabula rasa - blank slate for custom transformations)'
     }
     return labels[unit] || unit

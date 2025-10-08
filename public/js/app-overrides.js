@@ -141,7 +141,11 @@ async function editPathOverride(path) {
   if (!override) return
 
   // Check if there's an open form with unsaved changes
-  if (currentlyEditingOverridePath && currentlyEditingOverridePath !== path && isOverrideFormDirty()) {
+  if (
+    currentlyEditingOverridePath &&
+    currentlyEditingOverridePath !== path &&
+    isOverrideFormDirty()
+  ) {
     if (
       !confirm(
         `You have unsaved changes for "${currentlyEditingOverridePath}". Discard changes and edit "${path}" instead?`

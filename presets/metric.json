@@ -5,92 +5,74 @@
   "description": "SI units (meters, Celsius, km/h, etc.)",
   "categories": {
     "distance": {
-      "baseUnit": "m",
       "targetUnit": "km",
       "displayFormat": "0.0"
     },
     "speed": {
-      "baseUnit": "m/s",
       "targetUnit": "km/h",
       "displayFormat": "0.0"
     },
     "temperature": {
-      "baseUnit": "K",
-      "targetUnit": "C",
+      "targetUnit": "°C",
       "displayFormat": "0.0"
     },
     "pressure": {
-      "baseUnit": "Pa",
       "targetUnit": "mbar",
       "displayFormat": "0"
     },
     "depth": {
-      "baseUnit": "m",
       "targetUnit": "m",
       "displayFormat": "0.0"
     },
     "volume": {
-      "baseUnit": "m3",
       "targetUnit": "L",
       "displayFormat": "0.0"
     },
     "angle": {
-      "baseUnit": "rad",
-      "targetUnit": "deg",
+      "targetUnit": "°",
       "displayFormat": "0.0"
     },
     "length": {
-      "baseUnit": "m",
       "targetUnit": "m",
       "displayFormat": "0.0"
     },
     "angularVelocity": {
-      "baseUnit": "rad/s",
-      "targetUnit": "deg/s",
+      "targetUnit": "°/s",
       "displayFormat": "0.0"
     },
     "voltage": {
-      "baseUnit": "V",
       "targetUnit": "V",
       "displayFormat": "0.00"
     },
     "current": {
-      "baseUnit": "A",
       "targetUnit": "A",
       "displayFormat": "0.00"
     },
     "power": {
-      "baseUnit": "W",
       "targetUnit": "W",
       "displayFormat": "0.000"
     },
     "percentage": {
-      "baseUnit": "ratio",
-      "targetUnit": "percent",
+      "targetUnit": "%",
       "displayFormat": "0"
     },
     "frequency": {
-      "baseUnit": "Hz",
       "targetUnit": "rpm",
       "displayFormat": "0.0"
     },
     "time": {
-      "baseUnit": "s",
-      "targetUnit": "h",
+      "targetUnit": "hr",
       "displayFormat": "0.0"
     },
     "dateTime": {
-      "baseUnit": "RFC 3339 (UTC)",
       "targetUnit": "short-date",
       "displayFormat": "short-date"
     },
     "charge": {
-      "baseUnit": "C",
       "targetUnit": "Ah",
       "displayFormat": "0.0"
     },
     "volumeRate": {
-      "baseUnit": "m3/s",
       "targetUnit": "L/h",
       "displayFormat": "0.0"
     }

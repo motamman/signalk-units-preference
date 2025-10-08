@@ -1,4 +1,5 @@
 /* eslint-disable no-unused-vars, @typescript-eslint/no-unused-vars */
+/* global apiLoadPathsMetadata */
 
 /**
  * app-metadata.js
@@ -240,7 +241,8 @@ async function renderMetadata() {
     const backendMeta = backendMetadata[path]
     const valueDetails = getCurrentValueDetails(path)
     const hasSignalKMetadata = skMeta && skMeta.units
-    const hasBackendMetadata = backendMeta && backendMeta.baseUnit && backendMeta.baseUnit !== 'none'
+    const hasBackendMetadata =
+      backendMeta && backendMeta.baseUnit && backendMeta.baseUnit !== 'none'
     const matchingPattern = findMatchingPattern(path)
     const pathOverride = preferences?.pathOverrides?.[path]
 

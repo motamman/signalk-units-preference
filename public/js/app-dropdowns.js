@@ -16,7 +16,11 @@ function createBaseUnitDropdown(id, selectedValue = '', includeCustom = true) {
   const customOption = includeCustom
     ? `<option value="custom" ${selectedValue === 'custom' ? 'selected' : ''}>✏️ Custom...</option>`
     : ''
-  const emptySelected = !selectedValue ? 'selected' : ''
+
+  // Only select the empty option if no value provided AND it's not 'custom'
+  const hasSelection = selectedValue && selectedValue !== ''
+  const emptySelected = !hasSelection ? 'selected' : ''
+
   return `
     <select id="${id}">
       <option value="" ${emptySelected}>-- Select Base Unit --</option>
@@ -47,19 +51,85 @@ function createCategoryDropdown(id, selectedValue = '', includeCustom = true) {
 }
 
 /**
+ * Normalize a target unit value to its actual key (handles both symbols and longNames)
+ * This ensures backward compatibility with old preferences that might use longNames
+ */
+function normalizeTargetUnitKey(baseUnit, targetUnitValue) {
+  if (!targetUnitValue) return targetUnitValue
+
+  const baseUnitDef = unitSchema.baseUnitDefinitions?.[baseUnit]
+  if (!baseUnitDef?.conversions) {
+    return targetUnitValue
+  }
+
+  // First check if it's already a valid key
+  if (baseUnitDef.conversions[targetUnitValue]) {
+    return targetUnitValue
+  }
+
+  // Try to find by longName (case-insensitive)
+  const targetLower = targetUnitValue.toLowerCase()
+  for (const [key, conversion] of Object.entries(baseUnitDef.conversions)) {
+    if (conversion.longName?.toLowerCase() === targetLower) {
+      return key
+    }
+  }
+
+  // Return original if no match found
+  return targetUnitValue
+}
+
+/**
+ * Get display label for a target unit (shows "longName (symbol)" if available)
+ */
+function getTargetUnitLabel(baseUnit, targetUnitKey) {
+  const baseUnitDef = unitSchema.baseUnitDefinitions?.[baseUnit]
+  if (!baseUnitDef?.conversions) {
+    return targetUnitKey
+  }
+
+  const conversion = baseUnitDef.conversions[targetUnitKey]
+  if (!conversion) {
+    return targetUnitKey
+  }
+
+  const longName = conversion.longName
+  const symbol = conversion.symbol
+
+  // Format: "longName (symbol)" or just symbol if no longName
+  if (longName && symbol && longName !== symbol) {
+    return `${longName} (${symbol})`
+  } else if (longName) {
+    return longName
+  } else if (symbol) {
+    return symbol
+  }
+
+  return targetUnitKey
+}
+
+/**
  * Create target unit dropdown HTML based on base unit
  */
 function createTargetUnitDropdown(id, baseUnit = '', selectedValue = '', includeCustom = true) {
+  // Normalize the selected value to ensure it matches the actual key
+  const normalizedSelected = normalizeTargetUnitKey(baseUnit, selectedValue)
+
   const units = unitSchema.targetUnitsByBase[baseUnit] || []
   const options = units
-    .map(
-      unit => `<option value="${unit}" ${unit === selectedValue ? 'selected' : ''}>${unit}</option>`
-    )
+    .map(unit => {
+      const label = getTargetUnitLabel(baseUnit, unit)
+      return `<option value="${unit}" ${unit === normalizedSelected ? 'selected' : ''}>${label}</option>`
+    })
     .join('')
   const customOption = includeCustom
-    ? `<option value="custom" ${selectedValue === 'custom' ? 'selected' : ''}>✏️ Custom...</option>`
+    ? `<option value="custom" ${normalizedSelected === 'custom' ? 'selected' : ''}>✏️ Custom...</option>`
     : ''
-  const emptySelected = !selectedValue ? 'selected' : ''
+
+  // Only select the empty option if no value provided AND it's not 'custom'
+  const hasSelection = normalizedSelected && normalizedSelected !== ''
+  const emptySelected = !hasSelection ? 'selected' : ''
+
   return `
     <select id="${id}">
       <option value="" ${emptySelected}>-- Select Target Unit --</option>
