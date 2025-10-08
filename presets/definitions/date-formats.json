@@ -1,4 +1,5 @@
 {
+  "$comment": "SINGLE SOURCE OF TRUTH for date format patterns. ConversionEngine loads patterns from here at runtime. TypeScript fallbacks exist only for safety. To add a new date format: 1) Add entry here with 'pattern' field, 2) Restart server - no code changes needed.",
   "formats": {
     "short-date": {
       "description": "Short date format",

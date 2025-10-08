@@ -8,7 +8,7 @@ import {
   UnitsPreferences,
   PathPatternRule
 } from './types'
-import { defaultUnitsMetadata, categoryToBaseUnit } from './defaultUnits'
+import { defaultUnitsMetadata } from './defaultUnits'
 import { comprehensiveDefaultUnits } from './comprehensiveDefaults'
 
 /**
@@ -97,10 +97,7 @@ export class MetadataManager {
    * Infer category from path name alone (for paths with no metadata)
    * Checks if the last path element contains any known category name.
    */
-  inferCategoryFromPath(
-    pathStr: string,
-    allCategories: string[]
-  ): string | null {
+  inferCategoryFromPath(pathStr: string, allCategories: string[]): string | null {
     if (!pathStr) {
       return null
     }
@@ -206,13 +203,18 @@ export class MetadataManager {
    */
   getConversionsForBaseUnit(baseUnit: string, dateFormatsData?: any): UnitMetadata | null {
     // Try JSON first
-    this.app.debug(`getConversionsForBaseUnit: baseUnit=${baseUnit}, standardUnitsData keys=${Object.keys(this.standardUnitsData).join(', ')}`)
+    this.app.debug(
+      `getConversionsForBaseUnit: baseUnit=${baseUnit}, standardUnitsData keys=${Object.keys(this.standardUnitsData).join(', ')}`
+    )
     if (this.standardUnitsData[baseUnit]) {
       this.app.debug(`Using JSON conversions for ${baseUnit}`)
       const conversions = { ...(this.standardUnitsData[baseUnit].conversions || {}) }
 
       // For date/time base units, dynamically add date format conversions
-      if ((baseUnit === 'RFC 3339 (UTC)' || baseUnit === 'Epoch Seconds') && dateFormatsData?.formats) {
+      if (
+        (baseUnit === 'RFC 3339 (UTC)' || baseUnit === 'Epoch Seconds') &&
+        dateFormatsData?.formats
+      ) {
         for (const [formatKey, formatMeta] of Object.entries(dateFormatsData.formats)) {
           // Skip if already defined in standardUnitsData
           if (!conversions[formatKey]) {
@@ -259,7 +261,10 @@ export class MetadataManager {
     pathStr: string,
     preferences: UnitsPreferences,
     unitDefinitions: Record<string, BaseUnitDefinition>,
-    patternMatcher: { findMatchingPattern: (path: string) => PathPatternRule | null; generateMetadataFromPattern: (pattern: PathPatternRule) => UnitMetadata | null },
+    patternMatcher: {
+      findMatchingPattern: (path: string) => PathPatternRule | null
+      generateMetadataFromPattern: (pattern: PathPatternRule) => UnitMetadata | null
+    },
     getCategoryToBaseUnitMap: () => Record<string, string>,
     getBaseUnitForCategory: (category: string) => string | null,
     dateFormatsData?: any
@@ -333,7 +338,12 @@ export class MetadataManager {
       const skMetadata = this.signalKMetadata[pathStr]
 
       if (skMetadata?.units) {
-        const inferred = this.inferMetadataFromSignalK(pathStr, skMetadata.units, getCategoryToBaseUnitMap(), dateFormatsData)
+        const inferred = this.inferMetadataFromSignalK(
+          pathStr,
+          skMetadata.units,
+          getCategoryToBaseUnitMap(),
+          dateFormatsData
+        )
         if (inferred) {
           metadata = inferred
         } else {
@@ -350,7 +360,9 @@ export class MetadataManager {
           metadata = {
             baseUnit,
             category:
-              this.getCategoryFromBaseUnit(baseUnit, getCategoryToBaseUnitMap(), pathStr) || builtInDef?.category || 'custom',
+              this.getCategoryFromBaseUnit(baseUnit, getCategoryToBaseUnitMap(), pathStr) ||
+              builtInDef?.category ||
+              'custom',
             conversions
           }
         }

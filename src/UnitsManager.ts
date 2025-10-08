@@ -16,10 +16,9 @@ import {
 import { categoryToBaseUnit } from './defaultUnits'
 import { comprehensiveDefaultUnits } from './comprehensiveDefaults'
 import { MetadataManager } from './MetadataManager'
-import { ConversionEngine, UnitConversionError } from './ConversionEngine'
+import { ConversionEngine } from './ConversionEngine'
 import { PreferencesStore } from './PreferencesStore'
 import { PatternMatcher } from './PatternMatcher'
-import { evaluateFormula, formatNumber } from './formulaEvaluator'
 
 /**
  * UnitsManager orchestrates all unit conversion subsystems.
@@ -122,6 +121,24 @@ export class UnitsManager {
 
   /**
    * Validate that JSON and TypeScript definitions are consistent
+   *
+   * SINGLE SOURCE OF TRUTH VALIDATION
+   *
+   * This method enforces that JSON files are the primary source of truth:
+   * - categories.json: category-to-baseUnit mappings
+   * - date-formats.json: date format patterns
+   *
+   * Strategy:
+   * 1. Compare JSON definitions against TypeScript fallbacks
+   * 2. Log ERRORS if inconsistencies found (JSON takes precedence)
+   * 3. Log DEBUG if TypeScript has extras not in JSON
+   * 4. Validate that JSON loaded successfully
+   *
+   * Why this matters:
+   * - Ensures JSON and TypeScript don't diverge over time
+   * - Makes it clear which is the source of truth (JSON)
+   * - Catches copy-paste errors during updates
+   * - Helps maintainers know when to update fallbacks
    */
   private validateDefinitions(): void {
     // Validate category-to-baseUnit mapping consistency
@@ -129,29 +146,40 @@ export class UnitsManager {
       const jsonMapping = this.categoriesData.categoryToBaseUnit
       const tsMapping = categoryToBaseUnit
 
+      // Check each JSON category against TypeScript
       for (const [category, jsonBaseUnit] of Object.entries(jsonMapping)) {
         const tsBaseUnit = tsMapping[category]
         if (tsBaseUnit && tsBaseUnit !== jsonBaseUnit) {
           this.app.error(
-            `VALIDATION ERROR: Category "${category}" has inconsistent base units: ` +
-            `JSON=${jsonBaseUnit}, TypeScript=${tsBaseUnit}. Using JSON value.`
+            `⚠️  VALIDATION ERROR: Category "${category}" has inconsistent base units: ` +
+              `JSON=${jsonBaseUnit}, TypeScript=${tsBaseUnit}. Using JSON value (source of truth).`
           )
         }
       }
 
-      // Check for categories in TypeScript but not in JSON
+      // Check for categories in TypeScript but not in JSON (informational)
       for (const [category, tsBaseUnit] of Object.entries(tsMapping)) {
         if (!jsonMapping[category]) {
           this.app.debug(
-            `Category "${category}" exists in TypeScript (${tsBaseUnit}) but not in categories.json`
+            `ℹ️  Category "${category}" exists in TypeScript fallback (${tsBaseUnit}) but not in categories.json`
           )
         }
       }
+
+      this.app.debug(
+        `✅ Validated ${Object.keys(jsonMapping).length} category-to-baseUnit mappings from categories.json`
+      )
+    } else {
+      this.app.error('⚠️  categories.json failed to load, using TypeScript fallback')
     }
 
     // Validate date format patterns if loaded
     if (this.dateFormatsData?.formats && Object.keys(this.dateFormatsData.formats).length > 0) {
-      this.app.debug(`Validated ${Object.keys(this.dateFormatsData.formats).length} date format patterns from JSON`)
+      this.app.debug(
+        `✅ Validated ${Object.keys(this.dateFormatsData.formats).length} date format patterns from date-formats.json`
+      )
+    } else {
+      this.app.error('⚠️  date-formats.json failed to load, using TypeScript fallback patterns')
     }
   }
 
@@ -166,7 +194,11 @@ export class UnitsManager {
     this.validateDefinitions()
 
     // Now initialize MetadataManager with loaded data
-    this.metadataManager = new MetadataManager(this.app, this.standardUnitsData, this.categoriesData)
+    this.metadataManager = new MetadataManager(
+      this.app,
+      this.standardUnitsData,
+      this.categoriesData
+    )
 
     // Update ConversionEngine with loaded date formats data
     this.conversionEngine.setDateFormatsData(this.dateFormatsData)
@@ -313,14 +345,23 @@ export class UnitsManager {
     if (!conversionMatch && baseUnit) {
       const unitDef = unitDefinitions[baseUnit]
       if (unitDef?.conversions) {
-        conversionMatch = this.conversionEngine.findConversionByKeyOrLongName(unitDef.conversions, targetUnit)
+        conversionMatch = this.conversionEngine.findConversionByKeyOrLongName(
+          unitDef.conversions,
+          targetUnit
+        )
       }
     }
 
     if (!conversionMatch && baseUnit) {
-      const fallback = this.metadataManager.getConversionsForBaseUnit(baseUnit, this.dateFormatsData)
+      const fallback = this.metadataManager.getConversionsForBaseUnit(
+        baseUnit,
+        this.dateFormatsData
+      )
       if (fallback?.conversions) {
-        conversionMatch = this.conversionEngine.findConversionByKeyOrLongName(fallback.conversions, targetUnit)
+        conversionMatch = this.conversionEngine.findConversionByKeyOrLongName(
+          fallback.conversions,
+          targetUnit
+        )
       }
     }
 
@@ -351,7 +392,8 @@ export class UnitsManager {
           this.patternMatcher.generateMetadataFromPattern(
             pattern,
             unitDefinitions,
-            (baseUnit: string) => this.metadataManager.getConversionsForBaseUnit(baseUnit, this.dateFormatsData),
+            (baseUnit: string) =>
+              this.metadataManager.getConversionsForBaseUnit(baseUnit, this.dateFormatsData),
             (category: string) => this.getBaseUnitForCategory(category)
           )
       },
@@ -452,7 +494,12 @@ export class UnitsManager {
       inverseFormula: 'value',
       displayFormat: displayFormat,
       symbol: symbol,
-      category: this.metadataManager.getCategoryFromBaseUnit(unit, this.getCategoryToBaseUnitMap(), pathStr) || 'none',
+      category:
+        this.metadataManager.getCategoryFromBaseUnit(
+          unit,
+          this.getCategoryToBaseUnitMap(),
+          pathStr
+        ) || 'none',
       valueType: valueType,
       dateFormat: valueType === 'date' ? 'ISO-8601' : undefined,
       useLocalTime: valueType === 'date' ? false : undefined,
@@ -526,7 +573,8 @@ export class UnitsManager {
       rawValue,
       unitDefinitions,
       (bu: string) => this.metadataManager.getConversionsForBaseUnit(bu, this.dateFormatsData),
-      (bu: string) => this.metadataManager.getCategoryFromBaseUnit(bu, this.getCategoryToBaseUnitMap()),
+      (bu: string) =>
+        this.metadataManager.getCategoryFromBaseUnit(bu, this.getCategoryToBaseUnitMap()),
       options
     )
   }
@@ -553,7 +601,10 @@ export class UnitsManager {
       // Build info for each path
       for (const path of paths) {
         const pathOverride = preferences.pathOverrides?.[path]
-        const matchingPattern = this.patternMatcher.findMatchingPattern(path, preferences.pathPatterns || [])
+        const matchingPattern = this.patternMatcher.findMatchingPattern(
+          path,
+          preferences.pathPatterns || []
+        )
         const skMetadata = this.metadataManager.getSignalKMetadata(path)
         const metadataEntry = this.metadataManager.resolveMetadataForPath(
           path,
@@ -566,7 +617,8 @@ export class UnitsManager {
               this.patternMatcher.generateMetadataFromPattern(
                 pattern,
                 unitDefinitions,
-                (baseUnit: string) => this.metadataManager.getConversionsForBaseUnit(baseUnit, this.dateFormatsData),
+                (baseUnit: string) =>
+                  this.metadataManager.getConversionsForBaseUnit(baseUnit, this.dateFormatsData),
                 (category: string) => this.getBaseUnitForCategory(category)
               )
           },
@@ -614,7 +666,11 @@ export class UnitsManager {
           baseUnit = skMetadata.units
           category =
             metadataEntry?.category ||
-            this.metadataManager.getCategoryFromBaseUnit(skMetadata.units, this.getCategoryToBaseUnitMap(), path) ||
+            this.metadataManager.getCategoryFromBaseUnit(
+              skMetadata.units,
+              this.getCategoryToBaseUnitMap(),
+              path
+            ) ||
             '-'
 
           const categoryPref = category !== '-' ? preferences.categories?.[category] : null
@@ -706,7 +762,8 @@ export class UnitsManager {
           this.patternMatcher.generateMetadataFromPattern(
             pattern,
             unitDefinitions,
-            (baseUnit: string) => this.metadataManager.getConversionsForBaseUnit(baseUnit, this.dateFormatsData),
+            (baseUnit: string) =>
+              this.metadataManager.getConversionsForBaseUnit(baseUnit, this.dateFormatsData),
             (category: string) => this.getBaseUnitForCategory(category)
           )
       },
@@ -742,7 +799,8 @@ export class UnitsManager {
               this.patternMatcher.generateMetadataFromPattern(
                 pattern,
                 unitDefinitions,
-                (baseUnit: string) => this.metadataManager.getConversionsForBaseUnit(baseUnit, this.dateFormatsData),
+                (baseUnit: string) =>
+                  this.metadataManager.getConversionsForBaseUnit(baseUnit, this.dateFormatsData),
                 (category: string) => this.getBaseUnitForCategory(category)
               )
           },
@@ -775,7 +833,12 @@ export class UnitsManager {
           const baseUnit = skMeta?.units || null
           result[path] = {
             baseUnit,
-            category: this.metadataManager.getCategoryFromBaseUnit(baseUnit, this.getCategoryToBaseUnitMap(), path) || 'none',
+            category:
+              this.metadataManager.getCategoryFromBaseUnit(
+                baseUnit,
+                this.getCategoryToBaseUnitMap(),
+                path
+              ) || 'none',
             conversions: {}
           }
         }

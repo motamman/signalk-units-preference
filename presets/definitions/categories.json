@@ -1,4 +1,5 @@
 {
+  "$comment": "SINGLE SOURCE OF TRUTH for category-to-base-unit mappings. UnitsManager validates this against TypeScript fallback on startup and logs errors if inconsistent. JSON takes precedence. To add a new category: 1) Add to categoryToBaseUnit, 2) Add to coreCategories array, 3) Restart server.",
   "categoryToBaseUnit": {
     "speed": "m/s",
     "temperature": "K",

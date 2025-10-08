@@ -249,7 +249,12 @@ export const comprehensiveDefaultUnits: UnitsMetadataStore = {
     baseUnit: 'K',
     category: 'temperature',
     conversions: {
-      '°C': { formula: 'value - 273.15', inverseFormula: 'value + 273.15', symbol: '°C', longName: 'celsius' },
+      '°C': {
+        formula: 'value - 273.15',
+        inverseFormula: 'value + 273.15',
+        symbol: '°C',
+        longName: 'celsius'
+      },
       '°F': {
         formula: '(value - 273.15) * 9/5 + 32',
         inverseFormula: '(value - 32) * 5/9 + 273.15',
@@ -262,7 +267,12 @@ export const comprehensiveDefaultUnits: UnitsMetadataStore = {
     baseUnit: 'K',
     category: 'temperature',
     conversions: {
-      '°C': { formula: 'value - 273.15', inverseFormula: 'value + 273.15', symbol: '°C', longName: 'celsius' },
+      '°C': {
+        formula: 'value - 273.15',
+        inverseFormula: 'value + 273.15',
+        symbol: '°C',
+        longName: 'celsius'
+      },
       '°F': {
         formula: '(value - 273.15) * 9/5 + 32',
         inverseFormula: '(value - 32) * 5/9 + 273.15',
@@ -334,7 +344,12 @@ export const comprehensiveDefaultUnits: UnitsMetadataStore = {
     baseUnit: 'K',
     category: 'temperature',
     conversions: {
-      '°C': { formula: 'value - 273.15', inverseFormula: 'value + 273.15', symbol: '°C', longName: 'celsius' },
+      '°C': {
+        formula: 'value - 273.15',
+        inverseFormula: 'value + 273.15',
+        symbol: '°C',
+        longName: 'celsius'
+      },
       '°F': {
         formula: '(value - 273.15) * 9/5 + 32',
         inverseFormula: '(value - 32) * 5/9 + 273.15',
@@ -426,7 +441,12 @@ export const comprehensiveDefaultUnits: UnitsMetadataStore = {
     baseUnit: 'K',
     category: 'temperature',
     conversions: {
-      '°C': { formula: 'value - 273.15', inverseFormula: 'value + 273.15', symbol: '°C', longName: 'celsius' },
+      '°C': {
+        formula: 'value - 273.15',
+        inverseFormula: 'value + 273.15',
+        symbol: '°C',
+        longName: 'celsius'
+      },
       '°F': {
         formula: '(value - 273.15) * 9/5 + 32',
         inverseFormula: '(value - 32) * 5/9 + 273.15',
@@ -487,7 +507,12 @@ export const comprehensiveDefaultUnits: UnitsMetadataStore = {
     baseUnit: 'K',
     category: 'temperature',
     conversions: {
-      '°C': { formula: 'value - 273.15', inverseFormula: 'value + 273.15', symbol: '°C', longName: 'celsius' },
+      '°C': {
+        formula: 'value - 273.15',
+        inverseFormula: 'value + 273.15',
+        symbol: '°C',
+        longName: 'celsius'
+      },
       '°F': {
         formula: '(value - 273.15) * 9/5 + 32',
         inverseFormula: '(value - 32) * 5/9 + 273.15',
@@ -500,7 +525,12 @@ export const comprehensiveDefaultUnits: UnitsMetadataStore = {
     baseUnit: 'K',
     category: 'temperature',
     conversions: {
-      '°C': { formula: 'value - 273.15', inverseFormula: 'value + 273.15', symbol: '°C', longName: 'celsius' },
+      '°C': {
+        formula: 'value - 273.15',
+        inverseFormula: 'value + 273.15',
+        symbol: '°C',
+        longName: 'celsius'
+      },
       '°F': {
         formula: '(value - 273.15) * 9/5 + 32',
         inverseFormula: '(value - 32) * 5/9 + 273.15',
@@ -543,7 +573,12 @@ export const comprehensiveDefaultUnits: UnitsMetadataStore = {
     baseUnit: 'K',
     category: 'temperature',
     conversions: {
-      '°C': { formula: 'value - 273.15', inverseFormula: 'value + 273.15', symbol: '°C', longName: 'celsius' },
+      '°C': {
+        formula: 'value - 273.15',
+        inverseFormula: 'value + 273.15',
+        symbol: '°C',
+        longName: 'celsius'
+      },
       '°F': {
         formula: '(value - 273.15) * 9/5 + 32',
         inverseFormula: '(value - 32) * 5/9 + 273.15',

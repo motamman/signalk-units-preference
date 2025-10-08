@@ -6,7 +6,6 @@ import {
   PathValueType,
   ConvertValueResponse
 } from './types'
-import { comprehensiveDefaultUnits } from './comprehensiveDefaults'
 import { evaluateFormula, formatNumber, formatDate } from './formulaEvaluator'
 
 export class UnitConversionError extends Error {
@@ -43,15 +42,27 @@ export class ConversionEngine {
 
   /**
    * Map custom date format keys to date-fns format patterns
-   * Now uses date-formats.json as single source of truth
+
+  *
+   * SINGLE SOURCE OF TRUTH: date-formats.json (presets/definitions/date-formats.json)
+   *
+   * Strategy:
+   * 1. PRIMARY: Load patterns from date-formats.json at runtime (this.dateFormatsData)
+   * 2. FALLBACK: Use hardcoded patterns only if JSON fails to load (safety net)
+   * 3. VALIDATION: UnitsManager.validateDefinitions() logs warnings on startup if JSON missing
+   *
+   * To add a new date format:
+   * 1. Add entry to date-formats.json with 'pattern', 'description', 'example'
+   * 2. Restart server - no code changes needed
+   * 3. Fallback patterns below only updated if JSON loading permanently fails
    */
   private getDateFnsPattern(formatKey: string): string | null {
-    // Try to get pattern from loaded date formats data
+    // Try to get pattern from loaded date formats data (PRIMARY SOURCE)
     if (this.dateFormatsData?.formats?.[formatKey]?.pattern) {
       return this.dateFormatsData.formats[formatKey].pattern
     }
 
-    // Fallback to hardcoded patterns only if date formats not loaded
+    // Fallback to hardcoded patterns only if date formats not loaded (SAFETY NET)
     const fallbackPatterns: Record<string, string> = {
       'short-date': 'MMM d, yyyy',
       'long-date': 'EEEE, MMMM d, yyyy',

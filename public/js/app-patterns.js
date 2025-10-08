@@ -398,7 +398,10 @@ async function editPattern(index) {
     : '-- Use Category Default --'
 
   const baseOptions = unitSchema.baseUnits
-    .map(opt => `<option value="${opt.value}" ${opt.value === pattern.baseUnit ? 'selected' : ''}>${opt.label}</option>`)
+    .map(
+      opt =>
+        `<option value="${opt.value}" ${opt.value === pattern.baseUnit ? 'selected' : ''}>${opt.label}</option>`
+    )
     .join('')
   const emptySelected = !pattern.baseUnit ? 'selected' : ''
 
