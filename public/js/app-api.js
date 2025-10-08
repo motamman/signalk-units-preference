@@ -39,9 +39,9 @@ async function apiLoadPatterns() {
   return await res.json()
 }
 
-async function apiLoadMetadata() {
-  const res = await fetch(`${API_BASE}/metadata`)
-  if (!res.ok) throw new Error('Failed to load metadata')
+async function apiLoadPathsMetadata() {
+  const res = await fetch(`${API_BASE}/paths`)
+  if (!res.ok) throw new Error('Failed to load paths metadata')
   return await res.json()
 }
 
@@ -52,15 +52,14 @@ async function apiLoadCurrentPreset() {
 }
 
 async function apiLoadAllData() {
-  const [categoriesRes, overridesRes, patternsRes, metaRes, presetRes] = await Promise.all([
+  const [categoriesRes, overridesRes, patternsRes, presetRes] = await Promise.all([
     fetch(`${API_BASE}/categories`),
     fetch(`${API_BASE}/overrides`),
     fetch(`${API_BASE}/patterns`),
-    fetch(`${API_BASE}/metadata`),
     fetch(`${API_BASE}/presets/current`)
   ])
 
-  if (!categoriesRes.ok || !overridesRes.ok || !patternsRes.ok || !metaRes.ok || !presetRes.ok) {
+  if (!categoriesRes.ok || !overridesRes.ok || !patternsRes.ok || !presetRes.ok) {
     throw new Error('Failed to load data')
   }
 
@@ -68,7 +67,6 @@ async function apiLoadAllData() {
     categories: await categoriesRes.json(),
     pathOverrides: await overridesRes.json(),
     pathPatterns: await patternsRes.json(),
-    metadata: await metaRes.json(),
     currentPreset: await presetRes.json()
   }
 }

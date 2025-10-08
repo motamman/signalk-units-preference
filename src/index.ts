@@ -177,7 +177,7 @@ module.exports = (app: ServerAPI): Plugin => {
       const buildDeltaResponse = (
         pathStr: string,
         rawValue: unknown,
-        options?: { typeHint?: SupportedValueType }
+        options?: { typeHint?: SupportedValueType; timestamp?: string }
       ): DeltaResponse => {
         const conversionInfo = unitsManager.getConversion(pathStr)
         const normalized = normalizeValueForConversion(
@@ -188,7 +188,7 @@ module.exports = (app: ServerAPI): Plugin => {
 
         const baseUpdate: DeltaResponse['updates'][number] = {
           $source: conversionInfo.signalkSource || undefined,
-          timestamp: new Date().toISOString(),
+          timestamp: options?.timestamp || new Date().toISOString(),
           values: [] as DeltaValueEntry[]
         }
 
@@ -356,12 +356,14 @@ module.exports = (app: ServerAPI): Plugin => {
           const pathStr = req.params.path
           const valueParam = Array.isArray(req.query.value) ? req.query.value[0] : req.query.value
           const typeParam = Array.isArray(req.query.type) ? req.query.type[0] : req.query.type
+          const timestampParam = Array.isArray(req.query.timestamp) ? req.query.timestamp[0] : req.query.timestamp
 
           // If value query param provided, return conversion result
           if (valueParam !== undefined) {
             app.debug(`Converting value ${valueParam} for path: ${pathStr}`)
             const result = buildDeltaResponse(pathStr, valueParam, {
-              typeHint: typeof typeParam === 'string' ? toSupportedValueType(typeParam) : undefined
+              typeHint: typeof typeParam === 'string' ? toSupportedValueType(typeParam) : undefined,
+              timestamp: typeof timestampParam === 'string' ? timestampParam : undefined
             })
             return res.json(result)
           }
@@ -499,6 +501,7 @@ module.exports = (app: ServerAPI): Plugin => {
           let value = req.body.value
           const typeHintBody =
             typeof req.body.type === 'string' ? toSupportedValueType(req.body.type) : undefined
+          const timestampBody = typeof req.body.timestamp === 'string' ? req.body.timestamp : undefined
 
           // If value is a string from form data, try to parse it as JSON
           if (typeof value === 'string' && value !== '') {
@@ -519,23 +522,12 @@ module.exports = (app: ServerAPI): Plugin => {
           app.debug(`Converting value for path: ${path}, value: ${value}`)
 
           const result = buildDeltaResponse(path, value, {
-            typeHint: typeHintBody
+            typeHint: typeHintBody,
+            timestamp: timestampBody
           })
           return res.json(result)
         } catch (error) {
           app.error(`Error converting value: ${error}`)
-          res.status(500).json({ error: 'Internal server error' })
-        }
-      })
-
-      // GET /plugins/signalk-units-preference/metadata
-      // Get all metadata
-      router.get('/metadata', (req: Request, res: Response) => {
-        try {
-          const metadata = unitsManager.getMetadata()
-          res.json(metadata)
-        } catch (error) {
-          app.error(`Error getting metadata: ${error}`)
           res.status(500).json({ error: 'Internal server error' })
         }
       })
@@ -616,7 +608,7 @@ module.exports = (app: ServerAPI): Plugin => {
         async (req: Request, res: Response) => {
           try {
             const baseUnit = req.params.baseUnit
-            const { targetUnit, formula, inverseFormula, symbol } = req.body
+            const { targetUnit, formula, inverseFormula, symbol, longName, key } = req.body
             if (!targetUnit || !formula || !inverseFormula || !symbol) {
               return res.status(400).json({
                 error: 'targetUnit, formula, inverseFormula, and symbol are required'
@@ -625,7 +617,9 @@ module.exports = (app: ServerAPI): Plugin => {
             await unitsManager.addConversionToUnit(baseUnit, targetUnit, {
               formula,
               inverseFormula,
-              symbol
+              symbol,
+              longName: longName || undefined,
+              key: key || undefined
             })
             res.json({ success: true, baseUnit, targetUnit })
           } catch (error) {
@@ -1391,7 +1385,7 @@ module.exports = (app: ServerAPI): Plugin => {
 
       // PUT /plugins/signalk-units-preference/files/definitions/:fileType
       // Upload individual definition file (standard-units, categories, date-formats)
-      router.put('/files/definitions/:fileType', (req: Request, res: Response) => {
+      router.put('/files/definitions/:fileType', async (req: Request, res: Response) => {
         try {
           const fileType = req.params.fileType
 
@@ -1422,6 +1416,9 @@ module.exports = (app: ServerAPI): Plugin => {
 
           // Write file
           fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8')
+
+          // Reload units manager to apply changes
+          await unitsManager.initialize()
 
           res.json({ success: true, message: `${fileName} uploaded successfully` })
 

@@ -1,4 +1,5 @@
 /* eslint-disable no-unused-vars, @typescript-eslint/no-unused-vars */
+/* global apiLoadPathsMetadata */
 
 /**
  * app-metadata.js
@@ -230,7 +231,7 @@ async function renderMetadata() {
   const signalKMetadata = await getAllSignalKMetadata()
 
   // Get resolved metadata from backend (includes path inference)
-  const backendMetadata = await apiLoadMetadata()
+  const backendMetadata = await apiLoadPathsMetadata()
 
   // Build path info with metadata status
   const pathInfo = []
@@ -240,7 +241,8 @@ async function renderMetadata() {
     const backendMeta = backendMetadata[path]
     const valueDetails = getCurrentValueDetails(path)
     const hasSignalKMetadata = skMeta && skMeta.units
-    const hasBackendMetadata = backendMeta && backendMeta.baseUnit && backendMeta.baseUnit !== 'none'
+    const hasBackendMetadata =
+      backendMeta && backendMeta.baseUnit && backendMeta.baseUnit !== 'none'
     const matchingPattern = findMatchingPattern(path)
     const pathOverride = preferences?.pathOverrides?.[path]
 
@@ -434,7 +436,11 @@ function renderMetadataTable(pathInfo) {
       let testLink = ''
       if (currentValue !== undefined && currentValue !== null) {
         if (info.valueType === 'number') {
-          const convertUrl = `${API_BASE}/conversions/${info.path}?value=${encodeURIComponent(currentValue)}`
+          let convertUrl = `${API_BASE}/conversions/${info.path}?value=${encodeURIComponent(currentValue)}`
+          // Add timestamp if available
+          if (details?.timestamp) {
+            convertUrl += `&timestamp=${encodeURIComponent(details.timestamp)}`
+          }
           testLink = `<a href="${convertUrl}" target="_blank" title="Run conversion test - convert current value (${currentValue}) and see result in new tab" style="color: #2ecc71; margin-left: 4px; text-decoration: none; font-size: 14px;">▶️</a>`
         } else {
           const formId = `convert-form-${info.path.replace(/\./g, '-')}`
@@ -445,10 +451,15 @@ function renderMetadataTable(pathInfo) {
                 ? currentValue
                 : JSON.stringify(currentValue)
 
+          const timestampInput = details?.timestamp
+            ? `<input type="hidden" name="timestamp" value="${details.timestamp}">`
+            : ''
+
           testLink = `<form id="${formId}" method="POST" action="${API_BASE}/conversions" target="_blank" style="display: inline; margin: 0;">
         <input type="hidden" name="path" value="${info.path}">
         <input type="hidden" name="value" value="${serializedValue.replace(/"/g, '&quot;')}">
         <input type="hidden" name="type" value="${info.valueType}">
+        ${timestampInput}
         <button type="submit" title="Run conversion test - convert current value and see result in new tab" style="color: #2ecc71; margin-left: 4px; background: none; border: none; cursor: pointer; font-size: 14px; padding: 0;">▶️</button>
       </form>`
         }
@@ -712,31 +723,44 @@ function handleConversionTemplateChange() {
   }
 }
 
-function selectMetadataPath(path) {
+async function selectMetadataPath(path) {
   document.getElementById('selectedMetadataPath').value = path
   document.getElementById('selectedMetadataDisplay').textContent = path
 
-  // Load existing metadata if available
-  if (metadata[path]) {
-    const baseUnit = metadata[path].baseUnit || ''
-    const baseUnitSelect = document.getElementById('metadataBaseUnit')
+  // Load existing metadata from backend
+  try {
+    const pathsMetadata = await apiLoadPathsMetadata()
+    const pathMeta = pathsMetadata[path]
 
-    // Check if base unit is in dropdown options
-    const option = Array.from(baseUnitSelect.options).find(opt => opt.value === baseUnit)
-    if (option) {
-      baseUnitSelect.value = baseUnit
+    if (pathMeta && pathMeta.baseUnit) {
+      const baseUnit = pathMeta.baseUnit || ''
+      const baseUnitSelect = document.getElementById('metadataBaseUnit')
+
+      // Check if base unit is in dropdown options
+      const option = Array.from(baseUnitSelect.options).find(opt => opt.value === baseUnit)
+      if (option) {
+        baseUnitSelect.value = baseUnit
+      } else {
+        // Custom base unit
+        baseUnitSelect.value = 'custom'
+        document.getElementById('metadataBaseUnitCustom').style.display = 'block'
+        document.getElementById('metadataBaseUnitCustom').value = baseUnit
+      }
+
+      document.getElementById('metadataCategory').value = pathMeta.category || ''
+      currentMetadataConversions = { ...pathMeta.conversions } || {}
+
+      handleBaseUnitChange()
     } else {
-      // Custom base unit
-      baseUnitSelect.value = 'custom'
-      document.getElementById('metadataBaseUnitCustom').style.display = 'block'
-      document.getElementById('metadataBaseUnitCustom').value = baseUnit
+      document.getElementById('metadataBaseUnit').value = ''
+      document.getElementById('metadataCategory').value = ''
+      document.getElementById('metadataBaseUnitCustom').style.display = 'none'
+      document.getElementById('metadataBaseUnitCustom').value = ''
+      currentMetadataConversions = {}
     }
-
-    document.getElementById('metadataCategory').value = metadata[path].category || ''
-    currentMetadataConversions = { ...metadata[path].conversions } || {}
-
-    handleBaseUnitChange()
-  } else {
+  } catch (error) {
+    console.error('Failed to load path metadata:', error)
+    // Reset form on error
     document.getElementById('metadataBaseUnit').value = ''
     document.getElementById('metadataCategory').value = ''
     document.getElementById('metadataBaseUnitCustom').style.display = 'none'

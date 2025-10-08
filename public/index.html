@@ -944,8 +944,8 @@
                                 <div id="conversionBaseUnitContainer"></div>
                             </div>
                             <div class="input-group">
-                                <label>Target Unit Name</label>
-                                <input type="text" id="conversionTargetUnit" placeholder="e.g., gal/h, fahrenheit">
+                                <label>Description (optional)</label>
+                                <input type="text" id="conversionLongName" placeholder="e.g., gallons per hour, fahrenheit">
                             </div>
                         </div>
                         <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-bottom: 15px;">
@@ -965,7 +965,16 @@
                             </div>
                             <div class="input-group">
                                 <label>Symbol</label>
-                                <input type="text" id="conversionSymbol" placeholder="e.g., gal/h, °F">
+                                <input type="text" id="conversionSymbol" placeholder="e.g., gal/h, °F" oninput="toggleConversionKeyField()">
+                            </div>
+                        </div>
+                        <div id="conversionKeyFieldContainer" style="display: none; margin-bottom: 15px;">
+                            <div class="input-group">
+                                <label>
+                                    Key (ASCII-safe identifier)
+                                    <span class="tooltip-icon" data-tooltip="Required when symbol contains extended characters (like °, µ). Example: use 'deg' for '°', 'deg_s' for '°/s'">?</span>
+                                </label>
+                                <input type="text" id="conversionKey" placeholder="e.g., deg, deg_s">
                             </div>
                         </div>
                         <button class="btn-success" onclick="addConversion()" style="padding: 10px 24px;">Add Conversion</button>
@@ -1074,9 +1083,8 @@
                         <div style="background: #f8f9fa; padding: 15px; border-radius: 6px; border-left: 4px solid #2ecc71;">
                             <h3 style="margin: 0 0 10px 0; color: #2ecc71; font-size: 1.1rem;">Schema & Metadata</h3>
                             <ul class="api-test-list">
-                                <li><a href="/plugins/signalk-units-preference/schema" target="_blank">/schema</a> - Get available base units, categories, and target units</li>
-                                <li><a href="/plugins/signalk-units-preference/metadata" target="_blank">/metadata</a> - Get all path metadata (built-in defaults)</li>
-                                <li><a href="/plugins/signalk-units-preference/paths" target="_blank">/paths</a> - Get all paths with configuration</li>
+                                <li><a href="/plugins/signalk-units-preference/schema" target="_blank">/schema</a> - Get complete unit schema (base units, categories, conversions, and mappings)</li>
+                                <li><a href="/plugins/signalk-units-preference/paths" target="_blank">/paths</a> - Get resolved metadata for all discovered SignalK paths</li>
                             </ul>
                         </div>
 

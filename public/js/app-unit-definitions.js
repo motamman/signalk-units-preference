@@ -41,10 +41,12 @@ function isConversionFormDirty() {
   if (!conversionFormOriginalState || !currentlyEditingConversion) return false
 
   const { baseUnit, targetUnit } = currentlyEditingConversion
+  const longNameInputId = buildConversionId('edit-conv-longname', baseUnit, targetUnit)
   const formulaInputId = buildConversionId('edit-conv-formula', baseUnit, targetUnit)
   const inverseInputId = buildConversionId('edit-conv-inverse', baseUnit, targetUnit)
   const symbolInputId = buildConversionId('edit-conv-symbol', baseUnit, targetUnit)
 
+  const longNameInput = document.getElementById(longNameInputId)
   const formulaInput = document.getElementById(formulaInputId)
   const inverseInput = document.getElementById(inverseInputId)
   const symbolInput = document.getElementById(symbolInputId)
@@ -52,6 +54,7 @@ function isConversionFormDirty() {
   if (!formulaInput || !inverseInput || !symbolInput) return false
 
   return (
+    (longNameInput ? longNameInput.value : '') !== (conversionFormOriginalState.longName || '') ||
     formulaInput.value !== conversionFormOriginalState.formula ||
     inverseInput.value !== conversionFormOriginalState.inverseFormula ||
     symbolInput.value !== conversionFormOriginalState.symbol
@@ -304,35 +307,95 @@ function cancelEditBaseUnit(baseUnit) {
 // CONVERSION CRUD OPERATIONS
 // ============================================================================
 
+// Check if a string contains extended (non-ASCII) characters
+function hasExtendedCharacters(str) {
+  // eslint-disable-next-line no-control-regex
+  return /[^\x00-\x7F]/.test(str)
+}
+
+// Toggle visibility of key field based on symbol input (creation form)
+function toggleConversionKeyField() {
+  const symbolInput = document.getElementById('conversionSymbol')
+  const keyFieldContainer = document.getElementById('conversionKeyFieldContainer')
+  const symbol = symbolInput?.value || ''
+
+  if (hasExtendedCharacters(symbol)) {
+    keyFieldContainer.style.display = 'block'
+  } else {
+    keyFieldContainer.style.display = 'none'
+    // Clear the key field when hidden
+    const keyInput = document.getElementById('conversionKey')
+    if (keyInput) keyInput.value = ''
+  }
+}
+
+// Toggle visibility of key field based on symbol input (edit form)
+function toggleEditConversionKeyField(baseUnit, targetUnit) {
+  const symbolInputId = buildConversionId('edit-conv-symbol', baseUnit, targetUnit)
+  const keyContainerId = buildConversionId('edit-conv-key-container', baseUnit, targetUnit)
+  const keyInputId = buildConversionId('edit-conv-key', baseUnit, targetUnit)
+
+  const symbolInput = document.getElementById(symbolInputId)
+  const keyContainer = document.getElementById(keyContainerId)
+  const keyInput = document.getElementById(keyInputId)
+
+  const symbol = symbolInput?.value || ''
+
+  if (hasExtendedCharacters(symbol)) {
+    keyContainer.style.display = 'block'
+  } else {
+    keyContainer.style.display = 'none'
+    // Clear the key field when hidden
+    if (keyInput) keyInput.value = ''
+  }
+}
+
 // Add a conversion formula to an existing base unit
 async function addConversion() {
   const baseSelect = document.getElementById('conversionBaseUnit')
   const baseUnit = baseSelect.value.trim()
-  const targetUnit = document.getElementById('conversionTargetUnit').value.trim()
+  const longName = document.getElementById('conversionLongName').value.trim()
   const formula = document.getElementById('conversionFormula').value.trim()
   const inverseFormula = document.getElementById('conversionInverseFormula').value.trim()
   const symbol = document.getElementById('conversionSymbol').value.trim()
+  const key = document.getElementById('conversionKey').value.trim()
 
-  if (!baseUnit || !targetUnit || !formula || !inverseFormula || !symbol) {
-    showStatus('Please fill in all conversion fields', 'error')
+  if (!baseUnit || !formula || !inverseFormula || !symbol) {
+    showStatus('Please fill in base unit, formula, inverse formula, and symbol fields', 'error')
+    return
+  }
+
+  // If symbol has extended characters, key is required
+  if (hasExtendedCharacters(symbol) && !key) {
+    showStatus('Key field is required when symbol contains extended characters', 'error')
     return
   }
 
   try {
-    await apiCreateConversion(baseUnit, {
-      targetUnit,
+    const conversionData = {
+      targetUnit: key || symbol, // Use key if provided, otherwise symbol
       formula,
       inverseFormula,
-      symbol
-    })
+      symbol,
+      longName: longName || undefined
+    }
 
-    showStatus(`Added conversion: ${baseUnit} → ${targetUnit}`, 'success')
+    // Add key field only if it differs from symbol
+    if (key && key !== symbol) {
+      conversionData.key = key
+    }
+
+    await apiCreateConversion(baseUnit, conversionData)
+
+    showStatus(`Added conversion: ${baseUnit} → ${symbol}`, 'success')
 
     // Clear form
-    document.getElementById('conversionTargetUnit').value = ''
+    document.getElementById('conversionLongName').value = ''
     document.getElementById('conversionFormula').value = ''
     document.getElementById('conversionInverseFormula').value = ''
     document.getElementById('conversionSymbol').value = ''
+    document.getElementById('conversionKey').value = ''
+    toggleConversionKeyField() // Hide key field
 
     // Reload schema and unit definitions
     await loadSchema()
@@ -432,9 +495,14 @@ function editConversion(baseUnit, targetUnit) {
 
   const editRowId = buildConversionId('conversion-edit', baseUnit, targetUnit)
   const targetInputId = buildConversionId('edit-conv-target', baseUnit, targetUnit)
+  const longNameInputId = buildConversionId('edit-conv-longname', baseUnit, targetUnit)
+  const keyInputId = buildConversionId('edit-conv-key', baseUnit, targetUnit)
   const formulaInputId = buildConversionId('edit-conv-formula', baseUnit, targetUnit)
   const inverseInputId = buildConversionId('edit-conv-inverse', baseUnit, targetUnit)
   const symbolInputId = buildConversionId('edit-conv-symbol', baseUnit, targetUnit)
+  const keyContainerId = buildConversionId('edit-conv-key-container', baseUnit, targetUnit)
+
+  const showKeyField = hasExtendedCharacters(conv.symbol || '')
 
   // Create edit row
   const editRow = document.createElement('tr')
@@ -442,11 +510,17 @@ function editConversion(baseUnit, targetUnit) {
   editRow.innerHTML = `
     <td colspan="5" style="padding: 15px; background: #fff3cd;">
       <h5 style="margin: 0 0 10px 0; color: #856404; font-size: 13px;">Edit Conversion: ${baseUnit} → ${targetUnit}</h5>
-      <div style="display: grid; grid-template-columns: 1fr 2fr 2fr 1fr; gap: 10px; margin-bottom: 10px;">
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
         <div>
-          <label style="font-size: 12px; color: #666; display: block; margin-bottom: 3px;">Target Unit</label>
+          <label style="font-size: 12px; color: #666; display: block; margin-bottom: 3px;">Target Unit (Key)</label>
           <input type="text" id="${targetInputId}" value="${targetUnit}" readonly style="background: #f5f5f5; padding: 6px; width: 100%; border: 1px solid #ddd; border-radius: 4px; font-family: monospace;">
         </div>
+        <div>
+          <label style="font-size: 12px; color: #666; display: block; margin-bottom: 3px;">Description (optional)</label>
+          <input type="text" id="${longNameInputId}" value="${conv.longName || ''}" placeholder="e.g., gallons per hour, fahrenheit" style="padding: 6px; width: 100%; border: 1px solid #ddd; border-radius: 4px;">
+        </div>
+      </div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 10px;">
         <div>
           <label style="font-size: 12px; color: #666; display: block; margin-bottom: 3px;">Formula (base → target)</label>
           <input type="text" id="${formulaInputId}" value="${conv.formula}" placeholder="e.g., value * 0.264" style="padding: 6px; width: 100%; border: 1px solid #ddd; border-radius: 4px; font-family: monospace;">
@@ -457,8 +531,12 @@ function editConversion(baseUnit, targetUnit) {
         </div>
         <div>
           <label style="font-size: 12px; color: #666; display: block; margin-bottom: 3px;">Symbol</label>
-          <input type="text" id="${symbolInputId}" value="${conv.symbol}" placeholder="e.g., gal/h" style="padding: 6px; width: 100%; border: 1px solid #ddd; border-radius: 4px;">
+          <input type="text" id="${symbolInputId}" value="${conv.symbol}" placeholder="e.g., gal/h, °F" style="padding: 6px; width: 100%; border: 1px solid #ddd; border-radius: 4px;" oninput="toggleEditConversionKeyField('${baseUnit}', '${targetUnit}')">
         </div>
+      </div>
+      <div id="${keyContainerId}" style="display: ${showKeyField ? 'block' : 'none'}; margin-bottom: 10px;">
+        <label style="font-size: 12px; color: #666; display: block; margin-bottom: 3px;">Key (ASCII-safe identifier)</label>
+        <input type="text" id="${keyInputId}" value="${conv.key || ''}" placeholder="e.g., deg, deg_s" style="padding: 6px; width: 100%; border: 1px solid #ddd; border-radius: 4px;">
       </div>
       <div style="display: flex; gap: 10px;">
         <button class="btn-success" onclick="saveEditConversion('${baseUnit}', '${targetUnit}')" style="padding: 6px 12px; font-size: 12px;">Save Changes</button>
@@ -474,11 +552,13 @@ function editConversion(baseUnit, targetUnit) {
   // Store original state for dirty checking AFTER form is populated
   currentlyEditingConversion = { baseUnit, targetUnit }
   setTimeout(() => {
+    const longNameInput = document.getElementById(longNameInputId)
     const formulaInput = document.getElementById(formulaInputId)
     const inverseInput = document.getElementById(inverseInputId)
     const symbolInput = document.getElementById(symbolInputId)
 
     conversionFormOriginalState = {
+      longName: longNameInput?.value || '',
       formula: formulaInput?.value || '',
       inverseFormula: inverseInput?.value || '',
       symbol: symbolInput?.value || ''
@@ -488,10 +568,14 @@ function editConversion(baseUnit, targetUnit) {
 
 // Save edited conversion
 async function saveEditConversion(baseUnit, targetUnit) {
+  const longNameInputId = buildConversionId('edit-conv-longname', baseUnit, targetUnit)
+  const keyInputId = buildConversionId('edit-conv-key', baseUnit, targetUnit)
   const formulaInputId = buildConversionId('edit-conv-formula', baseUnit, targetUnit)
   const inverseInputId = buildConversionId('edit-conv-inverse', baseUnit, targetUnit)
   const symbolInputId = buildConversionId('edit-conv-symbol', baseUnit, targetUnit)
 
+  const longName = document.getElementById(longNameInputId).value.trim()
+  const key = document.getElementById(keyInputId)?.value.trim() || ''
   const formula = document.getElementById(formulaInputId).value.trim()
   const inverseFormula = document.getElementById(inverseInputId).value.trim()
   const symbol = document.getElementById(symbolInputId).value.trim()
@@ -501,14 +585,28 @@ async function saveEditConversion(baseUnit, targetUnit) {
     return
   }
 
+  // If symbol has extended characters, key is required
+  if (hasExtendedCharacters(symbol) && !key) {
+    showStatus('Key field is required when symbol contains extended characters', 'error')
+    return
+  }
+
   try {
-    // Use POST to overwrite the existing conversion
-    await apiUpdateConversion(baseUnit, targetUnit, {
+    const conversionData = {
       targetUnit,
       formula,
       inverseFormula,
-      symbol
-    })
+      symbol,
+      longName: longName || undefined
+    }
+
+    // Add key field only if it differs from symbol
+    if (key && key !== symbol) {
+      conversionData.key = key
+    }
+
+    // Use POST to overwrite the existing conversion
+    await apiUpdateConversion(baseUnit, targetUnit, conversionData)
 
     showStatus(`Updated conversion: ${baseUnit} → ${targetUnit}`, 'success')
 

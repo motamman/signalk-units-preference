@@ -11,7 +11,7 @@
     },
     "speed": {
       "baseUnit": "m/s",
-      "targetUnit": "knots",
+      "targetUnit": "kn",
       "displayFormat": "0.0"
     },
     "temperature": {

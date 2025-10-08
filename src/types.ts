@@ -8,6 +8,10 @@ export interface ConversionDefinition {
   inverseFormula: string
   /** Symbol to display for this unit (e.g., "kn", "°C", "mph") */
   symbol: string
+  /** Human-readable name for this unit (e.g., "knots", "celsius", "miles per hour") */
+  longName?: string
+  /** Optional: ASCII-safe key for symbols with extended characters (e.g., "deg" for "°", "deg_s" for "°/s"). If not provided, defaults to symbol value. */
+  key?: string
   /** Optional: Named date format for date/time conversions */
   dateFormat?: string
   /** Optional: Whether to render using local time zone */
@@ -24,6 +28,8 @@ export interface ConversionDefinition {
 export interface BaseUnitDefinition {
   /** Base unit symbol (e.g., "m/s", "Pa", "K") */
   baseUnit: string
+  /** Human-readable name for this base unit (e.g., "meters per second", "pascal", "kelvin") */
+  longName?: string
   /** Human-readable description (e.g., "speed", "temperature", "date/time format") */
   description?: string
   /** Available conversions for this unit */

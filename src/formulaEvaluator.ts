@@ -10,7 +10,7 @@ export function evaluateFormula(formula: string, value: number): number | string
   // Validate: allow numbers, operators, parentheses, whitespace, Math functions, arrays, and string methods
   // Allow: digits, operators (including %), parentheses, dots, commas, word characters, square brackets,
   // colons, question marks, single quotes, arrow functions (=>)
-  const safePattern = /^[\d\s+\-*/%().,\w\[\]:?'=><]+$/
+  const safePattern = /^[\d\s+\-*/%().,\w[\]:?'=><]+$/
   if (!safePattern.test(expression)) {
     throw new Error(`Unsafe formula: ${formula}`)
   }
@@ -26,7 +26,8 @@ export function evaluateFormula(formula: string, value: number): number | string
     'Math.min',
     'Math.max'
   ]
-  const allowedStringFunctions = ['String', 'padStart', 'padEnd', 'map', 'join', 'slice', 'substring']
+  // Note: allowedStringFunctions defined for documentation but validation happens at runtime
+  // const allowedStringFunctions = ['String', 'padStart', 'padEnd', 'map', 'join', 'slice', 'substring']
 
   const hasMath = /Math\.\w+/.test(expression)
   if (hasMath) {
@@ -50,7 +51,9 @@ export function evaluateFormula(formula: string, value: number): number | string
     } else if (typeof result === 'string') {
       return result
     } else {
-      throw new Error(`Invalid result type from formula: ${formula} (expected number or string, got ${typeof result})`)
+      throw new Error(
+        `Invalid result type from formula: ${formula} (expected number or string, got ${typeof result})`
+      )
     }
   } catch (error) {
     throw new Error(`Failed to evaluate formula "${formula}": ${error}`)

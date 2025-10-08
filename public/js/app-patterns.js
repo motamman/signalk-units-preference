@@ -391,19 +391,20 @@ async function editPattern(index) {
   `
 
   // Populate base unit dropdown
+  // Note: baseUnit is optional - if empty, it uses the category's default base unit
+  // Show what base unit is being used in the placeholder when no override is set
+  const baseUnitPlaceholder = baseUnitForTargets
+    ? `-- Use Category Default (${baseUnitForTargets}) --`
+    : '-- Use Category Default --'
+
   const baseOptions = unitSchema.baseUnits
-    .map(
-      opt =>
-        `<option value="${opt.value}" ${opt.value === pattern.baseUnit ? 'selected' : ''}>${opt.label}</option>`
-    )
+    .map(opt => `<option value="${opt.value}" ${opt.value === pattern.baseUnit ? 'selected' : ''}>${opt.label}</option>`)
     .join('')
-  const baseUnitLabel = pattern.baseUnit
-    ? `-- None (uses category default) --`
-    : `-- Use Category Default --`
   const emptySelected = !pattern.baseUnit ? 'selected' : ''
+
   document.getElementById(`edit-pattern-base-container-${index}`).innerHTML = `
     <select id="edit-pattern-base-${index}">
-      <option value="" ${emptySelected}>${baseUnitLabel}</option>
+      <option value="" ${emptySelected}>${baseUnitPlaceholder}</option>
       ${baseOptions}
     </select>
   `
@@ -417,20 +418,14 @@ async function editPattern(index) {
     false
   )
 
-  // Populate target unit dropdown
-  const targetUnits = unitSchema.targetUnitsByBase[baseUnitForTargets] || []
-  const targetOptions = targetUnits
-    .map(
-      unit =>
-        `<option value="${unit}" ${unit === pattern.targetUnit ? 'selected' : ''}>${unit}</option>`
+  // Populate target unit dropdown using helper
+  document.getElementById(`edit-pattern-target-container-${index}`).innerHTML =
+    createTargetUnitDropdown(
+      `edit-pattern-target-${index}`,
+      baseUnitForTargets,
+      pattern.targetUnit || '',
+      false
     )
-    .join('')
-  document.getElementById(`edit-pattern-target-container-${index}`).innerHTML = `
-    <select id="edit-pattern-target-${index}">
-      <option value="">-- Use Category Default --</option>
-      ${targetOptions}
-    </select>
-  `
 
   // Handle base unit change to update category and target units
   document.getElementById(`edit-pattern-base-${index}`).addEventListener('change', async e => {
@@ -446,16 +441,10 @@ async function editPattern(index) {
       false
     )
 
-    // Update target units
+    // Update target units using helper
     const baseForTargets = selectedBase || unitSchema.categoryToBaseUnit[currentCategory] || ''
-    const units = unitSchema.targetUnitsByBase[baseForTargets] || []
-    const options = units.map(unit => `<option value="${unit}">${unit}</option>`).join('')
-    document.getElementById(`edit-pattern-target-container-${index}`).innerHTML = `
-      <select id="edit-pattern-target-${index}">
-        <option value="">-- Use Category Default --</option>
-        ${options}
-      </select>
-    `
+    document.getElementById(`edit-pattern-target-container-${index}`).innerHTML =
+      createTargetUnitDropdown(`edit-pattern-target-${index}`, baseForTargets, '', false)
   })
 
   // Show edit form, hide view

@@ -11,7 +11,6 @@ const API_BASE = '/plugins/signalk-units-preference'
 
 // Application state
 let preferences = null
-let metadata = null
 let availablePaths = []
 let signalKValues = {}
 let signalKValueDetails = {}

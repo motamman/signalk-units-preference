@@ -84,7 +84,7 @@ function switchTab(tabName) {
 // Load all data
 async function loadData() {
   try {
-    // Load categories, overrides, patterns, metadata, and current preset separately
+    // Load categories, overrides, patterns, and current preset
     const data = await apiLoadAllData()
 
     // Reconstruct preferences object
@@ -94,7 +94,6 @@ async function loadData() {
       pathPatterns: data.pathPatterns,
       currentPreset: data.currentPreset
     }
-    metadata = data.metadata
 
     const presetType = preferences.currentPreset?.type
     if (presetType && !BUILT_IN_PRESETS.includes(presetType.toLowerCase())) {
@@ -181,17 +180,25 @@ async function restoreBackup(event) {
     statusEl.innerHTML =
       '<div style="color: #3498db; padding: 10px; background: #e3f2fd; border-radius: 4px;">Restoring backup...</div>'
 
-    const formData = new FormData()
-    formData.append('backup', file)
+    // Read file and convert to base64
+    const arrayBuffer = await file.arrayBuffer()
+    const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)))
 
-    const response = await fetch(`${API_BASE}/backup/restore`, {
+    const response = await fetch(`${API_BASE}/backups`, {
       method: 'POST',
-      body: formData
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ zipData: base64 })
     })
 
     if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.message || 'Failed to restore backup')
+      let errorMsg = 'Failed to restore backup'
+      try {
+        const error = await response.json()
+        errorMsg = error.message || error.error || errorMsg
+      } catch (e) {
+        errorMsg = `Server error (${response.status}): ${response.statusText}`
+      }
+      throw new Error(errorMsg)
     }
 
     statusEl.innerHTML = `<div style="color: #27ae60; padding: 10px; background: #e8f5e9; border-radius: 4px;">
