@@ -91,36 +91,51 @@
   },
   "m": {
     "conversions": {
-      "m": {
-        "formula": "value * 1",
-        "inverseFormula": "value * 1",
-        "symbol": "m"
+      "inch": {
+        "formula": "value * 39.3701",
+        "inverseFormula": "value * 0.0254",
+        "symbol": "in"
       },
-      "ft": {
+      "foot": {
         "formula": "value * 3.28084",
         "inverseFormula": "value * 0.3048",
         "symbol": "ft"
       },
-      "nm": {
-        "formula": "value * 0.000539957",
-        "inverseFormula": "value * 1852",
-        "symbol": "nm"
-      },
-      "km": {
-        "formula": "value * 0.001",
-        "inverseFormula": "value * 1000",
-        "symbol": "km"
-      },
-      "mi": {
+      "mile": {
         "formula": "value * 0.000621371",
         "inverseFormula": "value * 1609.34",
         "symbol": "mi"
       },
+      "nautical mile": {
+        "formula": "value * 0.000539957",
+        "inverseFormula": "value * 1852",
+        "symbol": "nm"
+      },
+      
       "fathom": {
         "formula": "value * 0.546807",
         "inverseFormula": "value * 1.8288",
         "symbol": "fathom"
+      },
+
+      "millimeter": {
+        "formula": "value * 1",
+        "inverseFormula": "value / 100",
+        "symbol": "mm"
+      },
+
+      "cenitmeter": {
+        "formula": "value / 10",
+        "inverseFormula": "value / 10",
+        "symbol": "m"
+      },
+      "kilometer": {
+        "formula": "value * 0.001",
+        "inverseFormula": "value * 1000",
+        "symbol": "km"
       }
+
+
     },
     "description": "meter"
   },
