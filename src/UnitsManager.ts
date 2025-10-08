@@ -384,6 +384,26 @@ export class UnitsManager {
   }
 
   /**
+   * Get all categories that map to a given base unit
+   * Public API for frontend use
+   */
+  getCategoriesForBaseUnit(baseUnit: string): string[] {
+    // Start with static categories
+    const categoryMap = { ...this.getCategoryToBaseUnitMap() }
+
+    // Add custom categories that have a baseUnit defined
+    for (const [category, pref] of Object.entries(this.preferences.categories || {})) {
+      if (pref.baseUnit) {
+        categoryMap[category] = pref.baseUnit
+      }
+    }
+
+    return Object.entries(categoryMap)
+      .filter(([, unit]) => unit === baseUnit)
+      .map(([category]) => category)
+  }
+
+  /**
    * Get conversions for a base unit (JSON or TypeScript fallback)
    */
   private getConversionsForBaseUnit(baseUnit: string): UnitMetadata | null {
@@ -455,10 +475,44 @@ export class UnitsManager {
   }
 
   /**
+   * Infer category from path name alone (for paths with no metadata)
+   * Checks if the last path element contains any known category name.
+   */
+  private inferCategoryFromPath(pathStr: string): string | null {
+    if (!pathStr) {
+      return null
+    }
+
+    const pathElements = pathStr.split('.')
+    const lastElement = pathElements[pathElements.length - 1].toLowerCase()
+
+    // Get all known categories
+    const allCategories = [
+      ...this.getCoreCategories(),
+      ...Object.keys(this.preferences.categories || {})
+    ]
+
+    // Check if last element contains any category name
+    const match = allCategories.find(cat => lastElement.includes(cat.toLowerCase()))
+
+    if (match) {
+      this.app.debug(
+        `Inferred category from path: ${pathStr} → category "${match}" (matched "${lastElement}")`
+      )
+      return match
+    }
+
+    return null
+  }
+
+  /**
    * Infer a category from a base unit by looking at custom definitions,
    * built-in metadata, or category defaults.
+   *
+   * When multiple categories map to the same base unit, uses path heuristic:
+   * checks if the last path element contains any category name.
    */
-  private getCategoryFromBaseUnit(baseUnit?: string | null): string | null {
+  private getCategoryFromBaseUnit(baseUnit?: string | null, pathStr?: string): string | null {
     if (!baseUnit) {
       return null
     }
@@ -477,17 +531,41 @@ export class UnitsManager {
       return comprehensiveEntry.category
     }
 
-    // Fallback to category-to-base mapping (may be many-to-one, choose first)
-    // WARNING: This returns the FIRST matching category when multiple categories
-    // use the same baseUnit (e.g., 'm' is used by distance, depth, length)
-    const categoryMatch = Object.entries(this.getCategoryToBaseUnitMap()).find(
-      ([, unit]) => unit === baseUnit
-    )
-    if (categoryMatch) {
-      return categoryMatch[0]
+    // Get all categories that map to this base unit
+    const matchingCategories = Object.entries(this.getCategoryToBaseUnitMap())
+      .filter(([, unit]) => unit === baseUnit)
+      .map(([cat]) => cat)
+
+    if (matchingCategories.length === 0) {
+      return null
     }
 
-    return null
+    if (matchingCategories.length === 1) {
+      // 1:1 mapping, return the only category
+      return matchingCategories[0]
+    }
+
+    // Many-to-one: Use path element heuristic if path is provided
+    if (pathStr) {
+      const pathElements = pathStr.split('.')
+      const lastElement = pathElements[pathElements.length - 1].toLowerCase()
+
+      // Check if last element contains any category name
+      const match = matchingCategories.find(cat => lastElement.includes(cat.toLowerCase()))
+
+      if (match) {
+        this.app.debug(
+          `Smart category assignment: ${pathStr} + base unit "${baseUnit}" → category "${match}" (matched "${lastElement}")`
+        )
+        return match
+      }
+    }
+
+    // Fallback: return first matching category
+    this.app.debug(
+      `Default category assignment: base unit "${baseUnit}" → category "${matchingCategories[0]}" (first of ${matchingCategories.length})`
+    )
+    return matchingCategories[0]
   }
 
   /**
@@ -515,25 +593,45 @@ export class UnitsManager {
       return this.cloneMetadata(metadata)
     }
 
-    // Path override takes precedence when specifying a base unit
-    if (pathOverridePref?.baseUnit) {
-      const baseUnit = pathOverridePref.baseUnit
-      const builtInDef = this.getConversionsForBaseUnit(baseUnit)
-      const customDef = this.unitDefinitions[baseUnit]
+    // Path override takes precedence (highest priority)
+    if (pathOverridePref) {
+      let baseUnit: string | null = null
+      let category: string | null = null
 
-      // Merge built-in and custom conversions
-      const conversions = {
-        ...(builtInDef?.conversions || {}),
-        ...(customDef?.conversions || {})
+      // If override specifies baseUnit, use it
+      if (pathOverridePref.baseUnit) {
+        baseUnit = pathOverridePref.baseUnit
       }
 
-      metadata = {
-        baseUnit,
-        category:
-          builtInDef?.category ||
-          this.getCategoryFromBaseUnit(baseUnit) ||
-          'custom',
-        conversions
+      // If override specifies category, always use it
+      if (pathOverridePref.category) {
+        category = pathOverridePref.category
+      }
+
+      // If we have category but no baseUnit yet, get baseUnit from category
+      if (category && !baseUnit) {
+        baseUnit = this.getBaseUnitForCategory(category)
+      }
+
+      // If we have a baseUnit from either source, build metadata
+      if (baseUnit) {
+        const builtInDef = this.getConversionsForBaseUnit(baseUnit)
+        const customDef = this.unitDefinitions[baseUnit]
+
+        // Merge built-in and custom conversions
+        const conversions = {
+          ...(builtInDef?.conversions || {}),
+          ...(customDef?.conversions || {})
+        }
+
+        // Use the override's category if specified, otherwise infer from baseUnit
+        const finalCategory = category || builtInDef?.category || this.getCategoryFromBaseUnit(baseUnit, pathStr) || 'custom'
+
+        metadata = {
+          baseUnit,
+          category: finalCategory,
+          conversions
+        }
       }
     }
 
@@ -570,9 +668,33 @@ export class UnitsManager {
           metadata = {
             baseUnit,
             category:
-              builtInDef?.category ||
-              this.getCategoryFromBaseUnit(baseUnit) ||
-              'custom',
+              builtInDef?.category || this.getCategoryFromBaseUnit(baseUnit, pathStr) || 'custom',
+            conversions
+          }
+        }
+      }
+    }
+
+    // FINAL FALLBACK: Path-only inference (catches paths not in comprehensive defaults)
+    if (!metadata) {
+      const inferredCategory = this.inferCategoryFromPath(pathStr)
+      if (inferredCategory) {
+        const baseUnit = this.getBaseUnitForCategory(inferredCategory)
+        if (baseUnit) {
+          this.app.debug(
+            `Path-only inference: ${pathStr} → category "${inferredCategory}" → base unit "${baseUnit}"`
+          )
+          const builtInDef = this.getConversionsForBaseUnit(baseUnit)
+          const customDef = this.unitDefinitions[baseUnit]
+
+          const conversions = {
+            ...(builtInDef?.conversions || {}),
+            ...(customDef?.conversions || {})
+          }
+
+          metadata = {
+            baseUnit,
+            category: inferredCategory,
             conversions
           }
         }
@@ -1048,11 +1170,7 @@ export class UnitsManager {
       }
 
       // Validate that customDef has the expected structure
-      if (
-        typeof customDef !== 'object' ||
-        customDef === null ||
-        !customDef.conversions
-      ) {
+      if (typeof customDef !== 'object' || customDef === null || !customDef.conversions) {
         this.app.error(
           `Skipping invalid unit definition for "${baseUnit}" - must have conversions property`
         )
@@ -1256,7 +1374,7 @@ export class UnitsManager {
       inverseFormula: 'value',
       displayFormat: displayFormat,
       symbol: symbol,
-      category: this.getCategoryFromBaseUnit(unit) || 'none',
+      category: this.getCategoryFromBaseUnit(unit, pathStr) || 'none',
       valueType: valueType,
       dateFormat: valueType === 'date' ? 'ISO-8601' : undefined,
       useLocalTime: valueType === 'date' ? false : undefined,
@@ -1275,13 +1393,23 @@ export class UnitsManager {
 
     try {
       const convertedValue = evaluateFormula(conversionInfo.formula, value)
-      const formatted = formatNumber(convertedValue, conversionInfo.displayFormat)
+
+      // Handle string results (e.g., formatted time)
+      let formatted: string
+      if (typeof convertedValue === 'string') {
+        formatted = conversionInfo.symbol
+          ? `${convertedValue} ${conversionInfo.symbol}`
+          : convertedValue
+      } else {
+        const formattedNumber = formatNumber(convertedValue, conversionInfo.displayFormat)
+        formatted = `${formattedNumber} ${conversionInfo.symbol}`
+      }
 
       return {
         originalValue: value,
-        convertedValue,
+        convertedValue: typeof convertedValue === 'number' ? convertedValue : value,
         symbol: conversionInfo.symbol,
-        formatted: `${formatted} ${conversionInfo.symbol}`,
+        formatted,
         displayFormat: conversionInfo.displayFormat,
         signalkTimestamp: skMeta?.timestamp,
         signalkSource: skMeta?.$source || skMeta?.source
@@ -1421,16 +1549,23 @@ export class UnitsManager {
     const convertedValue = evaluateFormula(conversion.formula, numericValue)
 
     const displayFormat = options?.displayFormat || '0.0'
-    const formattedNumber = formatNumber(convertedValue, displayFormat)
     const symbol = conversion.symbol || ''
-    const formatted = symbol ? `${formattedNumber} ${symbol}`.trim() : formattedNumber
+
+    // If formula returns a string (e.g., formatted time), use it directly without number formatting
+    let formatted: string
+    if (typeof convertedValue === 'string') {
+      formatted = symbol ? `${convertedValue} ${symbol}`.trim() : convertedValue
+    } else {
+      const formattedNumber = formatNumber(convertedValue, displayFormat)
+      formatted = symbol ? `${formattedNumber} ${symbol}`.trim() : formattedNumber
+    }
 
     return {
       convertedValue,
       formatted,
       symbol,
       displayFormat,
-      valueType: 'number'
+      valueType: typeof convertedValue === 'string' ? 'string' : 'number'
     }
   }
 
@@ -1642,7 +1777,7 @@ export class UnitsManager {
             overrideCategory ||
             matchingPattern?.category ||
             metadataEntry?.category ||
-            this.getCategoryFromBaseUnit(pathOverride.baseUnit || skMetadata?.units) ||
+            this.getCategoryFromBaseUnit(pathOverride.baseUnit || skMetadata?.units, path) ||
             '-'
           displayUnit = pathOverride.targetUnit
           targetUnit = pathOverride.targetUnit
@@ -1660,7 +1795,7 @@ export class UnitsManager {
           // Try to auto-assign category from SignalK base unit
           baseUnit = skMetadata.units
           category =
-            metadataEntry?.category || this.getCategoryFromBaseUnit(skMetadata.units) || '-'
+            metadataEntry?.category || this.getCategoryFromBaseUnit(skMetadata.units, path) || '-'
 
           // Check if this category has a preference (auto-assign to category)
           const categoryPref = category !== '-' ? this.preferences.categories?.[category] : null
@@ -1679,12 +1814,32 @@ export class UnitsManager {
             targetUnit = undefined
           }
         } else {
-          status = 'none'
-          source = 'None'
-          baseUnit = '-'
-          category = '-'
-          displayUnit = '-'
-          targetUnit = undefined
+          // No metadata at all - try to infer category from path name
+          const inferredCategory = this.inferCategoryFromPath(path)
+
+          if (inferredCategory) {
+            status = 'inferred'
+            source = 'Inferred from path'
+            baseUnit = this.getBaseUnitForCategory(inferredCategory) || '-'
+            category = inferredCategory
+
+            // Check if inferred category has preferences
+            const categoryPref = this.preferences.categories?.[inferredCategory]
+            if (categoryPref?.targetUnit && baseUnit !== '-') {
+              targetUnit = categoryPref.targetUnit
+              displayUnit = targetUnit
+            } else {
+              displayUnit = baseUnit
+              targetUnit = undefined
+            }
+          } else {
+            status = 'none'
+            source = 'None'
+            baseUnit = '-'
+            category = '-'
+            displayUnit = '-'
+            targetUnit = undefined
+          }
         }
 
         // Get value details if available
@@ -1729,7 +1884,8 @@ export class UnitsManager {
     const result: Record<string, UnitMetadata> = {}
 
     try {
-      const pathsSet = await this.collectSignalKPaths()
+      // Use paths from signalKMetadata (sent by frontend) instead of stale API snapshot
+      const pathsSet = new Set<string>(Object.keys(this.signalKMetadata))
 
       // Include any overrides even if not currently present in the SignalK data
       Object.keys(this.preferences.pathOverrides || {}).forEach(path => pathsSet.add(path))
@@ -1761,7 +1917,7 @@ export class UnitsManager {
           const baseUnit = skMeta?.units || null
           result[path] = {
             baseUnit,
-            category: this.getCategoryFromBaseUnit(baseUnit) || 'none',
+            category: this.getCategoryFromBaseUnit(baseUnit, path) || 'none',
             conversions: {}
           }
         }

@@ -3,18 +3,19 @@
  * Only allows basic math operations
  */
 
-export function evaluateFormula(formula: string, value: number): number {
+export function evaluateFormula(formula: string, value: number): number | string {
   // Replace 'value' with the actual number
   const expression = formula.replace(/value/g, value.toString())
 
-  // Validate: allow numbers, operators, parentheses, whitespace, and Math functions
-  // Allow: digits, operators, parentheses, dots, commas, and word characters (for Math.pow, etc)
-  const safePattern = /^[\d\s+\-*/().,\w]+$/
+  // Validate: allow numbers, operators, parentheses, whitespace, Math functions, arrays, and string methods
+  // Allow: digits, operators (including %), parentheses, dots, commas, word characters, square brackets,
+  // colons, question marks, single quotes, arrow functions (=>)
+  const safePattern = /^[\d\s+\-*/%().,\w\[\]:?'=><]+$/
   if (!safePattern.test(expression)) {
     throw new Error(`Unsafe formula: ${formula}`)
   }
 
-  // Additional check: only allow specific Math methods
+  // Additional check: only allow specific Math and String methods
   const allowedMathFunctions = [
     'Math.pow',
     'Math.sqrt',
@@ -25,6 +26,8 @@ export function evaluateFormula(formula: string, value: number): number {
     'Math.min',
     'Math.max'
   ]
+  const allowedStringFunctions = ['String', 'padStart', 'padEnd', 'map', 'join', 'slice', 'substring']
+
   const hasMath = /Math\.\w+/.test(expression)
   if (hasMath) {
     const mathFunctions = expression.match(/Math\.\w+/g) || []
@@ -38,11 +41,17 @@ export function evaluateFormula(formula: string, value: number): number {
     // Use Function constructor for safe evaluation (no access to scope)
     const result = new Function(`return (${expression})`)()
 
-    if (typeof result !== 'number' || isNaN(result) || !isFinite(result)) {
-      throw new Error(`Invalid result from formula: ${formula}`)
+    // Allow both numbers and strings as results
+    if (typeof result === 'number') {
+      if (isNaN(result) || !isFinite(result)) {
+        throw new Error(`Invalid numeric result from formula: ${formula}`)
+      }
+      return result
+    } else if (typeof result === 'string') {
+      return result
+    } else {
+      throw new Error(`Invalid result type from formula: ${formula} (expected number or string, got ${typeof result})`)
     }
-
-    return result
   } catch (error) {
     throw new Error(`Failed to evaluate formula "${formula}": ${error}`)
   }

@@ -854,7 +854,7 @@
                         Define patterns to automatically categorize paths. Use ** for wildcards (e.g., **.temperature, environment.**)
                     </p>
                     <div class="add-override">
-                        <div style="display: grid; grid-template-columns: 2fr 1.5fr 1.5fr 1fr 0.8fr; gap: 15px; margin-bottom: 15px;">
+                        <div style="display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr 0.8fr; gap: 15px; margin-bottom: 15px;">
                             <div class="input-group">
                                 <label>
                                     Pattern
@@ -863,14 +863,14 @@
                                 <input type="text" id="newPatternPattern" placeholder="e.g., **.temperature">
                             </div>
                             <div class="input-group">
+                                <label>Base Unit (optional)</label>
+                                <div id="newPatternBaseContainer"></div>
+                                <input type="text" id="newPatternBaseCustom" placeholder="Enter custom base unit" style="display: none; margin-top: 5px;">
+                            </div>
+                            <div class="input-group">
                                 <label>Category</label>
                                 <div id="newPatternCategoryContainer"></div>
                                 <input type="text" id="newPatternCategoryCustom" placeholder="Enter custom category name" style="display: none; margin-top: 5px;">
-                            </div>
-                            <div class="input-group" id="newPatternBaseGroup" style="display: none;">
-                                <label>Base Unit (required for custom category)</label>
-                                <div id="newPatternBaseContainer"></div>
-                                <input type="text" id="newPatternBaseCustom" placeholder="Enter custom base unit" style="display: none; margin-top: 5px;">
                             </div>
                             <div class="input-group">
                                 <label>Target Unit <span id="targetUnitLabel">(optional)</span></label>
@@ -993,7 +993,7 @@
                         Assign units to specific paths that don't fit a pattern.
                     </p>
                     <div class="add-override" style="background: #f8f9fa; padding: 20px; border-radius: 6px; border: 1px solid #e9ecef;">
-                        <div style="display: grid; grid-template-columns: 2.5fr 1fr 1fr 0.8fr; gap: 12px; margin-bottom: 15px;">
+                        <div style="display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 0.8fr; gap: 12px; margin-bottom: 15px;">
                             <div class="input-group" style="margin: 0; position: relative;">
                                 <label style="font-weight: 500; margin-bottom: 6px; display: block; font-size: 13px;">Path</label>
                                 <input type="text" id="overridePathInput" placeholder="Type to search paths..." style="width: 100%;" autocomplete="off">
@@ -1002,6 +1002,10 @@
                             <div class="input-group" style="margin: 0;">
                                 <label style="font-weight: 500; margin-bottom: 6px; display: block; font-size: 13px;">Base Unit</label>
                                 <div id="overrideBaseUnitContainer"></div>
+                            </div>
+                            <div class="input-group" style="margin: 0;">
+                                <label style="font-weight: 500; margin-bottom: 6px; display: block; font-size: 13px;">Category</label>
+                                <div id="overrideCategoryContainer"></div>
                             </div>
                             <div class="input-group" style="margin: 0;">
                                 <label style="font-weight: 500; margin-bottom: 6px; display: block; font-size: 13px;">Target Unit</label>
@@ -1404,7 +1408,21 @@
             }
         }
     </script>
-    <script src="app.js"></script>
-    <script src="pathTree.js"></script>
+    <!-- Modular app scripts (loaded in dependency order) -->
+    <script src="js/app-state.js"></script>
+    <script src="js/app-utils.js"></script>
+    <script src="js/app-dropdowns.js"></script>
+    <script src="js/app-api.js"></script>
+
+    <!-- Feature modules -->
+    <script src="js/app-categories.js"></script>
+    <script src="js/app-patterns.js"></script>
+    <script src="js/app-overrides.js"></script>
+    <script src="js/app-unit-definitions.js"></script>
+    <script src="js/app-metadata.js"></script>
+
+    <!-- Main app -->
+    <script src="js/app-main.js"></script>
+    <script src="js/pathTree.js"></script>
 </body>
 </html>

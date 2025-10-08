@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head><title>Test</title></head>
+<body>
+<div id="test"></div>
+<script>
+const unitSchema = {
+  targetUnitsByBase: {
+    'm/s': ['knots', 'mph', 'km/h']
+  }
+};
+
+function createTargetUnitDropdown(id, baseUnit = '', selectedValue = '', includeCustom = true) {
+  const units = unitSchema.targetUnitsByBase[baseUnit] || []
+  const options = units
+    .map(
+      unit => \`<option value="\${unit}" \${unit === selectedValue ? 'selected' : ''}>\${unit}</option>\`
+    )
+    .join('')
+  const customOption = includeCustom
+    ? \`<option value="custom" \${selectedValue === 'custom' ? 'selected' : ''}>✏️ Custom...</option>\`
+    : ''
+  const emptySelected = !selectedValue ? 'selected' : ''
+  return \`
+    <select id="\${id}">
+      <option value="" \${emptySelected}>-- Select Target Unit --</option>
+      \${options}
+      \${customOption}
+    </select>
+  \`
+}
+
+document.getElementById('test').innerHTML = createTargetUnitDropdown('test-select', 'm/s', 'knots', false);
+console.log('Selected value:', document.getElementById('test-select').value);
+</script>
+</body>
+</html>

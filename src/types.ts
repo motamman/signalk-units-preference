@@ -58,6 +58,8 @@ export interface CategoryPreference {
   displayFormat: string
   /** Base unit for custom categories (optional, only for user-created categories) */
   baseUnit?: string
+  /** Category name (optional, for path overrides to specify which category they belong to) */
+  category?: string
 }
 
 /**
