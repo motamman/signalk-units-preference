@@ -72,10 +72,11 @@ Read-only view of all SignalK paths with comprehensive metadata and conversion i
 - **Live Values**: Shows current SignalK values for each path
 
 ### 7. **Formula-Based Conversions**
-Use JavaScript expressions for ultimate flexibility in unit conversions.
+Safe mathematical expressions powered by mathjs for secure unit conversions.
 
+- **Secure Evaluation**: Uses mathjs library with sandboxed environment (no code injection)
 - **Complex Formulas**: Support for any mathematical expression
-- **Built-in Math**: Access to JavaScript Math functions
+- **Built-in Math**: Access to Math functions (sqrt, pow, abs, round, etc.)
 - **Examples**:
   - `value * 1.94384` - m/s to knots
   - `value - 273.15` - Kelvin to Celsius
@@ -90,12 +91,22 @@ Paths without conversions automatically return their original values with Signal
 - **Formula**: `value` (no conversion)
 
 ### 9. **Date/Time Formatting**
-Render ISO-8601 SignalK timestamps in human-friendly formats.
+Render ISO-8601 SignalK timestamps in human-friendly formats using date-fns.
 
 - **Multiple Presets**: Short & long dates, regional formats, time-of-day, epoch seconds
 - **Local vs UTC**: Target units with `-local` suffix render in the vessel's local timezone
 - **Category-Aware**: New `dateTime` category ties into presets, patterns, and overrides
+- **Safe Formatting**: Uses date-fns library for robust date parsing and timezone handling
 - **Drop-In**: Select the desired target unit (e.g., `short-date`, `time-24hrs`, `epoch-seconds`)—no custom code required
+
+### 10. **Duration Formatting**
+Convert seconds to human-readable durations (e.g., for timers, ETA, runtime).
+
+- **Time Formats**: HH:MM:SS, MM:SS, DD:HH:MM:SS with optional milliseconds
+- **Decimal Formats**: Decimal minutes (MM.xx), hours (HH.xx), or days (DD.xx)
+- **Human-Readable**: Verbose ("2 hours 30 minutes 45 seconds") or compact ("2h 30m")
+- **Safe Formatting**: Uses date-fns intervalToDuration for verbose output
+- **Examples**: Perfect for `navigation.course.calcValues.timeToGo`, `propulsion.*.runtime`, etc.
 
 ## How It Works
 
@@ -1406,6 +1417,11 @@ Result: All engine temperatures display in °F.
 ### Frequency
 - Hz, rpm, kHz, MHz
 
+### Time/Duration
+- s (seconds), DD:HH:MM:SS, HH:MM:SS, MM:SS, HH:MM:SS.mmm, MM:SS.mmm
+- MM.xx (decimal minutes), HH.xx (decimal hours), DD.xx (decimal days)
+- duration-verbose ("2 hours 30 minutes"), duration-compact ("2h 30m")
+
 ### And more...
 
 All conversions are extensible - add your own!
@@ -1463,6 +1479,71 @@ Apache-2.0
 ---
 
 ## Changelog
+
+### [0.6.0-beta.2] - 2025-10-08
+
+#### Added
+- **Duration Formatting**: 11 new duration formats for the `time` category (base unit: seconds)
+  - `DD:HH:MM:SS` - Days:Hours:Minutes:Seconds format
+  - `HH:MM:SS` - Hours:Minutes:Seconds format
+  - `HH:MM:SS.mmm` - Hours:Minutes:Seconds with milliseconds
+  - `MM:SS` - Minutes:Seconds format
+  - `MM:SS.mmm` - Minutes:Seconds with milliseconds
+  - `MM.xx` - Decimal minutes (e.g., 150.75 min)
+  - `HH.xx` - Decimal hours (e.g., 2.51 hr)
+  - `DD.xx` - Decimal days (e.g., 0.10 days)
+  - `duration-verbose` - Human-readable (e.g., "2 hours 30 minutes 45 seconds")
+  - `duration-compact` - Compact format (e.g., "2h 30m")
+  - Perfect for `navigation.course.calcValues.timeToGo`, `propulsion.*.runtime`, timers, etc.
+
+#### Changed
+- **Security Hardening**: Replaced unsafe `Function` constructor with **mathjs** library
+  - Eliminated code injection vulnerabilities in formula evaluation
+  - Sandboxed mathematical expression evaluation
+  - No access to JavaScript runtime or global scope
+  - Validated input/output types with proper error handling
+- **Date/Time Security**: Replaced manual date parsing with **date-fns** library
+  - Safe ISO-8601 date parsing and formatting
+  - Proper timezone support using date-fns-tz
+  - Removed 100+ lines of custom date manipulation code
+  - All 28+ date formats now use date-fns format patterns
+- **Dynamic Date Format Loading**: Date formats now generated from `date-formats.json`
+  - Date format conversions created dynamically at runtime
+  - Centralized format metadata in one location
+  - No duplication between definitions and conversion logic
+- **Type Safety Improvements**: Enhanced type handling for formulas
+  - Formulas return `number` for numeric conversions
+  - Formulas return `string` for duration/date formatting
+  - Proper type checking throughout conversion pipeline
+  - Consistent handling of numeric vs formatted string results
+- **Cleaned Time Conversions**: Simplified seconds (s) base unit conversions
+  - Removed confusing numeric-only conversions (old min, hr, day)
+  - Kept only useful duration formats
+  - Better organized with clear purpose for each format
+
+#### Security
+- **No Code Injection**: mathjs prevents all code injection attacks
+  - `constructor.constructor("malicious")()` ❌ Blocked
+  - `process.exit()` ❌ Blocked
+  - `eval("malicious")` ❌ Blocked
+- **Input Validation**: Strict validation of all formula inputs
+  - Rejects NaN, Infinity, non-numeric values
+  - Type-safe evaluation with error handling
+- **Safe Dependencies**: Industry-standard libraries with millions of downloads
+  - mathjs: 14.8.2 - Mathematical expression parser
+  - date-fns: 4.1.0 - Modern date utility library
+  - date-fns-tz: 3.2.0 - Timezone support for date-fns
+
+#### Technical Changes
+- Refactored `formulaEvaluator.ts` with mathjs and date-fns
+- Added duration formatting functions (formatDurationHMS, formatDurationMS, etc.)
+- Updated `evaluateFormula()` to handle special duration format functions
+- Enhanced `UnitsManager.convertValue()` to handle string results from duration formatting
+- Enhanced `UnitsManager.convertUnitValue()` to handle string results
+- Simplified `UnitsManager.formatDateValue()` using date-fns patterns
+- Removed manual date manipulation code (MONTH_NAMES, WEEKDAY_NAMES, pad2, getDateParts)
+- Updated `getConversionsForBaseUnit()` to dynamically generate date format conversions
+- Cleaned up `standard-units-definitions.json` seconds (s) conversions
 
 ### [0.5.0-beta.5] - 2025-10-06
 
