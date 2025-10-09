@@ -3,7 +3,6 @@
  */
 
 import { registerDeltaStreamHandler } from '../DeltaStreamHandler'
-import { UnitsManager } from '../UnitsManager'
 
 describe('DeltaStreamHandler', () => {
   let mockApp: any
@@ -127,12 +126,20 @@ describe('DeltaStreamHandler', () => {
     expect(emittedMessage.delta.updates[0].$source).toBe('units-preference.conversion')
     expect(emittedMessage.delta.updates[0].values).toHaveLength(1)
 
+    // Check converted value structure (new SignalK-compliant format)
     const convertedValue = emittedMessage.delta.updates[0].values[0]
     expect(convertedValue.path).toBe('navigation.speedOverGround.unitsConverted')
-    expect(convertedValue.value.value).toBeCloseTo(9.7192, 3)
+    expect(convertedValue.value.converted).toBeCloseTo(9.7192, 3)
     expect(convertedValue.value.formatted).toBe('9.7 kn')
-    expect(convertedValue.value.symbol).toBe('kn')
     expect(convertedValue.value.original).toBe(5.0)
+
+    // Check metadata array (SignalK spec)
+    expect(emittedMessage.delta.updates[0].meta).toHaveLength(1)
+    const metadata = emittedMessage.delta.updates[0].meta[0]
+    expect(metadata.path).toBe('navigation.speedOverGround.unitsConverted')
+    expect(metadata.value.units).toBe('kn')
+    expect(metadata.value.displayFormat).toBeDefined()
+    expect(metadata.value.originalUnits).toBe('m/s')
   })
 
   test('should skip pass-through conversions', () => {

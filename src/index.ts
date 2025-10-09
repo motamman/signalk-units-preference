@@ -22,6 +22,12 @@ module.exports = (app: ServerAPI): Plugin => {
         title: 'Enable Delta Stream Injection (Legacy)',
         description: 'DEPRECATED: Inject converted values into SignalK delta stream as .unitsConverted paths. Use the plugin\'s dedicated WebSocket endpoint instead.',
         default: false
+      },
+      sendMeta: {
+        type: 'boolean',
+        title: 'Send Metadata with Every Delta',
+        description: 'Include metadata (units, displayFormat, description) in every delta message. Disable for optimization if metadata rarely changes.',
+        default: true
       }
     }
   }
@@ -38,7 +44,7 @@ module.exports = (app: ServerAPI): Plugin => {
 
     schema: () => PLUGIN_SCHEMA,
 
-    start: async (config: { enableDeltaInjection?: boolean } = {}) => {
+    start: async (config: { enableDeltaInjection?: boolean; sendMeta?: boolean } = {}) => {
       try {
         const dataDir = app.getDataDirPath()
         unitsManager = new UnitsManager(app, dataDir)
@@ -57,7 +63,8 @@ module.exports = (app: ServerAPI): Plugin => {
         // DEPRECATED: This approach pollutes SignalK's data tree with .unitsConverted paths
         // Use the plugin's dedicated WebSocket endpoint instead
         const enableDeltaInjection = config.enableDeltaInjection === true // Default to false
-        unsubscribeDeltaHandler = registerDeltaStreamHandler(app, unitsManager, enableDeltaInjection)
+        const sendMeta = config.sendMeta !== false // Default to true
+        unsubscribeDeltaHandler = registerDeltaStreamHandler(app, unitsManager, enableDeltaInjection, sendMeta)
 
         if (enableDeltaInjection) {
           app.debug('LEGACY: Delta stream injection enabled - converted values will be available at .unitsConverted paths')
@@ -67,7 +74,7 @@ module.exports = (app: ServerAPI): Plugin => {
         }
 
         // Start dedicated conversion stream server
-        conversionStreamServer = new ConversionStreamServer(app, unitsManager)
+        conversionStreamServer = new ConversionStreamServer(app, unitsManager, sendMeta)
         const httpServer = (app as any).server
         if (httpServer) {
           conversionStreamServer.start(httpServer)
@@ -130,6 +137,68 @@ module.exports = (app: ServerAPI): Plugin => {
           error.details = details
         }
         return error
+      }
+
+      /**
+       * Validate filename to prevent path traversal attacks
+       * Throws ValidationError if filename is invalid
+       */
+      const validateFilename = (filename: string, fieldName: string = 'filename'): void => {
+        if (!filename || typeof filename !== 'string') {
+          throw new ValidationError(
+            `Invalid ${fieldName}`,
+            `The ${fieldName} must be a non-empty string`,
+            'Please provide a valid filename'
+          )
+        }
+
+        // Prevent path traversal - no directory separators or parent directory references
+        if (filename.includes('/') || filename.includes('\\') || filename.includes('..')) {
+          throw new ValidationError(
+            `Invalid ${fieldName}`,
+            `The ${fieldName} contains invalid characters`,
+            'Only alphanumeric characters, hyphens, and underscores are allowed. Path traversal attempts are not permitted.'
+          )
+        }
+
+        // Prevent very long names (filesystem limits)
+        if (filename.length > 255) {
+          throw new ValidationError(
+            `Invalid ${fieldName}`,
+            `The ${fieldName} is too long`,
+            'Maximum length is 255 characters'
+          )
+        }
+
+        // Minimum length check
+        if (filename.length < 1) {
+          throw new ValidationError(
+            `Invalid ${fieldName}`,
+            `The ${fieldName} is too short`,
+            'Filename must be at least 1 character'
+          )
+        }
+      }
+
+      /**
+       * Validate that a resolved path doesn't escape the allowed base directory
+       * Throws ValidationError if path attempts to escape
+       */
+      const validatePathInDirectory = (
+        resolvedPath: string,
+        allowedBaseDir: string,
+        description: string = 'file path'
+      ): void => {
+        const normalizedPath = path.normalize(resolvedPath)
+        const normalizedBase = path.normalize(allowedBaseDir)
+
+        if (!normalizedPath.startsWith(normalizedBase)) {
+          throw new ValidationError(
+            `Invalid ${description}`,
+            `The ${description} attempts to access files outside the allowed directory`,
+            'Path traversal is not permitted for security reasons'
+          )
+        }
       }
 
       const normalizeValueForConversion = (
@@ -371,10 +440,8 @@ module.exports = (app: ServerAPI): Plugin => {
         }
 
         const payload: ConversionDeltaValue = {
-          value: convertedValue,
+          converted: convertedValue,
           formatted,
-          symbol,
-          displayFormat,
           original: normalizedValue
         }
 
@@ -382,6 +449,18 @@ module.exports = (app: ServerAPI): Plugin => {
           path: pathStr,
           value: payload
         })
+
+        // Add metadata for API responses (always send for API calls)
+        baseUpdate.meta = [{
+          path: pathStr,
+          value: {
+            units: symbol,
+            displayFormat,
+            description: `${pathStr} (${conversionInfo.category || 'converted'})`,
+            originalUnits: conversionInfo.baseUnit || '',
+            displayName: conversionInfo.symbol ? `${pathStr.split('.').pop()} (${conversionInfo.symbol})` : undefined
+          }
+        }]
 
         return envelope
       }
@@ -1099,6 +1178,9 @@ module.exports = (app: ServerAPI): Plugin => {
         try {
           const presetName = req.params.name
 
+          // Security: Validate filename to prevent path traversal
+          validateFilename(presetName, 'preset name')
+
           // Validate name format
           if (!/^[a-zA-Z0-9_-]+$/.test(presetName)) {
             throw new ValidationError(
@@ -1135,6 +1217,9 @@ module.exports = (app: ServerAPI): Plugin => {
           }
 
           const presetPath = path.join(customPresetsDir, `${presetName}.json`)
+
+          // Security: Validate that resolved path doesn't escape custom directory
+          validatePathInDirectory(presetPath, customPresetsDir, 'preset path')
 
           const computeNextVersion = (current?: unknown): string => {
             const numeric = Number(current)
@@ -1234,7 +1319,15 @@ module.exports = (app: ServerAPI): Plugin => {
       router.get('/presets/custom/:name', async (req: Request, res: Response) => {
         try {
           const presetName = req.params.name
-          const presetPath = path.join(__dirname, '..', 'presets', 'custom', `${presetName}.json`)
+
+          // Security: Validate filename to prevent path traversal
+          validateFilename(presetName, 'preset name')
+
+          const customPresetsDir = path.join(__dirname, '..', 'presets', 'custom')
+          const presetPath = path.join(customPresetsDir, `${presetName}.json`)
+
+          // Security: Validate that resolved path doesn't escape custom directory
+          validatePathInDirectory(presetPath, customPresetsDir, 'preset path')
 
           if (!fs.existsSync(presetPath)) {
             throw new NotFoundError('Custom preset', presetName)
@@ -1255,7 +1348,15 @@ module.exports = (app: ServerAPI): Plugin => {
       router.put('/presets/custom/:name', async (req: Request, res: Response) => {
         try {
           const presetName = req.params.name
-          const presetPath = path.join(__dirname, '..', 'presets', 'custom', `${presetName}.json`)
+
+          // Security: Validate filename to prevent path traversal
+          validateFilename(presetName, 'preset name')
+
+          const customPresetsDir = path.join(__dirname, '..', 'presets', 'custom')
+          const presetPath = path.join(customPresetsDir, `${presetName}.json`)
+
+          // Security: Validate that resolved path doesn't escape custom directory
+          validatePathInDirectory(presetPath, customPresetsDir, 'preset path')
 
           if (!req.body) {
             throw new ValidationError(
@@ -1297,7 +1398,15 @@ module.exports = (app: ServerAPI): Plugin => {
       router.delete('/presets/custom/:name', async (req: Request, res: Response) => {
         try {
           const presetName = req.params.name
-          const presetPath = path.join(__dirname, '..', 'presets', 'custom', `${presetName}.json`)
+
+          // Security: Validate filename to prevent path traversal
+          validateFilename(presetName, 'preset name')
+
+          const customPresetsDir = path.join(__dirname, '..', 'presets', 'custom')
+          const presetPath = path.join(customPresetsDir, `${presetName}.json`)
+
+          // Security: Validate that resolved path doesn't escape custom directory
+          validatePathInDirectory(presetPath, customPresetsDir, 'preset path')
 
           if (!fs.existsSync(presetPath)) {
             throw new NotFoundError('Custom preset', presetName)
@@ -1408,24 +1517,54 @@ module.exports = (app: ServerAPI): Plugin => {
 
           const restoredFiles: string[] = []
 
+          // Define allowed base directories for security validation
+          const pluginBaseDir = path.normalize(path.join(__dirname, '..'))
+          const dataBaseDir = path.normalize(dataDir)
+
           // Extract and restore each file
           for (const entry of zip.getEntries()) {
             if (entry.isDirectory) continue
 
             const entryName = entry.entryName
             let targetPath: string
+            let allowedBaseDir: string
+
+            // Security: Validate entry name doesn't contain path traversal
+            if (entryName.includes('..') || entryName.includes('\\')) {
+              app.error(`Security: Rejecting zip entry with path traversal: ${entryName}`)
+              throw new ValidationError(
+                'Invalid zip entry name',
+                `Entry "${entryName}" contains path traversal sequences`,
+                'The backup file may be corrupted or malicious. Path traversal is not permitted.'
+              )
+            }
 
             if (entryName.startsWith('presets/')) {
               // Restore preset files
               targetPath = path.join(__dirname, '..', entryName)
+              allowedBaseDir = pluginBaseDir
             } else if (
               entryName === 'units-preferences.json' ||
               entryName === 'custom-units-definitions.json'
             ) {
               // Restore runtime data files
               targetPath = path.join(dataDir, entryName)
+              allowedBaseDir = dataBaseDir
             } else {
-              continue // Skip unknown files
+              // Skip unknown files
+              app.debug(`Skipping unknown zip entry: ${entryName}`)
+              continue
+            }
+
+            // Security: CRITICAL - Validate the resolved path doesn't escape allowed directory
+            const normalizedTarget = path.normalize(targetPath)
+            if (!normalizedTarget.startsWith(allowedBaseDir)) {
+              app.error(`Security: Zip entry attempts to escape directory: ${entryName} -> ${normalizedTarget}`)
+              throw new ValidationError(
+                'Invalid zip entry path',
+                `Entry "${entryName}" attempts to write outside allowed directory`,
+                'The backup file may be corrupted or malicious. Path traversal is not permitted.'
+              )
             }
 
             // Create directory if it doesn't exist
@@ -1437,6 +1576,7 @@ module.exports = (app: ServerAPI): Plugin => {
             // Write the file
             fs.writeFileSync(targetPath, entry.getData())
             restoredFiles.push(entryName)
+            app.debug(`Restored: ${entryName}`)
           }
 
           // Reload the units manager
@@ -1448,7 +1588,7 @@ module.exports = (app: ServerAPI): Plugin => {
             restoredFiles
           })
 
-          app.debug(`Backup restored: ${restoredFiles.join(', ')}`)
+          app.debug(`Backup restored successfully: ${restoredFiles.length} files`)
         } catch (error) {
           app.error(`Error restoring backup: ${error}`)
           const response = formatErrorResponse(error)

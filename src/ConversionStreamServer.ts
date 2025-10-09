@@ -32,14 +32,16 @@ interface SubscriptionMessage {
 export class ConversionStreamServer {
   private app: ServerAPI
   private unitsManager: UnitsManager
+  private sendMeta: boolean
   private wss: WebSocket.Server | null = null
   private clients: Set<StreamClient> = new Set()
   private signalkWs: WebSocket | null = null
   private reconnectTimer: NodeJS.Timeout | null = null
 
-  constructor(app: ServerAPI, unitsManager: UnitsManager) {
+  constructor(app: ServerAPI, unitsManager: UnitsManager, sendMeta: boolean = true) {
     this.app = app
     this.unitsManager = unitsManager
+    this.sendMeta = sendMeta
   }
 
   /**
@@ -269,6 +271,7 @@ export class ConversionStreamServer {
       }
 
       const convertedValues: any[] = []
+      const metadataEntries: any[] = []
 
       for (const pathValue of update.values) {
         const { path, value } = pathValue
@@ -296,11 +299,22 @@ export class ConversionStreamServer {
           const converted = this.convertValue(path, value, conversion)
 
           if (converted) {
+            // Send converted value at the ORIGINAL path (not .unitsConverted)
+            // This dedicated stream is meant to provide converted values transparently
             convertedValues.push({
-              path,
+              path: path,  // Use original path, NOT path.unitsConverted
               value: converted
             })
-            this.app.debug(`  Converted ${path}: ${value} -> ${converted.value}`)
+
+            // Build metadata entry if sendMeta is enabled
+            if (this.sendMeta) {
+              metadataEntries.push({
+                path: path,  // Metadata for original path
+                value: this.buildMetadata(path, conversion)
+              })
+            }
+
+            this.app.debug(`  Converted ${path}: ${value} -> ${converted.converted}`)
           }
         } catch (error) {
           this.app.debug(`Failed to convert ${path}: ${error}`)
@@ -309,18 +323,38 @@ export class ConversionStreamServer {
 
       // Send converted values to interested clients
       if (convertedValues.length > 0) {
+        const deltaUpdate: any = {
+          $source: update.$source || 'units-preference',
+          timestamp: update.timestamp || new Date().toISOString(),
+          values: convertedValues
+        }
+
+        // Add metadata if we have any
+        if (metadataEntries.length > 0) {
+          deltaUpdate.meta = metadataEntries
+        }
+
         const convertedDelta = {
           context,
-          updates: [{
-            $source: update.$source || 'units-preference',
-            timestamp: update.timestamp || new Date().toISOString(),
-            values: convertedValues
-          }]
+          updates: [deltaUpdate]
         }
 
         this.app.debug(`Broadcasting ${convertedValues.length} converted values for context ${context}`)
         this.broadcastToClients(convertedDelta, context)
       }
+    }
+  }
+
+  /**
+   * Build metadata for a converted path (SignalK meta format)
+   */
+  private buildMetadata(originalPath: string, conversion: any): any {
+    return {
+      units: conversion.targetUnit || conversion.symbol || '',
+      displayFormat: conversion.displayFormat || '0.0',
+      description: `${originalPath} (converted from ${conversion.baseUnit || 'base unit'})`,
+      originalUnits: conversion.baseUnit || '',
+      displayName: conversion.symbol ? `${originalPath.split('.').pop()} (${conversion.symbol})` : undefined
     }
   }
 
@@ -354,19 +388,15 @@ export class ConversionStreamServer {
         try {
           const result = this.unitsManager.convertValue(path, value)
           return {
-            value: result.convertedValue,
+            converted: result.convertedValue,
             formatted: result.formatted,
-            symbol: result.symbol || '',
-            displayFormat: result.displayFormat,
-            baseUnit: conversion.baseUnit || '',
-            targetUnit: conversion.targetUnit || '',
             original: value
           }
         } catch (error) {
           return null
         }
 
-      case 'date':
+      case 'date': {
         // Handle date conversion
         let isoValue: string
         if (typeof value === 'number') {
@@ -391,30 +421,22 @@ export class ConversionStreamServer {
             conversion.useLocalTime
           )
           return {
-            value: result.convertedValue,
+            converted: result.convertedValue,
             formatted: result.formatted,
-            displayFormat: result.displayFormat,
-            dateFormat: result.dateFormat,
-            useLocalTime: result.useLocalTime,
-            baseUnit: conversion.baseUnit || '',
-            targetUnit: conversion.targetUnit || '',
             original: value
           }
         } catch (error) {
           return null
         }
+      }
 
       case 'boolean':
       case 'string':
       case 'object':
         // Pass-through for these types
         return {
-          value,
+          converted: value,
           formatted: typeof value === 'object' ? JSON.stringify(value) : String(value),
-          symbol: '',
-          displayFormat: valueType,
-          baseUnit: conversion.baseUnit || '',
-          targetUnit: conversion.targetUnit || '',
           original: value
         }
 
@@ -444,7 +466,14 @@ export class ConversionStreamServer {
       }
 
       // Check if client is interested in any of these paths
-      const hasInterestedPath = paths.some((path: string) => client.subscriptions.has(path))
+      // Clients subscribe to paths and receive converted values at the SAME paths
+      const hasInterestedPath = paths.some((path: string) => {
+        const isSubscribed = client.subscriptions.has(path)
+        if (isSubscribed) {
+          this.app.debug(`    Client subscribed to ${path}`)
+        }
+        return isSubscribed
+      })
 
       if (hasInterestedPath && client.ws.readyState === WebSocket.OPEN) {
         client.ws.send(message)

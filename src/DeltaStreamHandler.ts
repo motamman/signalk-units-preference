@@ -20,12 +20,14 @@ interface ConversionCache {
  * @param app - SignalK server API instance
  * @param unitsManager - Units manager instance for conversions
  * @param enabled - Whether delta injection is enabled (default: true)
+ * @param sendMeta - Whether to include metadata in every delta (default: true)
  * @returns Function to unregister the handler
  */
 export function registerDeltaStreamHandler(
   app: ServerAPI,
   unitsManager: UnitsManager,
-  enabled: boolean = true
+  enabled: boolean = true,
+  sendMeta: boolean = true
 ): () => void {
 
   if (!enabled) {
@@ -52,7 +54,7 @@ export function registerDeltaStreamHandler(
   // Register the delta input handler
   app.registerDeltaInputHandler((delta, next) => {
     try {
-      processDelta(app, unitsManager, delta as any, cache)
+      processDelta(app, unitsManager, delta as any, cache, sendMeta)
     } catch (error) {
       app.error(`Error in delta stream handler: ${error}`)
     }
@@ -76,7 +78,8 @@ function processDelta(
   app: ServerAPI,
   unitsManager: UnitsManager,
   delta: any,
-  cache: ConversionCache
+  cache: ConversionCache,
+  sendMeta: boolean
 ): void {
 
   if (!delta.updates || delta.updates.length === 0) {
@@ -89,8 +92,9 @@ function processDelta(
       continue
     }
 
-    // Collect converted values for this specific update
+    // Collect converted values and metadata for this specific update
     const convertedValues: any[] = []
+    const metadataEntries: any[] = []
 
     for (const pathValue of update.values) {
       const { path, value } = pathValue
@@ -122,10 +126,20 @@ function processDelta(
         const convertedValue = convertValue(unitsManager, path, value, conversion)
 
         if (convertedValue) {
+          const convertedPath = `${path}.unitsConverted`
+
           convertedValues.push({
-            path: `${path}.unitsConverted`,
+            path: convertedPath,
             value: convertedValue
           })
+
+          // Build metadata entry if sendMeta is enabled
+          if (sendMeta) {
+            metadataEntries.push({
+              path: convertedPath,
+              value: buildMetadata(path, conversion)
+            })
+          }
         }
 
       } catch (error) {
@@ -135,20 +149,41 @@ function processDelta(
     }
 
     // Emit converted values as a new delta if we have any for this update
-    // Preserve the original timestamp and $source from the update
+    // Use 'units-preference.conversion' as $source to indicate this is converted data
+    // Preserve the original timestamp from the update
     if (convertedValues.length > 0) {
+      const deltaUpdate: any = {
+        $source: 'units-preference.conversion',
+        timestamp: update.timestamp || new Date().toISOString(),
+        values: convertedValues
+      }
+
+      // Add metadata if we have any
+      if (metadataEntries.length > 0) {
+        deltaUpdate.meta = metadataEntries
+      }
+
       app.handleMessage(
         'signalk-units-preference',
         {
           context: delta.context || 'vessels.self',
-          updates: [{
-            $source: update.$source || 'units-preference.conversion',
-            timestamp: update.timestamp || new Date().toISOString() as any,
-            values: convertedValues
-          }]
+          updates: [deltaUpdate]
         } as any
       )
     }
+  }
+}
+
+/**
+ * Build metadata for a converted path (SignalK meta format)
+ */
+function buildMetadata(originalPath: string, conversion: any): any {
+  return {
+    units: conversion.targetUnit || conversion.symbol || '',
+    displayFormat: conversion.displayFormat || '0.0',
+    description: `${originalPath} (converted from ${conversion.baseUnit || 'base unit'})`,
+    originalUnits: conversion.baseUnit || '',
+    displayName: conversion.symbol ? `${originalPath.split('.').pop()} (${conversion.symbol})` : undefined
   }
 }
 
@@ -184,29 +219,25 @@ function convertValue(
 
   switch (valueType) {
     case 'number':
-      return convertNumericValue(unitsManager, path, value, conversion)
+      return convertNumericValue(unitsManager, path, value)
 
     case 'date':
       return convertDateValue(unitsManager, path, value, conversion)
 
     case 'boolean':
-      return convertBooleanValue(value, conversion)
+      return convertBooleanValue(value)
 
     case 'string':
-      return convertStringValue(value, conversion)
+      return convertStringValue(value)
 
     case 'object':
-      return convertObjectValue(value, conversion)
+      return convertObjectValue(value)
 
     default:
       // Unknown type, return as-is with basic formatting
       return {
-        value: value,
+        converted: value,
         formatted: String(value),
-        symbol: '',
-        displayFormat: conversion.displayFormat || 'unknown',
-        baseUnit: conversion.baseUnit || '',
-        targetUnit: conversion.targetUnit || '',
         original: value
       }
   }
@@ -218,8 +249,7 @@ function convertValue(
 function convertNumericValue(
   unitsManager: UnitsManager,
   path: string,
-  value: any,
-  conversion: any
+  value: any
 ): any | null {
 
   // Validate numeric input
@@ -231,12 +261,8 @@ function convertNumericValue(
     const result = unitsManager.convertValue(path, value)
 
     return {
-      value: result.convertedValue,
+      converted: result.convertedValue,
       formatted: result.formatted,
-      symbol: result.symbol || '',
-      displayFormat: result.displayFormat,
-      baseUnit: conversion.baseUnit || '',
-      targetUnit: conversion.targetUnit || '',
       original: value
     }
   } catch (error) {
@@ -281,13 +307,8 @@ function convertDateValue(
     )
 
     return {
-      value: result.convertedValue,
+      converted: result.convertedValue,
       formatted: result.formatted,
-      displayFormat: result.displayFormat,
-      dateFormat: result.dateFormat,
-      useLocalTime: result.useLocalTime,
-      baseUnit: conversion.baseUnit || '',
-      targetUnit: conversion.targetUnit || '',
       original: value
     }
   } catch (error) {
@@ -298,19 +319,15 @@ function convertDateValue(
 /**
  * Convert boolean values (mostly pass-through)
  */
-function convertBooleanValue(value: any, conversion: any): any | null {
+function convertBooleanValue(value: any): any | null {
 
   if (typeof value !== 'boolean') {
     return null
   }
 
   return {
-    value: value,
+    converted: value,
     formatted: value ? 'true' : 'false',
-    symbol: '',
-    displayFormat: 'boolean',
-    baseUnit: conversion.baseUnit || '',
-    targetUnit: conversion.targetUnit || '',
     original: value
   }
 }
@@ -318,19 +335,15 @@ function convertBooleanValue(value: any, conversion: any): any | null {
 /**
  * Convert string values (mostly pass-through)
  */
-function convertStringValue(value: any, conversion: any): any | null {
+function convertStringValue(value: any): any | null {
 
   if (typeof value !== 'string') {
     return null
   }
 
   return {
-    value: value,
+    converted: value,
     formatted: value,
-    symbol: '',
-    displayFormat: 'string',
-    baseUnit: conversion.baseUnit || '',
-    targetUnit: conversion.targetUnit || '',
     original: value
   }
 }
@@ -338,19 +351,15 @@ function convertStringValue(value: any, conversion: any): any | null {
 /**
  * Convert object values (mostly pass-through)
  */
-function convertObjectValue(value: any, conversion: any): any | null {
+function convertObjectValue(value: any): any | null {
 
   if (value === null || typeof value !== 'object') {
     return null
   }
 
   return {
-    value: value,
+    converted: value,
     formatted: JSON.stringify(value),
-    symbol: '',
-    displayFormat: 'json',
-    baseUnit: conversion.baseUnit || '',
-    targetUnit: conversion.targetUnit || '',
     original: value
   }
 }
