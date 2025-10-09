@@ -1124,7 +1124,7 @@
                             <ul class="api-test-list">
                                 <li><a href="/plugins/signalk-units-preference/conversions/navigation.speedOverGround" target="_blank">/conversions/:path</a> - Get conversion metadata for a path</li>
                                 <li><a href="/plugins/signalk-units-preference/conversions/navigation.speedOverGround?value=5.14" target="_blank">/conversions/:path?value=...</a> - Convert a value for a path</li>
-                                <li><a href="/plugins/signalk-units-preference/units/conversions?baseUnit=m/s&targetUnit=knots&value=5.14" target="_blank">/units/conversions?baseUnit=...&targetUnit=...&value=...</a> - Convert by base unit</li>
+                                <li><a href="/plugins/signalk-units-preference/units/conversions?baseUnit=m/s&targetUnit=kn&value=5.14" target="_blank">/units/conversions?baseUnit=...&targetUnit=...&value=...</a> - Convert by base unit</li>
                             </ul>
                         </div>
 
@@ -1445,14 +1445,34 @@
     </div>
 
     <script>
-        // Toggle collapsible sections
+        // Toggle collapsible sections with accordion behavior
         function toggleCollapsible(contentId) {
             const content = document.getElementById(contentId);
             const header = content.previousElementSibling;
             const icon = header.querySelector('.collapse-icon');
 
-            content.classList.toggle('collapsed');
-            icon.classList.toggle('collapsed');
+            const isCurrentlyCollapsed = content.classList.contains('collapsed');
+
+            // Close all other collapsible sections in the same tab
+            const currentTab = content.closest('.tab-content');
+            if (currentTab) {
+                currentTab.querySelectorAll('.collapsible-content').forEach(el => {
+                    if (el.id !== contentId && el.parentElement.classList.contains('section')) {
+                        el.classList.add('collapsed');
+                        const elIcon = el.previousElementSibling?.querySelector('.collapse-icon');
+                        if (elIcon) elIcon.classList.add('collapsed');
+                    }
+                });
+            }
+
+            // Toggle current section
+            if (isCurrentlyCollapsed) {
+                content.classList.remove('collapsed');
+                icon.classList.remove('collapsed');
+            } else {
+                content.classList.add('collapsed');
+                icon.classList.add('collapsed');
+            }
         }
 
         // Toggle individual category item
