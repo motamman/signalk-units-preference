@@ -7,9 +7,152 @@ let streamWebSocket = null;
 let streamDataMap = new Map(); // Store path data for display
 let isStreamConnected = false;
 let reconnectTimeout = null;
+let availableContexts = ['vessels.self']; // Will be populated from SignalK
+let contextsRefreshInterval = null;
 
 /**
- * Connect to SignalK WebSocket stream
+ * Populate context dropdown with available vessels
+ */
+async function populateContexts(showNotification = false) {
+    try {
+        // Fetch available vessels from SignalK API
+        const response = await fetch('/signalk/v1/api/vessels');
+        const vessels = await response.json();
+
+        const oldCount = availableContexts.length;
+        availableContexts = ['vessels.self'];
+
+        // Add other vessels if they exist
+        if (vessels && typeof vessels === 'object') {
+            for (const vesselId of Object.keys(vessels)) {
+                const context = `vessels.${vesselId}`;
+                if (context !== 'vessels.self' && !availableContexts.includes(context)) {
+                    availableContexts.push(context);
+                }
+            }
+        }
+
+        // Update dropdown
+        const contextSelect = document.getElementById('streamContext');
+        if (contextSelect) {
+            // Store current selection
+            const currentSelection = contextSelect.value;
+
+            // Remove old listener if exists (to prevent duplicates)
+            contextSelect.removeEventListener('change', handleContextChange);
+
+            contextSelect.innerHTML = '';
+
+            for (const context of availableContexts) {
+                const option = document.createElement('option');
+                option.value = context;
+
+                if (context === 'vessels.self') {
+                    option.textContent = 'vessels.self (This Vessel)';
+                } else {
+                    // Try to get vessel name
+                    const vesselId = context.replace('vessels.', '');
+                    const vesselData = vessels[vesselId];
+                    const vesselName = vesselData?.name || vesselId;
+                    option.textContent = `${context} (${vesselName})`;
+                }
+
+                contextSelect.appendChild(option);
+            }
+
+            // Restore previous selection if it still exists
+            if (currentSelection && availableContexts.includes(currentSelection)) {
+                contextSelect.value = currentSelection;
+            }
+
+            // Add change event listener to handle context switching
+            contextSelect.addEventListener('change', handleContextChange);
+        }
+
+        // Update last refresh time
+        const refreshTime = document.getElementById('contextRefreshTime');
+        if (refreshTime) {
+            refreshTime.textContent = new Date().toLocaleTimeString();
+        }
+
+        // Show notification if requested and count changed
+        const newCount = availableContexts.length;
+        if (showNotification && newCount !== oldCount) {
+            console.log(`Vessel list updated: ${oldCount} → ${newCount} vessels`);
+            if (newCount > oldCount) {
+                showTemporaryMessage('contextRefreshBtn', `+${newCount - oldCount} vessel(s)`, 2000);
+            }
+        }
+
+        console.log(`Found ${availableContexts.length} vessel contexts`);
+    } catch (error) {
+        console.error('Error populating contexts:', error);
+        // Keep default vessels.self
+    }
+}
+
+/**
+ * Start auto-refresh of vessel contexts
+ */
+function startContextAutoRefresh() {
+    // Refresh every 30 seconds
+    if (!contextsRefreshInterval) {
+        contextsRefreshInterval = setInterval(() => {
+            populateContexts(true); // Show notification on auto-refresh
+        }, 30000);
+        console.log('Context auto-refresh started (30s interval)');
+    }
+}
+
+/**
+ * Stop auto-refresh of vessel contexts
+ */
+function stopContextAutoRefresh() {
+    if (contextsRefreshInterval) {
+        clearInterval(contextsRefreshInterval);
+        contextsRefreshInterval = null;
+        console.log('Context auto-refresh stopped');
+    }
+}
+
+/**
+ * Show temporary message on button
+ */
+function showTemporaryMessage(buttonId, message, duration) {
+    const button = document.getElementById(buttonId);
+    if (button) {
+        const originalText = button.textContent;
+        button.textContent = message;
+        button.style.background = '#4caf50';
+        setTimeout(() => {
+            button.textContent = originalText;
+            button.style.background = '';
+        }, duration);
+    }
+}
+
+/**
+ * Handle context dropdown change
+ */
+function handleContextChange() {
+    console.log('Context changed, clearing data...');
+
+    // Clear current data
+    clearStreamData();
+
+    // If currently connected, reconnect with new context
+    if (isStreamConnected && streamWebSocket && streamWebSocket.readyState === WebSocket.OPEN) {
+        console.log('Reconnecting with new context...');
+        disconnectFromStream();
+        // Wait a bit for disconnect to complete, then reconnect
+        setTimeout(() => {
+            connectToStream();
+        }, 500);
+    }
+}
+
+/**
+ * Connect to plugin's dedicated WebSocket stream
  */
 function connectToStream() {
     if (streamWebSocket && streamWebSocket.readyState === WebSocket.OPEN) {
@@ -19,10 +162,10 @@ function connectToStream() {
 
     updateStreamStatus('Connecting...', '#ffc107');
 
-    // Determine WebSocket URL
+    // Connect to plugin's dedicated WebSocket endpoint (not SignalK's)
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.host;
-    const wsUrl = `${protocol}//${host}/signalk/v1/stream?subscribe=none`;
+    const wsUrl = `${protocol}//${host}/plugins/signalk-units-preference/stream`;
 
     try {
         streamWebSocket = new WebSocket(wsUrl);
@@ -101,37 +244,33 @@ function disconnectFromStream() {
 }
 
 /**
- * Subscribe to all paths with .unitsConverted suffix
+ * Subscribe to paths for conversion
  */
 async function subscribeToConvertedPaths() {
     try {
+        // Get selected context
+        const contextSelect = document.getElementById('streamContext');
+        const selectedContext = contextSelect ? contextSelect.value : 'vessels.self';
+
         // Get all paths from the metadata
         const response = await fetch('/plugins/signalk-units-preference/paths');
         const pathsData = await response.json();
 
-        // Create subscription for .unitsConverted paths
+        // Create subscriptions (plugin will convert and stream back)
         const subscriptions = Object.keys(pathsData).map(path => ({
-            path: `${path}.unitsConverted`,
-            period: 1000,
-            format: 'delta',
-            policy: 'instant'
-        }));
-
-        // Also subscribe to original paths for comparison
-        const originalSubscriptions = Object.keys(pathsData).map(path => ({
             path: path,
             period: 1000,
             format: 'delta',
             policy: 'instant'
         }));
 
-        // Send subscription message
+        // Send subscription message with selected context
         if (streamWebSocket && streamWebSocket.readyState === WebSocket.OPEN) {
             streamWebSocket.send(JSON.stringify({
-                context: 'vessels.self',
-                subscribe: [...subscriptions, ...originalSubscriptions]
+                context: selectedContext,
+                subscribe: subscriptions
             }));
-            console.log(`Subscribed to ${subscriptions.length} converted paths`);
+            console.log(`Subscribed to ${subscriptions.length} paths for conversion (context: ${selectedContext})`);
         }
     } catch (error) {
         console.error('Error subscribing to paths:', error);
@@ -139,7 +278,7 @@ async function subscribeToConvertedPaths() {
 }
 
 /**
- * Handle incoming delta message
+ * Handle incoming delta message from plugin's conversion stream
  */
 function handleDeltaMessage(delta) {
     if (!delta.updates) return;
@@ -151,38 +290,25 @@ function handleDeltaMessage(delta) {
             const path = pathValue.path;
             const value = pathValue.value;
 
-            // Check if this is a converted path
-            if (path.endsWith('.unitsConverted')) {
-                const originalPath = path.replace('.unitsConverted', '');
+            // Plugin sends converted values directly (not as .unitsConverted paths)
+            // The value object contains both converted and original data
+            if (!path || !value) continue;
 
-                // Store or update the data
-                let pathData = streamDataMap.get(originalPath) || {
-                    originalPath: originalPath,
-                    originalValue: null,
-                    convertedValue: null,
-                    timestamp: null,
-                    source: null
-                };
+            // Store or update the data
+            let pathData = streamDataMap.get(path) || {
+                originalPath: path,
+                originalValue: null,
+                convertedValue: null,
+                timestamp: null,
+                source: null
+            };
 
-                pathData.convertedValue = value;
-                pathData.timestamp = update.timestamp || new Date().toISOString();
-                pathData.source = update.$source || 'unknown';
-                streamDataMap.set(originalPath, pathData);
-            } else {
-                // Original value
-                let pathData = streamDataMap.get(path) || {
-                    originalPath: path,
-                    originalValue: null,
-                    convertedValue: null,
-                    timestamp: null,
-                    source: null
-                };
-
-                pathData.originalValue = value;
-                pathData.timestamp = update.timestamp || new Date().toISOString();
-                pathData.source = update.$source || 'unknown';
-                streamDataMap.set(path, pathData);
-            }
+            // Value from plugin contains conversion info
+            pathData.convertedValue = value;
+            pathData.originalValue = value.original || null;
+            pathData.timestamp = update.timestamp || new Date().toISOString();
+            pathData.source = update.$source || 'unknown';
+            streamDataMap.set(path, pathData);
         }
     }
 
@@ -324,7 +450,12 @@ function clearStreamData() {
 function updateStreamStatus(status, color) {
     const statusDiv = document.getElementById('streamStatus');
     if (statusDiv) {
-        statusDiv.textContent = status;
+        // Get current context
+        const contextSelect = document.getElementById('streamContext');
+        const selectedContext = contextSelect ? contextSelect.value : 'vessels.self';
+        const contextDisplay = selectedContext === 'vessels.self' ? 'self' : selectedContext.replace('vessels.', '');
+
+        statusDiv.textContent = `${status} (${contextDisplay})`;
         statusDiv.style.background = color + '20'; // 20% opacity
         statusDiv.style.color = color;
         statusDiv.style.borderColor = color;
@@ -342,7 +473,19 @@ function escapeHtml(text) {
 
 // Cleanup on page unload
 window.addEventListener('beforeunload', () => {
+    stopContextAutoRefresh();
     if (streamWebSocket) {
         streamWebSocket.close();
     }
 });
+
+// Initialize context dropdown when page loads
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+        populateContexts();
+        startContextAutoRefresh();
+    });
+} else {
+    populateContexts();
+    startContextAutoRefresh();
+}

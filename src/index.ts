@@ -4,6 +4,7 @@ import { UnitsManager } from './UnitsManager'
 import { ConversionDeltaValue, DeltaResponse, DeltaValueEntry } from './types'
 import { ValidationError, NotFoundError, formatErrorResponse } from './errors'
 import { registerDeltaStreamHandler } from './DeltaStreamHandler'
+import { ConversionStreamServer } from './ConversionStreamServer'
 import * as path from 'path'
 import * as fs from 'fs'
 import archiver from 'archiver'
@@ -18,9 +19,9 @@ module.exports = (app: ServerAPI): Plugin => {
     properties: {
       enableDeltaInjection: {
         type: 'boolean',
-        title: 'Enable Delta Stream Injection',
-        description: 'Automatically inject converted values into SignalK delta stream as .unitsConverted paths',
-        default: true
+        title: 'Enable Delta Stream Injection (Legacy)',
+        description: 'DEPRECATED: Inject converted values into SignalK delta stream as .unitsConverted paths. Use the plugin\'s dedicated WebSocket endpoint instead.',
+        default: false
       }
     }
   }
@@ -28,6 +29,7 @@ module.exports = (app: ServerAPI): Plugin => {
   let unitsManager: UnitsManager
   let openApiSpec: object = PLUGIN_SCHEMA
   let unsubscribeDeltaHandler: (() => void) | undefined
+  let conversionStreamServer: ConversionStreamServer | undefined
 
   const plugin: Plugin = {
     id: PLUGIN_ID,
@@ -52,14 +54,26 @@ module.exports = (app: ServerAPI): Plugin => {
         }
 
         // Register delta stream handler to inject converted values into data stream
-        // This allows clients to access converted values at path.unitsConverted
-        const enableDeltaInjection = config.enableDeltaInjection !== false // Default to true
+        // DEPRECATED: This approach pollutes SignalK's data tree with .unitsConverted paths
+        // Use the plugin's dedicated WebSocket endpoint instead
+        const enableDeltaInjection = config.enableDeltaInjection === true // Default to false
         unsubscribeDeltaHandler = registerDeltaStreamHandler(app, unitsManager, enableDeltaInjection)
 
         if (enableDeltaInjection) {
-          app.debug('Delta stream injection enabled - converted values will be available at .unitsConverted paths')
+          app.debug('LEGACY: Delta stream injection enabled - converted values will be available at .unitsConverted paths')
+          app.debug('RECOMMENDED: Disable this and use the plugin WebSocket endpoint at /plugins/signalk-units-preference/stream')
         } else {
-          app.debug('Delta stream injection disabled - use REST API for conversions')
+          app.debug('Delta stream injection disabled (recommended) - use plugin WebSocket endpoint for conversions')
+        }
+
+        // Start dedicated conversion stream server
+        conversionStreamServer = new ConversionStreamServer(app, unitsManager)
+        const httpServer = (app as any).server
+        if (httpServer) {
+          conversionStreamServer.start(httpServer)
+          app.debug('Conversion stream server started - clients can connect to ws://host/plugins/signalk-units-preference/stream')
+        } else {
+          app.error('Cannot start conversion stream server - app.server is not available')
         }
 
         app.setPluginStatus('Running')
@@ -72,6 +86,13 @@ module.exports = (app: ServerAPI): Plugin => {
     },
 
     stop: async () => {
+      // Stop conversion stream server
+      if (conversionStreamServer) {
+        conversionStreamServer.stop()
+        conversionStreamServer = undefined
+        app.debug('Conversion stream server stopped')
+      }
+
       // Unsubscribe delta handler
       if (unsubscribeDeltaHandler) {
         unsubscribeDeltaHandler()
@@ -205,7 +226,7 @@ module.exports = (app: ServerAPI): Plugin => {
       const buildDeltaResponse = (
         pathStr: string,
         rawValue: unknown,
-        options?: { typeHint?: SupportedValueType; timestamp?: string }
+        options?: { typeHint?: SupportedValueType; timestamp?: string; context?: string }
       ): DeltaResponse => {
         const conversionInfo = unitsManager.getConversion(pathStr)
         const normalized = normalizeValueForConversion(
@@ -221,7 +242,7 @@ module.exports = (app: ServerAPI): Plugin => {
         }
 
         const envelope: DeltaResponse = {
-          context: 'vessels.self',
+          context: options?.context || 'vessels.self',
           updates: [baseUpdate]
         }
 
@@ -388,13 +409,17 @@ module.exports = (app: ServerAPI): Plugin => {
           const timestampParam = Array.isArray(req.query.timestamp)
             ? req.query.timestamp[0]
             : req.query.timestamp
+          const contextParam = Array.isArray(req.query.context)
+            ? req.query.context[0]
+            : req.query.context
 
           // If value query param provided, return conversion result
           if (valueParam !== undefined) {
-            app.debug(`Converting value ${valueParam} for path: ${pathStr}`)
+            app.debug(`Converting value ${valueParam} for path: ${pathStr} (context: ${contextParam || 'vessels.self'})`)
             const result = buildDeltaResponse(pathStr, valueParam, {
               typeHint: typeof typeParam === 'string' ? toSupportedValueType(typeParam) : undefined,
-              timestamp: typeof timestampParam === 'string' ? timestampParam : undefined
+              timestamp: typeof timestampParam === 'string' ? timestampParam : undefined,
+              context: typeof contextParam === 'string' ? contextParam : undefined
             })
             return res.json(result)
           }
@@ -547,6 +572,8 @@ module.exports = (app: ServerAPI): Plugin => {
             typeof req.body.type === 'string' ? toSupportedValueType(req.body.type) : undefined
           const timestampBody =
             typeof req.body.timestamp === 'string' ? req.body.timestamp : undefined
+          const contextBody =
+            typeof req.body.context === 'string' ? req.body.context : undefined
 
           // If value is a string from form data, try to parse it as JSON
           if (typeof value === 'string' && value !== '') {
@@ -565,11 +592,12 @@ module.exports = (app: ServerAPI): Plugin => {
             )
           }
 
-          app.debug(`Converting value for path: ${path}, value: ${value}`)
+          app.debug(`Converting value for path: ${path}, value: ${value} (context: ${contextBody || 'vessels.self'})`)
 
           const result = buildDeltaResponse(path, value, {
             typeHint: typeHintBody,
-            timestamp: timestampBody
+            timestamp: timestampBody,
+            context: contextBody
           })
           return res.json(result)
         } catch (error) {

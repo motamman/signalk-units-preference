@@ -1204,7 +1204,19 @@
                         </p>
                     </div>
 
-                    <div style="display: flex; gap: 10px; margin-bottom: 15px; align-items: center;">
+                    <div style="display: flex; gap: 10px; margin-bottom: 15px; align-items: center; flex-wrap: wrap;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <label for="streamContext" style="font-size: 14px; color: #6c757d; font-weight: 500;">Vessel:</label>
+                            <select id="streamContext" style="padding: 8px 12px; border: 2px solid #dee2e6; border-radius: 4px; font-size: 14px; min-width: 250px;">
+                                <option value="vessels.self">vessels.self (This Vessel)</option>
+                            </select>
+                            <button id="contextRefreshBtn" onclick="populateContexts(true)" style="padding: 8px 12px; background: #667eea; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;" title="Refresh vessel list">
+                                🔄
+                            </button>
+                            <span style="font-size: 11px; color: #95a5a6;">
+                                Updated: <span id="contextRefreshTime">--:--:--</span>
+                            </span>
+                        </div>
                         <button id="streamConnectBtn" class="btn-success" onclick="connectToStream()" style="padding: 10px 20px;">
                             Connect to Stream
                         </button>
@@ -1215,7 +1227,7 @@
                             Clear Data
                         </button>
                         <div id="streamStatus" style="padding: 8px 15px; border-radius: 4px; background: #f8f9fa; color: #6c757d; font-weight: 500;">
-                            Disconnected
+                            Disconnected (self)
                         </div>
                     </div>
 
