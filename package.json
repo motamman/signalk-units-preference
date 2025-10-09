@@ -38,9 +38,11 @@
     "node": ">=18.0.0"
   },
   "files": [
-    "dist/",
-    "public/",
-    "presets/",
+    "dist/**/*",
+    "src/**/*",
+    "public/**/*",
+    "presets/**/*",
+    "tsconfig.json",
     "README.md",
     "LICENSE"
   ],
