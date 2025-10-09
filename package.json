@@ -1,6 +1,6 @@
 {
   "name": "signalk-units-preference",
-  "version": "0.6.0-beta.2",
+  "version": "0.7.0-beta.1",
   "description": "SignalK webapp/utility for managing path value/unit conversions and display preferences",
   "main": "dist/index.js",
   "scripts": {
@@ -21,6 +21,9 @@
   ],
   "author": "Maurice Tamman",
   "license": "MIT",
+  "contributors": [
+    "Maurice Tamman <maurice@tamman.org>"
+  ],
   "repository": {
     "type": "git",
     "url": "https://github.com/motamman/signalk-units-preference.git"
@@ -29,6 +32,16 @@
     "url": "https://github.com/motamman/signalk-units-preference/issues"
   },
   "homepage": "https://github.com/motamman/signalk-units-preference#readme",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "files": [
+    "dist/",
+    "public/",
+    "presets/",
+    "README.md",
+    "LICENSE"
+  ],
   "signalk": {
     "appSupport": "webapp",
     "compatibility": ">=2.13.0",
@@ -36,8 +49,6 @@
     "appIcon": "units.png"
   },
   "dependencies": {
-    "@types/adm-zip": "^0.5.7",
-    "@types/archiver": "^6.0.3",
     "adm-zip": "^0.5.16",
     "archiver": "^7.0.1",
     "date-fns": "^4.1.0",
@@ -47,6 +58,8 @@
   },
   "devDependencies": {
     "@signalk/server-api": "^2.8.0",
+    "@types/adm-zip": "^0.5.7",
+    "@types/archiver": "^6.0.3",
     "@types/express": "^4.17.21",
     "@types/node": "^20.0.0",
     "@typescript-eslint/eslint-plugin": "^6.21.0",

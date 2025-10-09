@@ -1,8 +1,8 @@
-# SignalK Units Preference Manager
+# Units Display Preference
 
-A SignalK server for managing unit conversions and display preferences across all data paths. Convert any SignalK data point to your preferred units with flexible pattern matching, custom formulas, and a full-featured web interface and REST API.
+A SignalK server Weapp for managing unit conversions and display preferences across all data paths. Convert any SignalK data point to your preferred units with flexible pattern matching, custom formulas, and a REST API.
 
-> **Important:** This plugin only changes how conversions are managed inside the tool and its REST endpoints. It doesn’t modify existing SignalK applications yet—we’re trialing it as a possible built-in conversion manager for future apps.
+> **Important:** **Important:** This only changes how conversions are managed inside this tool. It won't modify any existing the display SignalK apps, though it could be used as conversion manager for other apps. For now, it is just for testing..
 
 ## Overview
 
