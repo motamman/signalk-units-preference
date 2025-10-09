@@ -2,7 +2,7 @@ import { Plugin, ServerAPI } from '@signalk/server-api'
 import { IRouter, Request, Response } from 'express'
 import { UnitsManager } from './UnitsManager'
 import { ConversionDeltaValue, DeltaResponse, DeltaValueEntry } from './types'
-import { ValidationError, ConversionError, NotFoundError, formatErrorResponse } from './errors'
+import { ValidationError, NotFoundError, formatErrorResponse } from './errors'
 import * as path from 'path'
 import * as fs from 'fs'
 import archiver from 'archiver'
@@ -359,7 +359,9 @@ module.exports = (app: ServerAPI): Plugin => {
           const pathStr = req.params.path
           const valueParam = Array.isArray(req.query.value) ? req.query.value[0] : req.query.value
           const typeParam = Array.isArray(req.query.type) ? req.query.type[0] : req.query.type
-          const timestampParam = Array.isArray(req.query.timestamp) ? req.query.timestamp[0] : req.query.timestamp
+          const timestampParam = Array.isArray(req.query.timestamp)
+            ? req.query.timestamp[0]
+            : req.query.timestamp
 
           // If value query param provided, return conversion result
           if (valueParam !== undefined) {
@@ -517,7 +519,8 @@ module.exports = (app: ServerAPI): Plugin => {
           let value = req.body.value
           const typeHintBody =
             typeof req.body.type === 'string' ? toSupportedValueType(req.body.type) : undefined
-          const timestampBody = typeof req.body.timestamp === 'string' ? req.body.timestamp : undefined
+          const timestampBody =
+            typeof req.body.timestamp === 'string' ? req.body.timestamp : undefined
 
           // If value is a string from form data, try to parse it as JSON
           if (typeof value === 'string' && value !== '') {

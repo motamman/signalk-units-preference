@@ -22,12 +22,7 @@ export class PluginError extends Error {
   userMessage: string
   resolution?: string
 
-  constructor(
-    message: string,
-    status: number,
-    userMessage?: string,
-    resolution?: string
-  ) {
+  constructor(message: string, status: number, userMessage?: string, resolution?: string) {
     super(message)
     this.name = this.constructor.name
     this.status = status
@@ -72,7 +67,8 @@ export class ConversionError extends PluginError {
       message,
       422,
       userMessage || 'Unable to convert units',
-      resolution || 'Check that the conversion formula is valid and the value is within acceptable range'
+      resolution ||
+        'Check that the conversion formula is valid and the value is within acceptable range'
     )
   }
 }
@@ -83,9 +79,7 @@ export class ConversionError extends PluginError {
  */
 export class NotFoundError extends PluginError {
   constructor(resource: string, identifier?: string) {
-    const message = identifier
-      ? `${resource} not found: ${identifier}`
-      : `${resource} not found`
+    const message = identifier ? `${resource} not found: ${identifier}` : `${resource} not found`
 
     const userMessage = identifier
       ? `Could not find ${resource.toLowerCase()}: "${identifier}"`

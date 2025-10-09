@@ -1,12 +1,7 @@
 import { ServerAPI } from '@signalk/server-api'
 import * as fs from 'fs'
 import * as path from 'path'
-import {
-  UnitsPreferences,
-  CategoryPreference,
-  PathPatternRule,
-  BaseUnitDefinition
-} from './types'
+import { UnitsPreferences, CategoryPreference, PathPatternRule, BaseUnitDefinition } from './types'
 
 const DEFAULT_CATEGORY_PREFERENCES: Record<string, CategoryPreference & { baseUnit?: string }> = {
   speed: { targetUnit: 'kn', displayFormat: '0.0' },
@@ -250,7 +245,8 @@ export class PreferencesStore {
           preferencesChanged = true
         }
 
-        preferencesChanged = this.ensureCategoryDefaults(categoryToBaseUnitMap) || preferencesChanged
+        preferencesChanged =
+          this.ensureCategoryDefaults(categoryToBaseUnitMap) || preferencesChanged
         preferencesChanged = this.ensureDefaultPathPatterns() || preferencesChanged
 
         if (preferencesChanged) {
@@ -501,11 +497,7 @@ export class PreferencesStore {
   /**
    * Add a conversion to a unit definition
    */
-  async addConversionToUnit(
-    baseUnit: string,
-    targetUnit: string,
-    conversion: any
-  ): Promise<void> {
+  async addConversionToUnit(baseUnit: string, targetUnit: string, conversion: any): Promise<void> {
     // If this base unit doesn't exist in custom definitions, create it
     if (!this.unitDefinitions[baseUnit]) {
       this.unitDefinitions[baseUnit] = {
