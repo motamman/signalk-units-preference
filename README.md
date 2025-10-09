@@ -1,9 +1,12 @@
-<div align="center" style="background: linear-gradient(135deg, #FAC10F 0%, #977408 100%); padding: 20px; border-radius: 10px; position: relative;">
-  <img src="public/units.png" alt="Units" height="80" style="position: absolute; left: 20px; top: 20px; border-radius: 5px;">
-  <h1 style="color: black; margin: 0 0 10px 0;">SignalK Units Display Selector</h1>
-  <p style="color: #241c00; font-size: 1.1rem;">Configure unit conversions and display preferences</p>
-  <p style="text-align: left; padding-left: 1%; padding-top: 2%;"><strong>Important:</strong> This only changes how conversions are managed inside this tool. It won't modify any existing SignalK apps, though it could be used as conversion manager for other apps. For now, it is just for testing.</p>
-</div>
+<p align="left">
+  <img src="public/units.png" alt="Units Icon" height="80">
+</p>
+
+# SignalK Units Display Selector
+
+**Configure unit conversions and display preferences**
+
+> **Important:** This only changes how conversions are managed inside this tool. It won't modify any existing SignalK apps, though it could be used as conversion manager for other apps. For now, it is just for testing.
 
 ## Overview
 
