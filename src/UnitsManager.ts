@@ -184,6 +184,14 @@ export class UnitsManager {
   }
 
   /**
+   * Set up callback for preference changes (used by delta stream handler for cache invalidation)
+   * This is exposed on UnitsManager to support the DeltaStreamHandler's cache clearing mechanism.
+   */
+  setPreferencesChangeCallback(callback: () => void): void {
+    this.preferencesStore.setOnPreferencesChanged(callback)
+  }
+
+  /**
    * Get category to base unit mapping (JSON or TypeScript fallback)
    */
   private getCategoryToBaseUnitMap(): Record<string, string> {

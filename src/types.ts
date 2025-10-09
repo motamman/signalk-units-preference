@@ -195,12 +195,32 @@ export interface ConvertValueResponse {
   signalkSource?: string
 }
 
+/**
+ * SignalK-compliant converted value structure
+ */
 export interface ConversionDeltaValue {
-  value: any
+  /** Converted value in target units */
+  converted: any
+  /** Formatted display string */
   formatted: string
-  symbol: string
-  displayFormat: string
+  /** Original value in base/SI units */
   original: any
+}
+
+/**
+ * Metadata for a converted path (SignalK meta format)
+ */
+export interface ConversionMetadata {
+  /** Target unit symbol (e.g., "kn", "°C") */
+  units: string
+  /** Display format pattern (e.g., "0.0", "0.00") */
+  displayFormat: string
+  /** Human-readable description */
+  description?: string
+  /** Original base unit (e.g., "m/s", "K") */
+  originalUnits: string
+  /** Display name for UI */
+  displayName?: string
 }
 
 /**
@@ -212,12 +232,22 @@ export interface DeltaValueEntry {
 }
 
 /**
+ * SignalK delta metadata entry
+ */
+export interface DeltaMetaEntry {
+  path: string
+  value: ConversionMetadata
+}
+
+/**
  * SignalK delta update block
  */
 export interface DeltaUpdate {
   $source?: string
   timestamp?: string
   values: DeltaValueEntry[]
+  /** Optional metadata array (SignalK spec) */
+  meta?: DeltaMetaEntry[]
 }
 
 /**
@@ -234,4 +264,8 @@ export interface DeltaResponse {
 export interface PluginConfig {
   /** Enable debug logging */
   debug?: boolean
+  /** Enable delta stream injection (legacy feature, deprecated) */
+  enableDeltaInjection?: boolean
+  /** Include metadata in every delta message (default: true). Set to false for optimization if metadata rarely changes. */
+  sendMeta?: boolean
 }

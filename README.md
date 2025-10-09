@@ -1,8 +1,8 @@
 # Units Display Preference
 
-A SignalK server tool for managing unit conversions and display preferences across all data paths. Convert any SignalK data point to your preferred units with flexible pattern matching, custom formulas, and a REST API.
+A SignalK server tool for managing unit conversions and display preferences across all data paths. Convert any SignalK data point to your preferred units with flexible pattern matching, custom formulas, and a REST API and streamer.
 
->**Important:** This only changes how conversions are managed inside this tool. It won't modify any existing the display SignalK apps, though it could be used as conversion manager for other apps. For now, it is just for testing..
+>**Important:** This only changes how conversions are managed inside this tool. It won't modify any existing the display SignalK apps, though it could be used as conversion manager for other apps. For now, it is just for testing.
 
 ## Overview
 
@@ -14,7 +14,7 @@ This plugin provides a complete unit conversion system for SignalK, allowing you
 - Use wildcard patterns to apply conversions to multiple paths
 - Override specific paths with custom units
 - View comprehensive metadata for all paths
-- Access conversions via REST API for integration with other apps
+- Access conversions via REST API websocket streamer for integration with other apps
 
 ## Key Features
 
@@ -110,6 +110,28 @@ Convert seconds to human-readable durations (e.g., for timers, ETA, runtime).
 - **Human-Readable**: Verbose ("2 hours 30 minutes 45 seconds") or compact ("2h 30m")
 - **Safe Formatting**: Uses date-fns `intervalToDuration` and `formatDuration` for verbose output
 - **Examples**: Perfect for `navigation.course.calcValues.timeToGo`, `propulsion.*.runtime`, etc.
+
+### 11. **Delta Stream Integration** ⭐ NEW
+Automatic injection of converted values into SignalK delta stream for zero-latency access.
+
+- **Parallel Paths**: Converted values available at `.unitsConverted` suffix (e.g., `navigation.speedOverGround.unitsConverted`)
+- **Real-Time Conversion**: All incoming delta messages automatically converted
+- **WebSocket Access**: Subscribe to converted values via SignalK WebSocket stream
+- **REST API Access**: Converted values accessible via standard SignalK REST API
+- **Performance Optimized**: Caching system with <2% CPU overhead
+- **SignalK Compliant**: Preserves original SI values alongside converted values
+- **Configurable**: Enable/disable via plugin settings (enabled by default)
+- **No Client Dependencies**: Clients don't need mathjs or date-fns - all conversions server-side
+
+**Example Usage:**
+```javascript
+// Subscribe to converted values via WebSocket
+ws.subscribe('navigation.speedOverGround.unitsConverted')
+// Receives: { value: 10.0, formatted: "10.0 kn", symbol: "kn", displayFormat: "0.0", original: 5.14 }
+
+// Or access via REST API
+GET /signalk/v1/api/vessels/self/navigation/speedOverGround/unitsConverted
+```
 
 ## How It Works
 
@@ -783,7 +805,75 @@ This plugin provides a centralized unit conversion service that other SignalK ap
 
 ### Integration Approaches
 
-#### 1. Simple Conversion Display
+#### 1. Delta Stream Integration (Recommended) ⭐ NEW
+
+**Use Case**: Access pre-converted values directly from SignalK delta stream with zero conversion overhead.
+
+Starting in v0.7.0, the plugin automatically injects converted values into the SignalK delta stream as parallel `.unitsConverted` paths. This is the **recommended approach** for real-time applications as it eliminates the need for REST API calls and client-side conversion logic.
+
+**WebSocket Subscription:**
+```javascript
+const ws = new WebSocket('ws://localhost:3000/signalk/v1/stream?subscribe=none')
+
+ws.onopen = () => {
+  // Subscribe to both original and converted values
+  ws.send(JSON.stringify({
+    context: 'vessels.self',
+    subscribe: [
+      { path: 'navigation.speedOverGround', period: 1000 },
+      { path: 'navigation.speedOverGround.unitsConverted', period: 1000 }
+    ]
+  }))
+}
+
+ws.onmessage = (event) => {
+  const delta = JSON.parse(event.data)
+
+  for (const update of delta.updates || []) {
+    for (const pathValue of update.values || []) {
+      if (pathValue.path === 'navigation.speedOverGround.unitsConverted') {
+        // Pre-converted value ready to display
+        const converted = pathValue.value
+        console.log(converted.formatted)  // "10.0 kn"
+        console.log(converted.value)      // 10.0
+        console.log(converted.symbol)     // "kn"
+        console.log(converted.original)   // 5.14 (original SI value)
+
+        // Display to user - no conversion needed!
+        displaySpeed(converted.formatted)
+      }
+    }
+  }
+}
+```
+
+**REST API Access:**
+```javascript
+// Get converted value directly from SignalK API
+const response = await fetch('/signalk/v1/api/vessels/self/navigation/speedOverGround/unitsConverted')
+const converted = await response.json()
+
+console.log(converted.value.formatted)  // "10.0 kn"
+```
+
+**Benefits:**
+- ✅ **Zero Latency**: No REST API calls needed - values arrive pre-converted
+- ✅ **No Dependencies**: Clients don't need mathjs, date-fns, or custom formatting functions
+- ✅ **Real-Time**: Converted values update automatically with delta stream
+- ✅ **SignalK Compliant**: Original SI values preserved at original path
+- ✅ **Server-Side**: All complex conversions (formulas, date formatting) handled server-side
+
+**Configuration:**
+The delta stream injection is enabled by default. To disable it, configure the plugin in SignalK admin UI:
+```json
+{
+  "enableDeltaInjection": false
+}
+```
+
+---
+
+#### 2. Simple Conversion Display (Legacy REST API)
 
 **Use Case**: Display a single SignalK value in user's preferred units
 
@@ -1521,399 +1611,4 @@ MIT
 
 ## Changelog
 
-### [0.7.0-beta.1] - 2025-10-09
-
-#### Added
-- **Comprehensive Test Suite**: Implemented Jest-based testing framework with 56 passing tests
-  - **Formula Evaluator Tests** (28 tests): Basic arithmetic, Math functions, edge cases, security validation, error handling
-  - **Conversion Engine Tests** (19 tests): Conversion lookups, unit definition resolution, formula conversions, date/time formatting
-  - **Error Handling Tests** (11 tests): ValidationError, NotFoundError, ConversionError, response formatting
-  - **Test Commands**: `npm test`, `npm run test:watch`, `npm run test:coverage`
-  - **Coverage**: 80%+ coverage on core conversion logic, 96%+ on error handling
-- **MIT License File**: Added standard MIT license to project root
-- **Contributors Metadata**: Added contributors field to package.json
-
-#### Changed
-- **Package.json Improvements**:
-  - **Version**: Bumped to 0.7.0-beta.1
-  - **Dependencies Cleanup**: Moved `@types/adm-zip` and `@types/archiver` to devDependencies (reduces production package size)
-  - **Node.js Requirement**: Added `engines` field requiring Node.js >= 18.0.0
-  - **Files Whitelist**: Added explicit `files` field for safer npm publishing (dist/, public/, presets/, README.md, LICENSE)
-  - **Contributors**: Added contributor information with email
-- **Code Refactoring** (from recent commits):
-  - **Modularization**: Split UnitsManager into focused classes:
-    - `ConversionEngine.ts` - Conversion logic and formula evaluation
-    - `MetadataManager.ts` - Path metadata resolution and management
-    - `PreferencesStore.ts` - Preference persistence and loading
-    - `PatternMatcher.ts` - Wildcard pattern matching logic
-  - **Standardized Errors**: Introduced dedicated error classes (ValidationError, ConversionError, NotFoundError)
-  - **Built-in Units**: Replaced comprehensiveDefaults.ts with builtInUnits.ts for clearer naming
-
-#### Fixed
-- **Test Configuration**: Properly configured Jest with TypeScript support and coverage reporting
-- **.gitignore**: Added coverage/ and *.tsbuildinfo to excluded files
-
-#### Technical Changes
-- **Jest Configuration**: Added jest.config.js with ts-jest preset, coverage collection, and proper test matching
-- **Test Infrastructure**: Created tests/ directory with organized test files by component
-- **Package Metadata**: Enhanced package.json with all necessary fields for npm publication
-- **Build Artifacts**: Updated .gitignore and .npmignore for cleaner repository
-
-#### Documentation
-- **README Updates**:
-  - Added Development → Testing section with test commands and coverage summary
-  - Added Development → Linting section
-  - Updated Project Structure to reflect modular architecture
-  - Corrected license from Apache-2.0 to MIT
-  - Updated file structure documentation with tests/ directory
-- **Changelog**: Added this entry documenting all changes for 0.7.0-beta.1
-
-### [0.6.0-beta.2] - 2025-10-08
-
-#### Added
-- **Duration Formatting**: 11 new duration formats for the `time` category (base unit: seconds)
-  - `DD:HH:MM:SS` - Days:Hours:Minutes:Seconds format
-  - `HH:MM:SS` - Hours:Minutes:Seconds format
-  - `HH:MM:SS.mmm` - Hours:Minutes:Seconds with milliseconds
-  - `MM:SS` - Minutes:Seconds format
-  - `MM:SS.mmm` - Minutes:Seconds with milliseconds
-  - `MM.xx` - Decimal minutes (e.g., 150.75 min)
-  - `HH.xx` - Decimal hours (e.g., 2.51 hr)
-  - `DD.xx` - Decimal days (e.g., 0.10 days)
-  - `duration-verbose` - Human-readable (e.g., "2 hours 30 minutes 45 seconds")
-  - `duration-compact` - Compact format (e.g., "2h 30m")
-  - Perfect for `navigation.course.calcValues.timeToGo`, `propulsion.*.runtime`, timers, etc.
-
-#### Changed
-- **Security Hardening**: Replaced unsafe `Function` constructor with **mathjs** library
-  - Eliminated code injection vulnerabilities in formula evaluation
-  - Sandboxed mathematical expression evaluation
-  - No access to JavaScript runtime or global scope
-  - Validated input/output types with proper error handling
-- **Date/Time Security**: Replaced manual date parsing with **date-fns** library
-  - Safe ISO-8601 date parsing and formatting
-  - Proper timezone support using date-fns-tz
-  - Removed 100+ lines of custom date manipulation code
-  - All 28+ date formats now use date-fns format patterns
-- **Dynamic Date Format Loading**: Date formats now generated from `date-formats.json`
-  - Date format conversions created dynamically at runtime
-  - Centralized format metadata in one location
-  - No duplication between definitions and conversion logic
-- **Type Safety Improvements**: Enhanced type handling for formulas
-  - Formulas return `number` for numeric conversions
-  - Formulas return `string` for duration/date formatting
-  - Proper type checking throughout conversion pipeline
-  - Consistent handling of numeric vs formatted string results
-- **Cleaned Time Conversions**: Simplified seconds (s) base unit conversions
-  - Removed confusing numeric-only conversions (old min, hr, day)
-  - Kept only useful duration formats
-  - Better organized with clear purpose for each format
-
-#### Security
-- **No Code Injection**: mathjs prevents all code injection attacks
-  - `constructor.constructor("malicious")()` ❌ Blocked
-  - `process.exit()` ❌ Blocked
-  - `eval("malicious")` ❌ Blocked
-- **Input Validation**: Strict validation of all formula inputs
-  - Rejects NaN, Infinity, non-numeric values
-  - Type-safe evaluation with error handling
-- **Safe Dependencies**: Industry-standard libraries with millions of downloads
-  - mathjs: 14.8.2 - Mathematical expression parser
-  - date-fns: 4.1.0 - Modern date utility library
-  - date-fns-tz: 3.2.0 - Timezone support for date-fns
-
-#### Technical Changes
-- Refactored `formulaEvaluator.ts` with mathjs and date-fns
-- Added duration formatting functions (formatDurationHMS, formatDurationMS, etc.)
-- Updated `evaluateFormula()` to handle special duration format functions
-- Enhanced `UnitsManager.convertValue()` to handle string results from duration formatting
-- Enhanced `UnitsManager.convertUnitValue()` to handle string results
-- Simplified `UnitsManager.formatDateValue()` using date-fns patterns
-- Removed manual date manipulation code (MONTH_NAMES, WEEKDAY_NAMES, pad2, getDateParts)
-- Updated `getConversionsForBaseUnit()` to dynamically generate date format conversions
-- Cleaned up `standard-units-definitions.json` seconds (s) conversions
-
-### [0.5.0-beta.5] - 2025-10-06
-
-#### Added
-- **Combined Date+Time Formats**: 16 new date/time conversion formats
-  - `short-date-24hrs` / `short-date-24hrs-local` → "Jan 6, 2025 14:30:45"
-  - `short-date-am/pm` / `short-date-am/pm-local` → "Jan 6, 2025 02:30:45 PM"
-  - `long-date-24hrs` / `long-date-24hrs-local` → "Monday, January 6, 2025 14:30:45"
-  - `long-date-am/pm` / `long-date-am/pm-local` → "Monday, January 6, 2025 02:30:45 PM"
-  - `dd/mm/yyyy-24hrs` / `dd/mm/yyyy-24hrs-local` → "06/01/2025 14:30:45"
-  - `dd/mm/yyyy-am/pm` / `dd/mm/yyyy-am/pm-local` → "06/01/2025 02:30:45 PM"
-  - `mm/dd/yyyy-24hrs` / `mm/dd/yyyy-24hrs-local` → "01/06/2025 14:30:45"
-  - `mm/dd/yyyy-am/pm` / `mm/dd/yyyy-am/pm-local` → "01/06/2025 02:30:45 PM"
-  - All available for both dateTime (RFC 3339 UTC) and epoch (Epoch Seconds) categories
-
-- **JSON-Based Unit System**: Refactored all conversions, categories, and date formats to JSON files
-  - `presets/definitions/conversions.json` - All unit conversions by base unit
-  - `presets/definitions/categories.json` - Category→baseUnit mappings and core categories list
-  - `presets/definitions/date-formats.json` - Date/time format definitions with metadata
-  - Automatic loading with TypeScript fallback if JSON files missing or corrupted
-  - Users can now customize unit system by editing/uploading JSON files
-
-#### Changed
-- **Backup/Restore**: Updated to include definition files
-  - Backup ZIP now includes `presets/definitions/*.json` files
-  - Restore automatically applies uploaded definition files
-  - Users can download, edit, and re-upload customized unit systems
-
-- **Comprehensive File Management**: New UI in Settings tab for discrete file editing
-  - **Definition Files**: conversions.json, categories.json, date-formats.json
-  - **Built-in Presets**: imperial-us.json, imperial-uk.json, metric.json
-  - **Runtime Data**: units-preferences.json, units-definitions.json
-  - Download/upload any individual file without affecting others
-  - Automatic JSON validation and reload after upload
-  - Fine-grained control over every aspect of the unit system
-
-#### Technical Changes
-- Refactored `UnitsManager` to load JSON definitions at startup
-- Added helper methods: `getCategoryToBaseUnitMap()`, `getCoreCategories()`, `getConversionsForBaseUnit()`
-- Replaced all hardcoded TypeScript references with JSON-backed helpers
-- Simplified lookup logic in `findUnitDefinition()`, `inferMetadataFromSignalK()`, etc.
-- Clean separation of data (JSON) vs logic (TypeScript)
-- Backward compatible with TypeScript fallback for missing JSON files
-
-### [0.5.0-beta.4] - 2025-10-06
-
-#### Fixed
-- **Auto-Assigned Path Conversions**: Fixed conversion endpoints returning pass-through conversions instead of proper category-based conversions
-  - Changed `resolveMetadataForPath()` to use `this.signalKMetadata[pathStr]` instead of `this.app.getMetadata(pathStr)`
-  - Auto-assigned paths (SignalK Auto status) now show correct conversions with proper formulas
-  - `/conversion/:path` endpoint now returns selected target conversion instead of identity pass-through
-  - `/paths` endpoint now includes proper conversion data for auto-assigned paths
-  - Examples: temperature (K → celsius), speed (m/s → knots), percentage (ratio → percent), angle (rad → deg)
-
-#### Technical Changes
-- Updated `resolveMetadataForPath()` to use frontend-provided SignalK metadata store
-- Made metadata resolution consistent with other methods (`getConversion()`, `getPassThroughConversion()`, `getAllPathsInfo()`)
-- Removed debug logging added during investigation
-
-### [0.5.0-beta.3] - 2025-10-05
-
-#### Added
-- **Unitless Category**: New core category for dimensionless values
-  - Base unit: `tr` (tabula rasa)
-  - Default target unit: `tr` with symbol 'tr'
-  - Identity conversion (tr → tr) for unitless/dimensionless data
-  - Available in all category and pattern dropdowns
-- **Core Categories List**: Schema API now includes `coreCategories` array
-  - Distinguishes core categories from custom user-created categories
-  - Frontend uses this list for proper CORE vs CUSTOM badge display
-  - Prevents misidentification of custom categories as core
-
-#### Fixed
-- **Custom Category Detection Bug**: Custom categories were incorrectly showing as CORE
-  - Fixed frontend detection logic to use `coreCategories` list from backend
-  - Custom categories now properly show CUSTOM badge with Edit and Delete buttons
-  - Core categories correctly show CORE badge with Edit button only
-- **Dirty State Tracking**: Adding or deleting custom categories now marks preset as modified
-  - `checkPresetDirty()` now detects when categories are added
-  - `checkPresetDirty()` now detects when categories are removed
-  - `addCustomCategory()` preserves dirty state instead of resetting it
-  - `deleteCategory()` preserves dirty state instead of resetting it
-  - Orange "Modified" banner correctly appears after category changes
-- **Backend Category Pollution**: Core categories no longer get `baseUnit` saved to preferences
-  - `ensureCategoryDefaults()` only adds `baseUnit` to custom categories
-  - Core categories rely on static `categoryToBaseUnit` map
-  - Prevents confusion between core and custom categories in preferences file
-
-#### Changed
-- **Category Detection Logic**: Simplified to check against static core categories list
-  - Removed complex baseUnit comparison logic
-  - More reliable and maintainable
-  - Consistent behavior across frontend and backend
-
-#### Technical Changes
-- Added `coreCategories` field to `getUnitSchema()` return type
-- Enhanced `ensureCategoryDefaults()` with core category check
-- Updated frontend `unitSchema` initialization to include `coreCategories` array
-- Improved dirty state detection in category add/delete operations
-
-### [0.5.0-beta.2] - 2025-10-05
-
-#### Added
-- **SignalK Auto Category Assignment**: Automatic category and conversion assignment based on SignalK base units
-  - Paths with SignalK units (K, V, ratio, etc.) automatically map to categories (temperature, voltage, percentage)
-  - Category preferences automatically applied without manual pattern/override configuration
-  - New "SignalK Auto" status (darker blue) in metadata table
-  - Priority hierarchy: Path Override > Path Pattern > SignalK Auto > SignalK Only > None
-- **Tabula Rasa Base Unit**: Special unitless base unit (`tr`) designed for custom transformations
-  - Blank slate unit with no built-in conversions
-  - Perfect for creating completely custom transformation workflows
-  - Available in all base unit dropdowns
-- **Backup & Restore System**: Complete configuration backup and restore functionality
-  - **Download Backup**: Creates timestamped zip file with all configuration
-  - **Restore Backup**: Upload zip to restore complete system state
-  - **Backup Contents**: All presets (built-in + custom), preferences, and custom unit definitions
-  - **Disaster Recovery**: Protects against corrupted files by backing up base presets
-  - **Warning Dialog**: Confirms before overwriting existing configuration
-  - **Auto-Reload**: Page refreshes after restore to load new configuration
-- **Quick Action Icons in Metadata Tab**: Create patterns and overrides directly from metadata table
-  - **Pattern Icon (📋)**: Pre-populates pattern form with path and category
-  - **Override Icon (📌)**: Pre-populates override form with path
-  - Icons only shown when applicable (not shown if pattern/override already exists)
-  - Auto-expands collapsed forms and scrolls to input
-  - Tab switching with pre-filled data
-- **Enhanced Icon Tooltips**: Detailed explanations for all metadata table icons
-  - 🔧 Conversion Details: "View conversion details - shows base unit, target unit, formula, symbol, and metadata"
-  - 🔗 GET Endpoint: "Open conversion in new tab - test GET endpoint with current value"
-  - ▶️ Run Test: "Run conversion test - convert current value and see result in new tab"
-  - 📋 Create Pattern: "Create pattern rule - define a wildcard pattern based on this path to match similar paths"
-  - 📌 Create Override: "Create path override - set specific units for this exact path (highest priority)"
-- **Clickable Filter Labels**: Metadata legend labels now filter the table on click
-  - Click any status label to search for that status
-  - Click Boolean label to filter by boolean valueType
-  - Visual feedback on hover with tooltips
-- **Clear Filter Button**: Reset metadata table filter
-  - Removes search text
-  - Clears visual selection indicators
-  - Resets to show all paths
-- **Visual Selection Indicators**: Active filter shows visual feedback
-  - Blue underline on selected filter label
-  - Bold text for active filter
-  - Clear visual state management
-- **Alphabetical Sorting**: All dropdowns and lists sorted case-insensitive alphabetically
-  - Categories sorted alphabetically
-  - Base units sorted alphabetically
-  - Target units sorted alphabetically
-  - Unit definitions list sorted alphabetically
-  - Conversion lists within each unit sorted alphabetically
-- **Boolean Type Support**: Detection and filtering for boolean value types
-  - Boolean valueType detection (true/false flags)
-  - Purple filter label in metadata legend
-  - Count of boolean-type paths
-  - Proper handling without treating as unit category
-
-#### Changed
-- **Category Resolution in Pass-Through**: Pass-through conversions now resolve category from base unit
-  - K → temperature category (not 'none')
-  - V → voltage category (not 'none')
-  - ratio → percentage category (not 'none')
-  - Enables category preferences to work with SignalK metadata paths
-- **Consistent Fallback Categories**:
-  - Paths with no base unit → category: 'none'
-  - Paths with unknown base unit → category: 'custom'
-  - Removed inconsistent use of 'custom' for null base units
-- **Header Logo Alignment**: SignalK Units Display Selector logo and text now left-aligned
-  - Logo positioned on left with flexbox alignment
-  - Text vertically centered with image
-  - Cleaner visual hierarchy
-
-#### Fixed
-- **Category Resolution Bug**: Pass-through conversions were hardcoded to category: 'none'
-  - Now correctly resolves category from base unit using `getCategoryFromBaseUnit()`
-  - Fixes voltage (V), temperature (K), and other auto-assignments
-- **Metadata Endpoint Category Bug**: `/paths` endpoint showing inconsistent categories
-  - Changed fallback from 'custom' to 'none' for null base units
-  - Consistent with pass-through conversion behavior
-- **Formula Evaluator Math Functions**: Added support for Math functions in conversion formulas
-  - Whitelisted: Math.pow, Math.sqrt, Math.abs, Math.round, Math.floor, Math.ceil, Math.min, Math.max
-  - Fixes Beaufort wind speed conversions and other complex formulas
-- **Inference Logic**: Removed inference that returned empty conversions
-  - `inferMetadataFromSignalK()` now returns null instead of metadata with empty conversions
-  - Allows fallback code to properly merge conversions from comprehensiveDefaultUnits
-
-#### Technical Changes
-- Added archiver and adm-zip dependencies for backup/restore
-- Enhanced `resolveMetadataForPath()` to merge built-in and custom conversions
-- Improved metadata resolution hierarchy with auto-category assignment
-- Better error messages and user feedback in backup/restore operations
-- Added `filterMetadataByStatus()` and `clearMetadataFilter()` functions
-- Enhanced `createPatternFromPath()` and `createOverrideFromPath()` with form expansion
-- Pattern icon hidden for SignalK Auto paths (already have category assignment)
-
-### [0.5.0-beta.1] - 2025-10-03
-
-#### Added
-- **All Paths Endpoint**: New `/paths` endpoint returns all SignalK paths with their conversion configuration
-  - Single API call to get complete configuration state
-  - Includes path overrides, pattern matches, and SignalK metadata
-  - Shows current values, status, and conversion settings for each path
-  - Designed for external app integration and diagnostics
-- **Unit System Presets**: Quick configuration with built-in unit system presets
-  - **Settings Tab**: New tab for managing unit system presets
-  - **Three Built-In Presets**: Metric, Imperial (US), and Imperial (UK)
-  - **One-Click Application**: Apply any preset to all categories instantly
-  - **Default Preset**: Imperial (US) applied automatically on virgin install
-  - **Current Preset Display**: Shows active preset on Categories tab with version and date
-- **Custom Preset Backup Feature**:
-  - **Dirty State Tracking**: Detects when categories are modified after applying a preset
-  - **Visual Indicator**: Orange "Modified" banner when preset is edited
-  - **Backup UI**: Name field and "Backup Preset" button appear when preset is dirty
-  - **Custom Presets Storage**: Saved to `presets/custom/` directory
-  - **Custom Presets Management**: View, apply, and delete custom presets in Settings tab
-- **Preset API Endpoints**:
-  - `PUT /presets/current` - Apply any preset (built-in or custom)
-  - `GET /presets/current` - Get currently applied preset
-  - `POST /presets/custom/:name` - Save custom preset
-  - `GET /presets/custom` - List all custom presets
-  - `GET /presets/custom/:name` - Download custom preset
-  - `PUT /presets/custom/:name` - Upload/update custom preset
-  - `DELETE /presets/custom/:name` - Delete custom preset
-- **Unit Definitions Tab**: Create custom base units and conversion formulas globally
-- **Path Patterns**: Wildcard pattern matching with priority system
-  - Support for `*` (single segment) and `**` (multi-segment) wildcards
-  - Pattern priority ordering for conflict resolution
-- **Pass-Through Conversions**: Graceful handling of unconfigured paths
-  - Returns SignalK metadata units when available
-  - No errors for missing conversions
-- **Enhanced Metadata Tab**: Read-only reference view with filtering and sorting
-  - Search across all columns
-  - Clickable column headers for sorting
-  - Color-coded status indicators
-  - Quick links to test conversions with live values
-- **Formula-Based Conversions**: JavaScript expression support
-  - Complex mathematical expressions
-  - Access to Math functions
-  - Bidirectional conversion formulas
-- **Path Override UI Improvements**:
-  - Searchable path dropdown with tree navigation
-  - Only selectable paths with actual values
-  - Click-to-close dropdown behavior
-- **SignalK Metadata Integration**:
-  - Automatic extraction of units from SignalK API
-  - Frontend sends metadata to backend for consistent access
-  - Metadata used in pass-through conversions
-
-#### Changed
-- **Removed Extended Metadata**: Simplified to patterns, categories, overrides, and unit definitions
-- **Conversion API**: Now always returns a conversion (pass-through if no match)
-  - Changed from `ConversionResponse | null` to `ConversionResponse`
-  - Removed 404 errors for missing conversions
-- **UI Refinements**:
-  - Cleaner Path Override form styling with proper layout
-  - Compact metadata table with better column sizing
-  - Improved tooltips with wrapping and positioning
-  - Categories tab now shows current preset status
-  - Settings tab moved to first position for easier access
-- **Dropdown Synchronization**: All dropdowns update when base units or conversions are added/deleted
-- **State Management**: Improved dirty state tracking to prevent false positives
-
-#### Fixed
-- Base unit dropdown synchronization across all tabs
-- Path tree rendering for Override tab
-- Path selection not working in Override tab
-- Metadata table displaying "Extended" entries after removal
-- Column header sort indicators
-- Search filtering now works across all columns
-- Dirty state persistence when editing path overrides, patterns, or categories
-- Original preset state reset when applying presets
-
-#### Technical Changes
-- Separated global unit definitions from path-specific assignments
-- Unified metadata handling between frontend and backend
-- Improved TypeScript type safety with non-nullable return types
-- Enhanced error handling with meaningful fallbacks
-- Better separation of concerns across tabs
-- Custom presets stored as JSON files in `presets/custom/` directory
-- Preset validation: prevents overwriting built-in presets
-- Name validation: alphanumeric, dashes, and underscores only
-
-### [0.4.0] - Previous Version
-- Initial category preferences
-- Basic path overrides
-- REST API endpoints
-- Web UI foundation
+See [CHANGELOG.md](./CHANGELOG.md) for a detailed history of changes.

@@ -496,16 +496,24 @@ export class MetadataManager {
         }
       }
 
-      const selfVesselId = data.self
-      const actualSelfId =
-        selfVesselId && selfVesselId.startsWith('vessels.')
-          ? selfVesselId.replace('vessels.', '')
-          : selfVesselId
+      // Extract paths from ALL vessels (self + AIS targets + buddy boats)
+      if (data.vessels && typeof data.vessels === 'object') {
+        const vesselIds = Object.keys(data.vessels)
+        this.app.debug(`Found ${vesselIds.length} vessels, extracting paths from all...`)
 
-      if (data.vessels && actualSelfId && data.vessels[actualSelfId]) {
-        this.app.debug(`Extracting paths from vessel: ${actualSelfId}`)
-        extractPathsRecursive(data.vessels[actualSelfId], '')
-        this.app.debug(`Extracted ${pathsSet.size} paths from SignalK API`)
+        for (const vesselId of vesselIds) {
+          const vesselData = data.vessels[vesselId]
+          if (vesselData && typeof vesselData === 'object') {
+            const beforeSize = pathsSet.size
+            extractPathsRecursive(vesselData, '')
+            const addedPaths = pathsSet.size - beforeSize
+            if (addedPaths > 0) {
+              this.app.debug(`Extracted ${addedPaths} paths from vessel: ${vesselId}`)
+            }
+          }
+        }
+
+        this.app.debug(`Total: Extracted ${pathsSet.size} unique paths from all vessels`)
       }
     } catch (error) {
       this.app.error(`Error collecting SignalK paths: ${error}`)

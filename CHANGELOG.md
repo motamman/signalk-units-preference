@@ -1,0 +1,218 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [0.7.0-beta.2] - 2025-10-09
+
+### Added ⭐ Major Architecture Overhaul
+- **Dedicated Conversion Stream Server**: Clean separation from SignalK data tree
+  - **New WebSocket Endpoint**: `ws://host/plugins/signalk-units-preference/stream` for streaming converted values
+  - **Zero Pollution**: No longer injects `.unitsConverted` paths into SignalK data tree (disabled by default)
+  - **Internal Subscription**: Plugin subscribes to SignalK internally and converts on-the-fly
+  - **Client Streaming**: Broadcasts converted values directly to clients without modifying SignalK
+  - **Module**: `ConversionStreamServer.ts` handles dedicated WebSocket server and conversion streaming
+  - **Dependencies**: Added `ws` and `@types/ws` for WebSocket server implementation
+
+- **Multi-Vessel Context Support**: Stream conversions from any vessel, not just vessels.self
+  - **Context Switching**: Select any vessel (self, AIS targets, buddy boats) from dropdown
+  - **Dynamic Discovery**: Auto-detects new vessels every 30 seconds
+  - **Manual Refresh**: Refresh button with visual feedback for immediate vessel list update
+  - **Context-Aware Subscriptions**: Plugin subscribes to SignalK for selected vessel context
+  - **REST API Enhancement**: Conversion endpoints accept optional `context` parameter
+
+- **Live Delta Stream Viewer**: Real-time conversion monitoring in web UI
+  - **New Tab Section**: "Live Delta Stream Viewer" at bottom of Metadata tab
+  - **WebSocket Connection**: Connect/disconnect controls with status indicator
+  - **Vessel Selector**: Dropdown with all available vessels and vessel names
+  - **Real-Time Display**: Shows original and converted values side-by-side
+  - **Detailed Info**: Displays baseUnit, targetUnit, timestamp, and $source for each path
+  - **Auto-Scroll**: Smart scrolling when near bottom of data stream
+  - **Visual Status**: Color-coded connection status (green=connected, gray=disconnected, yellow=connecting)
+
+- **Path Discovery Enhancement**: Discovers paths from ALL vessels
+  - **Multi-Vessel Scanning**: MetadataManager now scans all vessels, not just vessels.self
+  - **AIS Target Paths**: Discovers paths like `navigation.distanceToSelf` that only exist on other vessels
+  - **Debug Logging**: Added logging to show path count per vessel during discovery
+
+### Changed
+- **Delta Injection Disabled by Default**: Changed `enableDeltaInjection` default from `true` to `false`
+  - **Legacy Mode**: Old `.unitsConverted` injection available but deprecated
+  - **Migration**: Users should migrate to new dedicated WebSocket endpoint
+  - **Cleaner Architecture**: Recommended approach no longer pollutes SignalK data tree
+
+- **Stream Viewer Architecture**: Updated to use plugin's dedicated endpoint
+  - **Connection URL**: Changed from SignalK's WebSocket to plugin's dedicated endpoint
+  - **Subscription Format**: Simplified subscription message with context and paths
+  - **Data Format**: Receives converted values directly without `.unitsConverted` suffix
+
+- **Context Parameter**: REST API endpoints enhanced with optional context support
+  - **buildDeltaResponse()**: Accepts `context` parameter (defaults to vessels.self)
+  - **Envelope Format**: Context included in delta envelope
+  - **Multi-Vessel API**: Apps can query conversions for any vessel
+
+### Fixed
+- **Path Discovery Bug**: Fixed MetadataManager only scanning vessels.self
+  - **Root Cause**: `collectSignalKPaths()` was hardcoded to only scan vessels.self
+  - **Solution**: Now iterates through all vessel IDs from `/signalk/v1/api/vessels`
+  - **Impact**: Patterns like `**.distanceToSelf` now properly discovered and converted
+
+- **Context Mismatch**: Fixed stream viewer not receiving data when switching vessels
+  - **Subscription Handling**: Plugin properly subscribes to SignalK for each client's context
+  - **Broadcast Filtering**: Only sends deltas to clients subscribed to matching context
+  - **Debug Logging**: Added extensive logging for diagnosing context issues
+
+### Technical
+- **New Modules**:
+  - `ConversionStreamServer.ts` - Dedicated WebSocket server for conversion streaming
+  - Enhanced `DeltaStreamHandler.ts` (legacy mode, disabled by default)
+
+- **WebSocket Server**:
+  - Listens on `/plugins/signalk-units-preference/stream`
+  - Handles upgrade events on HTTP server
+  - Manages client subscriptions and contexts
+  - Internal SignalK WebSocket connection with auto-reconnect
+  - Per-client subscription tracking
+
+- **MetadataManager Enhancements**:
+  - `collectSignalKPaths()` now scans all vessels
+  - Added per-vessel debug logging
+  - Total paths logged across all vessels
+
+- **Stream Viewer Features**:
+  - `app-stream-viewer.js` - Complete client implementation
+  - `populateContexts()` - Fetches vessels from `/signalk/v1/api/vessels`
+  - `startContextAutoRefresh()` - 30-second auto-refresh interval
+  - `handleContextChange()` - Reconnects with new context on selection
+  - `subscribeToConvertedPaths()` - Sends subscription with context
+
+- **API Enhancements**:
+  - Added `context` parameter to `buildDeltaResponse()`
+  - Context defaults to `vessels.self` if not specified
+  - Delta envelope includes context for all responses
+
+### Documentation
+- **README Updates**:
+  - Updated Delta Stream Integration section with new architecture
+  - Added multi-vessel context usage examples
+  - Documented dedicated WebSocket endpoint
+  - Updated integration guide with new connection method
+  - Added migration notes for v0.7.0 architecture change
+
+## [0.7.0-beta.1] - 2025-10-09
+
+### Added
+- **Comprehensive Test Suite**: Implemented Jest-based testing framework with 56+ passing tests
+  - **Formula Evaluator Tests** (28 tests): Basic arithmetic, Math functions, edge cases, security validation, error handling
+  - **Conversion Engine Tests** (19 tests): Conversion lookups, unit definition resolution, formula conversions, date/time formatting
+  - **Error Handling Tests** (11 tests): ValidationError, NotFoundError, ConversionError, response formatting
+  - **Test Commands**: `npm test`, `npm run test:watch`, `npm run test:coverage`
+  - **Coverage**: 80%+ coverage on core conversion logic, 96%+ on error handling
+- **MIT License File**: Added standard MIT license to project root
+- **Contributors Metadata**: Added contributors field to package.json
+
+### Changed
+- **Package.json Improvements**:
+  - **Version**: Bumped to 0.7.0-beta.1
+  - **Dependencies Cleanup**: Moved `@types/adm-zip` and `@types/archiver` to devDependencies (reduces production package size)
+  - **Node.js Requirement**: Added `engines` field requiring Node.js >= 18.0.0
+  - **Files Whitelist**: Added explicit `files` field for safer npm publishing (dist/, public/, presets/, README.md, LICENSE)
+  - **Contributors**: Added contributor information with email
+- **Code Refactoring** (from recent commits):
+  - **Modularization**: Split UnitsManager into focused classes:
+    - `ConversionEngine.ts` - Conversion logic and formula evaluation
+    - `MetadataManager.ts` - Path metadata resolution and management
+    - `PreferencesStore.ts` - Preference persistence and loading
+    - `PatternMatcher.ts` - Wildcard pattern matching logic
+  - **Standardized Errors**: Introduced dedicated error classes (ValidationError, ConversionError, NotFoundError)
+  - **Built-in Units**: Replaced comprehensiveDefaults.ts with builtInUnits.ts for clearer naming
+
+### Fixed
+- **Test Configuration**: Properly configured Jest with TypeScript support and coverage reporting
+- **.gitignore**: Added coverage/ and *.tsbuildinfo to excluded files
+
+### Technical Changes
+- **Jest Configuration**: Added jest.config.js with ts-jest preset, coverage collection, and proper test matching
+- **Test Infrastructure**: Created tests/ directory with organized test files by component
+- **Package Metadata**: Enhanced package.json with all necessary fields for npm publication
+- **Build Artifacts**: Updated .gitignore and .npmignore for cleaner repository
+
+### Documentation
+- **README Updates**:
+  - Added Development → Testing section with test commands and coverage summary
+  - Added Development → Linting section
+  - Updated Project Structure to reflect modular architecture
+  - Corrected license from Apache-2.0 to MIT
+  - Updated file structure documentation with tests/ directory
+- **Changelog**: Added this entry documenting all changes for 0.7.0-beta.1
+
+## [0.6.0-beta.2] - 2025-10-08
+
+### Added
+- **Duration Formatting**: 11 new duration formats for the `time` category (base unit: seconds)
+  - `DD:HH:MM:SS` - Days:Hours:Minutes:Seconds format
+  - `HH:MM:SS` - Hours:Minutes:Seconds format
+  - `HH:MM:SS.mmm` - Hours:Minutes:Seconds with milliseconds
+  - `MM:SS` - Minutes:Seconds format
+  - `MM:SS.mmm` - Minutes:Seconds with milliseconds
+  - `MM.xx` - Decimal minutes (e.g., 150.75 min)
+  - `HH.xx` - Decimal hours (e.g., 2.51 hr)
+  - `DD.xx` - Decimal days (e.g., 0.10 days)
+  - `duration-verbose` - Human-readable (e.g., "2 hours 30 minutes 45 seconds")
+  - `duration-compact` - Compact format (e.g., "2h 30m")
+  - Perfect for `navigation.course.calcValues.timeToGo`, `propulsion.*.runtime`, timers, etc.
+
+### Changed
+- **Security Hardening**: Replaced unsafe `Function` constructor with **mathjs** library
+  - Eliminated code injection vulnerabilities in formula evaluation
+  - Sandboxed mathematical expression evaluation
+  - No access to JavaScript runtime or global scope
+  - Validated input/output types with proper error handling
+- **Date/Time Security**: Replaced manual date parsing with **date-fns** library
+  - Safe ISO-8601 date parsing and formatting
+  - Proper timezone support using date-fns-tz
+  - Removed 100+ lines of custom date manipulation code
+  - All 28+ date formats now use date-fns format patterns
+- **Dynamic Date Format Loading**: Date formats now generated from `date-formats.json`
+  - Date format conversions created dynamically at runtime
+  - Centralized format metadata in one location
+  - No duplication between definitions and conversion logic
+- **Type Safety Improvements**: Enhanced type handling for formulas
+  - Formulas return `number` for numeric conversions
+  - Formulas return `string` for duration/date formatting
+  - Proper type checking throughout conversion pipeline
+  - Consistent handling of numeric vs formatted string results
+- **Cleaned Time Conversions**: Simplified seconds (s) base unit conversions
+  - Removed confusing numeric-only conversions (old min, hr, day)
+  - Kept only useful duration formats
+  - Better organized with clear purpose for each format
+
+### Security
+- **No Code Injection**: mathjs prevents all code injection attacks
+  - `constructor.constructor("malicious")()` ❌ Blocked
+  - `process.exit()` ❌ Blocked
+  - `eval("malicious")` ❌ Blocked
+- **Input Validation**: Strict validation of all formula inputs
+  - Rejects NaN, Infinity, non-numeric values
+  - Type-safe evaluation with error handling
+- **Safe Dependencies**: Industry-standard libraries with millions of downloads
+  - mathjs: 14.8.2 - Mathematical expression parser
+  - date-fns: 4.1.0 - Modern date utility library
+  - date-fns-tz: 3.2.0 - Timezone support for date-fns
+
+### Technical Changes
+- Refactored `formulaEvaluator.ts` with mathjs and date-fns
+- Added duration formatting functions (formatDurationHMS, formatDurationMS, etc.)
+- Updated `evaluateFormula()` to handle special duration format functions
+- Enhanced `UnitsManager.convertValue()` to handle string results from duration formatting
+- Enhanced `UnitsManager.convertUnitValue()` to handle string results
+- Simplified `UnitsManager.formatDateValue()` using date-fns patterns
+- Removed manual date manipulation code (MONTH_NAMES, WEEKDAY_NAMES, pad2, getDateParts)
+- Updated `getConversionsForBaseUnit()` to dynamically generate date format conversions
+- Cleaned up `standard-units-definitions.json` seconds (s) conversions
+
+## [Older Versions]
+
+For changelog entries prior to 0.6.0-beta.2, please see the full changelog history in the git repository or previous releases.
