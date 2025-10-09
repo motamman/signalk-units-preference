@@ -1,9 +1,5 @@
 import { ServerAPI } from '@signalk/server-api'
-import {
-  PathPatternRule,
-  UnitMetadata,
-  BaseUnitDefinition
-} from './types'
+import { PathPatternRule, UnitMetadata, BaseUnitDefinition } from './types'
 
 /**
  * PatternMatcher handles path pattern matching logic.
@@ -35,17 +31,12 @@ export class PatternMatcher {
   /**
    * Find the highest priority matching pattern for a path
    */
-  findMatchingPattern(
-    pathStr: string,
-    pathPatterns: PathPatternRule[]
-  ): PathPatternRule | null {
+  findMatchingPattern(pathStr: string, pathPatterns: PathPatternRule[]): PathPatternRule | null {
     if (!pathPatterns || pathPatterns.length === 0) {
       return null
     }
 
-    const sortedPatterns = [...pathPatterns].sort(
-      (a, b) => (b.priority || 0) - (a.priority || 0)
-    )
+    const sortedPatterns = [...pathPatterns].sort((a, b) => (b.priority || 0) - (a.priority || 0))
 
     for (const pattern of sortedPatterns) {
       if (this.matchesPattern(pathStr, pattern.pattern)) {

@@ -567,7 +567,9 @@ async function saveCustomPreset() {
         // Include category field for all categories
         category: pref.category || category,
         // Include baseUnit if it exists, or infer it for custom categories
-        ...(pref.baseUnit || isCustomCategory ? { baseUnit: pref.baseUnit || unitSchema.categoryToBaseUnit[category] || null } : {})
+        ...(pref.baseUnit || isCustomCategory
+          ? { baseUnit: pref.baseUnit || unitSchema.categoryToBaseUnit[category] || null }
+          : {})
       }
     }
 

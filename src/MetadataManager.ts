@@ -8,8 +8,7 @@ import {
   UnitsPreferences,
   PathPatternRule
 } from './types'
-import { defaultUnitsMetadata, categoryToBaseUnit } from './defaultUnits'
-import { comprehensiveDefaultUnits } from './comprehensiveDefaults'
+import { builtInUnits } from './builtInUnits'
 
 /**
  * MetadataManager handles path metadata resolution and SignalK integration.
@@ -32,7 +31,7 @@ export class MetadataManager {
     categoriesData: any = {}
   ) {
     // Use only built-in default metadata (no custom file loading)
-    this.metadata = { ...defaultUnitsMetadata, ...comprehensiveDefaultUnits }
+    this.metadata = { ...builtInUnits }
     this.standardUnitsData = standardUnitsData
     this.categoriesData = categoriesData
   }
@@ -97,10 +96,7 @@ export class MetadataManager {
    * Infer category from path name alone (for paths with no metadata)
    * Checks if the last path element contains any known category name.
    */
-  inferCategoryFromPath(
-    pathStr: string,
-    allCategories: string[]
-  ): string | null {
+  inferCategoryFromPath(pathStr: string, allCategories: string[]): string | null {
     if (!pathStr) {
       return null
     }
@@ -143,12 +139,10 @@ export class MetadataManager {
       return metadataEntry.category
     }
 
-    // Search comprehensive defaults
-    const comprehensiveEntry = Object.values(comprehensiveDefaultUnits).find(
-      meta => meta.baseUnit === baseUnit
-    )
-    if (comprehensiveEntry?.category) {
-      return comprehensiveEntry.category
+    // Search built-in defaults
+    const builtInEntry = Object.values(builtInUnits).find(meta => meta.baseUnit === baseUnit)
+    if (builtInEntry?.category) {
+      return builtInEntry.category
     }
 
     // Get all categories that map to this base unit
@@ -206,13 +200,18 @@ export class MetadataManager {
    */
   getConversionsForBaseUnit(baseUnit: string, dateFormatsData?: any): UnitMetadata | null {
     // Try JSON first
-    this.app.debug(`getConversionsForBaseUnit: baseUnit=${baseUnit}, standardUnitsData keys=${Object.keys(this.standardUnitsData).join(', ')}`)
+    this.app.debug(
+      `getConversionsForBaseUnit: baseUnit=${baseUnit}, standardUnitsData keys=${Object.keys(this.standardUnitsData).join(', ')}`
+    )
     if (this.standardUnitsData[baseUnit]) {
       this.app.debug(`Using JSON conversions for ${baseUnit}`)
       const conversions = { ...(this.standardUnitsData[baseUnit].conversions || {}) }
 
       // For date/time base units, dynamically add date format conversions
-      if ((baseUnit === 'RFC 3339 (UTC)' || baseUnit === 'Epoch Seconds') && dateFormatsData?.formats) {
+      if (
+        (baseUnit === 'RFC 3339 (UTC)' || baseUnit === 'Epoch Seconds') &&
+        dateFormatsData?.formats
+      ) {
         for (const [formatKey, formatMeta] of Object.entries(dateFormatsData.formats)) {
           // Skip if already defined in standardUnitsData
           if (!conversions[formatKey]) {
@@ -235,17 +234,10 @@ export class MetadataManager {
       }
     }
 
-    // Fallback to TypeScript
-    const builtInDef = Object.values(comprehensiveDefaultUnits).find(
-      meta => meta.baseUnit === baseUnit
-    )
+    // Fallback to TypeScript built-in units
+    const builtInDef = Object.values(builtInUnits).find(meta => meta.baseUnit === baseUnit)
     if (builtInDef) {
       return builtInDef
-    }
-
-    const defaultDef = Object.values(defaultUnitsMetadata).find(meta => meta.baseUnit === baseUnit)
-    if (defaultDef) {
-      return defaultDef
     }
 
     return null
@@ -259,7 +251,10 @@ export class MetadataManager {
     pathStr: string,
     preferences: UnitsPreferences,
     unitDefinitions: Record<string, BaseUnitDefinition>,
-    patternMatcher: { findMatchingPattern: (path: string) => PathPatternRule | null; generateMetadataFromPattern: (pattern: PathPatternRule) => UnitMetadata | null },
+    patternMatcher: {
+      findMatchingPattern: (path: string) => PathPatternRule | null
+      generateMetadataFromPattern: (pattern: PathPatternRule) => UnitMetadata | null
+    },
     getCategoryToBaseUnitMap: () => Record<string, string>,
     getBaseUnitForCategory: (category: string) => string | null,
     dateFormatsData?: any
@@ -333,7 +328,12 @@ export class MetadataManager {
       const skMetadata = this.signalKMetadata[pathStr]
 
       if (skMetadata?.units) {
-        const inferred = this.inferMetadataFromSignalK(pathStr, skMetadata.units, getCategoryToBaseUnitMap(), dateFormatsData)
+        const inferred = this.inferMetadataFromSignalK(
+          pathStr,
+          skMetadata.units,
+          getCategoryToBaseUnitMap(),
+          dateFormatsData
+        )
         if (inferred) {
           metadata = inferred
         } else {
@@ -350,7 +350,9 @@ export class MetadataManager {
           metadata = {
             baseUnit,
             category:
-              this.getCategoryFromBaseUnit(baseUnit, getCategoryToBaseUnitMap(), pathStr) || builtInDef?.category || 'custom',
+              this.getCategoryFromBaseUnit(baseUnit, getCategoryToBaseUnitMap(), pathStr) ||
+              builtInDef?.category ||
+              'custom',
             conversions
           }
         }

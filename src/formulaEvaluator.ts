@@ -41,9 +41,7 @@ export function evaluateFormula(formula: string, value: number): number | string
 
     // Ensure result is a valid number
     if (typeof result !== 'number') {
-      throw new Error(
-        `Formula must return a number, got ${typeof result}`
-      )
+      throw new Error(`Formula must return a number, got ${typeof result}`)
     }
 
     if (!isFinite(result)) {
@@ -70,7 +68,12 @@ export function formatNumber(value: number, format: string): string {
 /**
  * Date formatting utilities using date-fns
  */
-import { format as dateFnsFormat, parseISO, formatDuration as dateFnsFormatDuration, intervalToDuration } from 'date-fns'
+import {
+  format as dateFnsFormat,
+  parseISO,
+  formatDuration as dateFnsFormatDuration,
+  intervalToDuration
+} from 'date-fns'
 import { toZonedTime } from 'date-fns-tz'
 
 const pad2 = (value: number): string => value.toString().padStart(2, '0')
@@ -98,9 +101,8 @@ export function formatDate(
     }
 
     // Convert to local timezone if requested
-    const dateToFormat = options.useLocalTime && options.timezone
-      ? toZonedTime(date, options.timezone)
-      : date
+    const dateToFormat =
+      options.useLocalTime && options.timezone ? toZonedTime(date, options.timezone) : date
 
     // Format using date-fns
     return dateFnsFormat(dateToFormat, formatPattern)
@@ -143,9 +145,7 @@ export function getDateParts(isoString: string, useLocalTime: boolean = false, t
     throw new Error('Invalid ISO-8601 date string')
   }
 
-  const dateToUse = useLocalTime && timezone
-    ? toZonedTime(date, timezone)
-    : date
+  const dateToUse = useLocalTime && timezone ? toZonedTime(date, timezone) : date
 
   return {
     year: useLocalTime ? dateToUse.getFullYear() : dateToUse.getUTCFullYear(),

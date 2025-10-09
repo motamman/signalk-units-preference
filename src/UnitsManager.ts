@@ -13,13 +13,11 @@ import {
   ConvertValueResponse,
   SignalKPathMetadata
 } from './types'
-import { categoryToBaseUnit } from './defaultUnits'
-import { comprehensiveDefaultUnits } from './comprehensiveDefaults'
+import { categoryToBaseUnit, builtInUnits } from './builtInUnits'
 import { MetadataManager } from './MetadataManager'
-import { ConversionEngine, UnitConversionError } from './ConversionEngine'
+import { ConversionEngine } from './ConversionEngine'
 import { PreferencesStore } from './PreferencesStore'
 import { PatternMatcher } from './PatternMatcher'
-import { evaluateFormula, formatNumber } from './formulaEvaluator'
 
 /**
  * UnitsManager orchestrates all unit conversion subsystems.
@@ -39,6 +37,11 @@ export class UnitsManager {
   private categoriesData: any = {}
   private dateFormatsData: any = {}
   private definitionsDir: string
+
+  // Simple time-based cache for getUnitSchema
+  private cachedSchema: ReturnType<UnitsManager['buildUnitSchema']> | null = null
+  private schemaCacheTimestamp: number = 0
+  private readonly SCHEMA_CACHE_TTL_MS = 15000 // 15 seconds
 
   constructor(
     private app: ServerAPI,
@@ -134,7 +137,7 @@ export class UnitsManager {
         if (tsBaseUnit && tsBaseUnit !== jsonBaseUnit) {
           this.app.error(
             `VALIDATION ERROR: Category "${category}" has inconsistent base units: ` +
-            `JSON=${jsonBaseUnit}, TypeScript=${tsBaseUnit}. Using JSON value.`
+              `JSON=${jsonBaseUnit}, TypeScript=${tsBaseUnit}. Using JSON value.`
           )
         }
       }
@@ -151,7 +154,9 @@ export class UnitsManager {
 
     // Validate date format patterns if loaded
     if (this.dateFormatsData?.formats && Object.keys(this.dateFormatsData.formats).length > 0) {
-      this.app.debug(`Validated ${Object.keys(this.dateFormatsData.formats).length} date format patterns from JSON`)
+      this.app.debug(
+        `Validated ${Object.keys(this.dateFormatsData.formats).length} date format patterns from JSON`
+      )
     }
   }
 
@@ -166,7 +171,11 @@ export class UnitsManager {
     this.validateDefinitions()
 
     // Now initialize MetadataManager with loaded data
-    this.metadataManager = new MetadataManager(this.app, this.standardUnitsData, this.categoriesData)
+    this.metadataManager = new MetadataManager(
+      this.app,
+      this.standardUnitsData,
+      this.categoriesData
+    )
 
     // Update ConversionEngine with loaded date formats data
     this.conversionEngine.setDateFormatsData(this.dateFormatsData)
@@ -313,14 +322,23 @@ export class UnitsManager {
     if (!conversionMatch && baseUnit) {
       const unitDef = unitDefinitions[baseUnit]
       if (unitDef?.conversions) {
-        conversionMatch = this.conversionEngine.findConversionByKeyOrLongName(unitDef.conversions, targetUnit)
+        conversionMatch = this.conversionEngine.findConversionByKeyOrLongName(
+          unitDef.conversions,
+          targetUnit
+        )
       }
     }
 
     if (!conversionMatch && baseUnit) {
-      const fallback = this.metadataManager.getConversionsForBaseUnit(baseUnit, this.dateFormatsData)
+      const fallback = this.metadataManager.getConversionsForBaseUnit(
+        baseUnit,
+        this.dateFormatsData
+      )
       if (fallback?.conversions) {
-        conversionMatch = this.conversionEngine.findConversionByKeyOrLongName(fallback.conversions, targetUnit)
+        conversionMatch = this.conversionEngine.findConversionByKeyOrLongName(
+          fallback.conversions,
+          targetUnit
+        )
       }
     }
 
@@ -351,7 +369,8 @@ export class UnitsManager {
           this.patternMatcher.generateMetadataFromPattern(
             pattern,
             unitDefinitions,
-            (baseUnit: string) => this.metadataManager.getConversionsForBaseUnit(baseUnit, this.dateFormatsData),
+            (baseUnit: string) =>
+              this.metadataManager.getConversionsForBaseUnit(baseUnit, this.dateFormatsData),
             (category: string) => this.getBaseUnitForCategory(category)
           )
       },
@@ -452,7 +471,12 @@ export class UnitsManager {
       inverseFormula: 'value',
       displayFormat: displayFormat,
       symbol: symbol,
-      category: this.metadataManager.getCategoryFromBaseUnit(unit, this.getCategoryToBaseUnitMap(), pathStr) || 'none',
+      category:
+        this.metadataManager.getCategoryFromBaseUnit(
+          unit,
+          this.getCategoryToBaseUnitMap(),
+          pathStr
+        ) || 'none',
       valueType: valueType,
       dateFormat: valueType === 'date' ? 'ISO-8601' : undefined,
       useLocalTime: valueType === 'date' ? false : undefined,
@@ -526,7 +550,8 @@ export class UnitsManager {
       rawValue,
       unitDefinitions,
       (bu: string) => this.metadataManager.getConversionsForBaseUnit(bu, this.dateFormatsData),
-      (bu: string) => this.metadataManager.getCategoryFromBaseUnit(bu, this.getCategoryToBaseUnitMap()),
+      (bu: string) =>
+        this.metadataManager.getCategoryFromBaseUnit(bu, this.getCategoryToBaseUnitMap()),
       options
     )
   }
@@ -553,7 +578,10 @@ export class UnitsManager {
       // Build info for each path
       for (const path of paths) {
         const pathOverride = preferences.pathOverrides?.[path]
-        const matchingPattern = this.patternMatcher.findMatchingPattern(path, preferences.pathPatterns || [])
+        const matchingPattern = this.patternMatcher.findMatchingPattern(
+          path,
+          preferences.pathPatterns || []
+        )
         const skMetadata = this.metadataManager.getSignalKMetadata(path)
         const metadataEntry = this.metadataManager.resolveMetadataForPath(
           path,
@@ -566,7 +594,8 @@ export class UnitsManager {
               this.patternMatcher.generateMetadataFromPattern(
                 pattern,
                 unitDefinitions,
-                (baseUnit: string) => this.metadataManager.getConversionsForBaseUnit(baseUnit, this.dateFormatsData),
+                (baseUnit: string) =>
+                  this.metadataManager.getConversionsForBaseUnit(baseUnit, this.dateFormatsData),
                 (category: string) => this.getBaseUnitForCategory(category)
               )
           },
@@ -614,7 +643,11 @@ export class UnitsManager {
           baseUnit = skMetadata.units
           category =
             metadataEntry?.category ||
-            this.metadataManager.getCategoryFromBaseUnit(skMetadata.units, this.getCategoryToBaseUnitMap(), path) ||
+            this.metadataManager.getCategoryFromBaseUnit(
+              skMetadata.units,
+              this.getCategoryToBaseUnitMap(),
+              path
+            ) ||
             '-'
 
           const categoryPref = category !== '-' ? preferences.categories?.[category] : null
@@ -706,7 +739,8 @@ export class UnitsManager {
           this.patternMatcher.generateMetadataFromPattern(
             pattern,
             unitDefinitions,
-            (baseUnit: string) => this.metadataManager.getConversionsForBaseUnit(baseUnit, this.dateFormatsData),
+            (baseUnit: string) =>
+              this.metadataManager.getConversionsForBaseUnit(baseUnit, this.dateFormatsData),
             (category: string) => this.getBaseUnitForCategory(category)
           )
       },
@@ -742,7 +776,8 @@ export class UnitsManager {
               this.patternMatcher.generateMetadataFromPattern(
                 pattern,
                 unitDefinitions,
-                (baseUnit: string) => this.metadataManager.getConversionsForBaseUnit(baseUnit, this.dateFormatsData),
+                (baseUnit: string) =>
+                  this.metadataManager.getConversionsForBaseUnit(baseUnit, this.dateFormatsData),
                 (category: string) => this.getBaseUnitForCategory(category)
               )
           },
@@ -775,7 +810,12 @@ export class UnitsManager {
           const baseUnit = skMeta?.units || null
           result[path] = {
             baseUnit,
-            category: this.metadataManager.getCategoryFromBaseUnit(baseUnit, this.getCategoryToBaseUnitMap(), path) || 'none',
+            category:
+              this.metadataManager.getCategoryFromBaseUnit(
+                baseUnit,
+                this.getCategoryToBaseUnitMap(),
+                path
+              ) || 'none',
             conversions: {}
           }
         }
@@ -811,9 +851,7 @@ export class UnitsManager {
 
     // Use JSON data if available, otherwise fall back to TypeScript
     const sourceData =
-      Object.keys(this.standardUnitsData).length > 0
-        ? this.standardUnitsData
-        : comprehensiveDefaultUnits
+      Object.keys(this.standardUnitsData).length > 0 ? this.standardUnitsData : builtInUnits
 
     // Handle JSON format (baseUnit as keys)
     if (sourceData === this.standardUnitsData) {
@@ -890,8 +928,43 @@ export class UnitsManager {
 
   /**
    * Get unit schema (base units, categories, target units mapping)
+   * Uses a 15-second TTL cache for performance
    */
   getUnitSchema(): {
+    baseUnits: Array<{ value: string; label: string }>
+    categories: string[]
+    targetUnitsByBase: Record<string, string[]>
+    categoryToBaseUnit: Record<string, string>
+    coreCategories: string[]
+    baseUnitDefinitions: Record<
+      string,
+      { conversions: Record<string, any>; description?: string; isCustom?: boolean }
+    >
+  } {
+    const now = Date.now()
+
+    // Return cached schema if it's still fresh
+    if (this.cachedSchema && now - this.schemaCacheTimestamp < this.SCHEMA_CACHE_TTL_MS) {
+      this.app.debug('Returning cached schema')
+      return this.cachedSchema
+    }
+
+    // Cache expired or doesn't exist - rebuild it
+    this.app.debug('Building fresh schema (cache expired or empty)')
+    const schema = this.buildUnitSchema()
+
+    // Update cache
+    this.cachedSchema = schema
+    this.schemaCacheTimestamp = now
+
+    return schema
+  }
+
+  /**
+   * Build unit schema from scratch (expensive operation)
+   * Called by getUnitSchema() when cache is stale
+   */
+  private buildUnitSchema(): {
     baseUnits: Array<{ value: string; label: string }>
     categories: string[]
     targetUnitsByBase: Record<string, string[]>
@@ -932,9 +1005,7 @@ export class UnitsManager {
 
     // Scan standard unit definitions
     const sourceData =
-      Object.keys(this.standardUnitsData).length > 0
-        ? this.standardUnitsData
-        : comprehensiveDefaultUnits
+      Object.keys(this.standardUnitsData).length > 0 ? this.standardUnitsData : builtInUnits
 
     if (sourceData === this.standardUnitsData) {
       for (const [baseUnit, data] of Object.entries(sourceData)) {
@@ -965,7 +1036,7 @@ export class UnitsManager {
     }
 
     // Scan all metadata to discover categories
-    const allMetadata = { ...comprehensiveDefaultUnits, ...this.metadataManager.getMetadata() }
+    const allMetadata = { ...builtInUnits, ...this.metadataManager.getMetadata() }
 
     for (const [, meta] of Object.entries(allMetadata)) {
       if (!meta.baseUnit) continue
@@ -1017,9 +1088,7 @@ export class UnitsManager {
     > = {}
 
     const standardSource =
-      Object.keys(this.standardUnitsData).length > 0
-        ? this.standardUnitsData
-        : comprehensiveDefaultUnits
+      Object.keys(this.standardUnitsData).length > 0 ? this.standardUnitsData : builtInUnits
 
     if (standardSource === this.standardUnitsData) {
       for (const [baseUnit, data] of Object.entries(standardSource)) {
@@ -1172,9 +1241,7 @@ export class UnitsManager {
 
     // If base unit doesn't exist in custom definitions, check built-in
     if (!unitDefinitions[baseUnit]) {
-      const builtInDef = Object.values(comprehensiveDefaultUnits).find(
-        meta => meta.baseUnit === baseUnit
-      )
+      const builtInDef = Object.values(builtInUnits).find(meta => meta.baseUnit === baseUnit)
 
       if (!builtInDef) {
         throw new Error(`Base unit "${baseUnit}" not found`)
