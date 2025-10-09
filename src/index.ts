@@ -3,6 +3,7 @@ import { IRouter, Request, Response } from 'express'
 import { UnitsManager } from './UnitsManager'
 import { ConversionDeltaValue, DeltaResponse, DeltaValueEntry } from './types'
 import { ValidationError, NotFoundError, formatErrorResponse } from './errors'
+import { registerDeltaStreamHandler } from './DeltaStreamHandler'
 import * as path from 'path'
 import * as fs from 'fs'
 import archiver from 'archiver'
@@ -12,22 +13,30 @@ const PLUGIN_ID = 'signalk-units-preference'
 const PLUGIN_NAME = 'Units Preference Manager'
 
 module.exports = (app: ServerAPI): Plugin => {
-  const DEFAULT_PLUGIN_SCHEMA = {
+  const PLUGIN_SCHEMA = {
     type: 'object',
-    properties: {}
+    properties: {
+      enableDeltaInjection: {
+        type: 'boolean',
+        title: 'Enable Delta Stream Injection',
+        description: 'Automatically inject converted values into SignalK delta stream as .unitsConverted paths',
+        default: true
+      }
+    }
   }
 
   let unitsManager: UnitsManager
-  let openApiSpec: object = DEFAULT_PLUGIN_SCHEMA
+  let openApiSpec: object = PLUGIN_SCHEMA
+  let unsubscribeDeltaHandler: (() => void) | undefined
 
   const plugin: Plugin = {
     id: PLUGIN_ID,
     name: PLUGIN_NAME,
     description: 'Manages unit conversions and display preferences for SignalK data paths',
 
-    schema: () => DEFAULT_PLUGIN_SCHEMA,
+    schema: () => PLUGIN_SCHEMA,
 
-    start: async () => {
+    start: async (config: { enableDeltaInjection?: boolean } = {}) => {
       try {
         const dataDir = app.getDataDirPath()
         unitsManager = new UnitsManager(app, dataDir)
@@ -39,7 +48,18 @@ module.exports = (app: ServerAPI): Plugin => {
           openApiSpec = JSON.parse(jsonData)
         } else {
           app.debug(`OpenAPI spec not found at ${openApiPath}`)
-          openApiSpec = DEFAULT_PLUGIN_SCHEMA
+          openApiSpec = PLUGIN_SCHEMA
+        }
+
+        // Register delta stream handler to inject converted values into data stream
+        // This allows clients to access converted values at path.unitsConverted
+        const enableDeltaInjection = config.enableDeltaInjection !== false // Default to true
+        unsubscribeDeltaHandler = registerDeltaStreamHandler(app, unitsManager, enableDeltaInjection)
+
+        if (enableDeltaInjection) {
+          app.debug('Delta stream injection enabled - converted values will be available at .unitsConverted paths')
+        } else {
+          app.debug('Delta stream injection disabled - use REST API for conversions')
         }
 
         app.setPluginStatus('Running')
@@ -52,6 +72,12 @@ module.exports = (app: ServerAPI): Plugin => {
     },
 
     stop: async () => {
+      // Unsubscribe delta handler
+      if (unsubscribeDeltaHandler) {
+        unsubscribeDeltaHandler()
+        app.debug('Delta stream handler unregistered')
+      }
+
       app.setPluginStatus('Stopped')
       app.debug('Plugin stopped')
     },

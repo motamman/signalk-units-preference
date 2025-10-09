@@ -1185,6 +1185,57 @@
                     </p>
                 </div>
             </div>
+
+            <div class="section">
+                <div class="collapsible-header" onclick="toggleCollapsible('streamViewerContent')">
+                    <h2>Live Delta Stream Viewer</h2>
+                    <span class="collapse-icon">▼</span>
+                </div>
+                <div id="streamViewerContent" class="collapsible-content">
+                    <p style="color: #7f8c8d; margin-bottom: 20px;">
+                        Real-time view of converted values from SignalK delta stream. Shows both original SI values and converted values with formatting.
+                    </p>
+
+                    <div style="background: #e8f5e9; border-left: 4px solid #4caf50; padding: 12px 15px; margin-bottom: 20px; border-radius: 4px;">
+                        <strong style="color: #2e7d32;">⚡ Delta Stream Integration</strong>
+                        <p style="margin: 8px 0 0 0; color: #555; font-size: 14px;">
+                            This viewer subscribes to SignalK WebSocket stream and displays converted values in real-time.
+                            Converted values are available at <code style="background: white; padding: 2px 6px; border-radius: 3px;">{path}.unitsConverted</code>
+                        </p>
+                    </div>
+
+                    <div style="display: flex; gap: 10px; margin-bottom: 15px; align-items: center;">
+                        <button id="streamConnectBtn" class="btn-success" onclick="connectToStream()" style="padding: 10px 20px;">
+                            Connect to Stream
+                        </button>
+                        <button id="streamDisconnectBtn" class="btn-danger" onclick="disconnectFromStream()" style="padding: 10px 20px; display: none;">
+                            Disconnect
+                        </button>
+                        <button class="btn-secondary" onclick="clearStreamData()" style="padding: 10px 20px;">
+                            Clear Data
+                        </button>
+                        <div id="streamStatus" style="padding: 8px 15px; border-radius: 4px; background: #f8f9fa; color: #6c757d; font-weight: 500;">
+                            Disconnected
+                        </div>
+                    </div>
+
+                    <div id="streamData" style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 6px; padding: 15px; max-height: 600px; overflow-y: auto; font-family: 'Courier New', monospace; font-size: 13px;">
+                        <div style="color: #6c757d; text-align: center; padding: 40px;">
+                            Click "Connect to Stream" to start receiving real-time data
+                        </div>
+                    </div>
+
+                    <div style="margin-top: 15px; padding: 12px; background: #fff3cd; border-radius: 4px; border-left: 4px solid #ffc107;">
+                        <strong style="color: #856404;">💡 Tips:</strong>
+                        <ul style="margin: 8px 0 0 20px; color: #555; font-size: 13px;">
+                            <li>Original values are shown in gray with their SI units</li>
+                            <li>Converted values are shown in blue with formatted display and symbols</li>
+                            <li>Only paths with active conversions are displayed</li>
+                            <li>Stream automatically reconnects if connection is lost</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <div id="settings" class="tab-content">
@@ -1506,6 +1557,7 @@
     <script src="js/app-overrides.js"></script>
     <script src="js/app-unit-definitions.js"></script>
     <script src="js/app-metadata.js"></script>
+    <script src="js/app-stream-viewer.js"></script>
 
     <!-- Main app -->
     <script src="js/app-main.js"></script>

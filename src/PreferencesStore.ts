@@ -70,6 +70,7 @@ export class PreferencesStore {
   private unitDefinitions: Record<string, BaseUnitDefinition>
   private preferencesPath: string
   private customDefinitionsPath: string
+  private onPreferencesChanged?: () => void
 
   constructor(
     private app: ServerAPI,
@@ -82,6 +83,13 @@ export class PreferencesStore {
       pathOverrides: {}
     }
     this.unitDefinitions = {}
+  }
+
+  /**
+   * Set callback to be invoked when preferences change
+   */
+  setOnPreferencesChanged(callback: () => void): void {
+    this.onPreferencesChanged = callback
   }
 
   /**
@@ -332,6 +340,11 @@ export class PreferencesStore {
     try {
       fs.writeFileSync(this.preferencesPath, JSON.stringify(this.preferences, null, 2), 'utf-8')
       this.app.debug('Saved units preferences')
+
+      // Notify listeners that preferences have changed (e.g., to clear conversion cache)
+      if (this.onPreferencesChanged) {
+        this.onPreferencesChanged()
+      }
     } catch (error) {
       this.app.error(`Failed to save preferences: ${error}`)
       throw error
