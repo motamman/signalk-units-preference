@@ -17,7 +17,7 @@ describe('DeltaStreamHandler', () => {
     mockApp = {
       debug: jest.fn(),
       error: jest.fn(),
-      registerDeltaInputHandler: jest.fn((handler) => {
+      registerDeltaInputHandler: jest.fn(handler => {
         capturedHandler = handler
       }),
       handleMessage: jest.fn((pluginId, delta) => {
@@ -27,7 +27,7 @@ describe('DeltaStreamHandler', () => {
 
     // Mock UnitsManager
     mockUnitsManager = {
-      getConversion: jest.fn((path) => {
+      getConversion: jest.fn(path => {
         if (path === 'navigation.speedOverGround') {
           return {
             path: 'navigation.speedOverGround',
@@ -87,9 +87,7 @@ describe('DeltaStreamHandler', () => {
     registerDeltaStreamHandler(mockApp, mockUnitsManager, false)
 
     expect(mockApp.registerDeltaInputHandler).not.toHaveBeenCalled()
-    expect(mockApp.debug).toHaveBeenCalledWith(
-      'Delta stream handler disabled by configuration'
-    )
+    expect(mockApp.debug).toHaveBeenCalledWith('Delta stream handler disabled by configuration')
   })
 
   test('should convert numeric values and emit converted delta', () => {
@@ -200,9 +198,7 @@ describe('DeltaStreamHandler', () => {
       context: 'vessels.self',
       updates: [
         {
-          values: [
-            { path: 'navigation.speedOverGround', value: 5.0 }
-          ]
+          values: [{ path: 'navigation.speedOverGround', value: 5.0 }]
         }
       ]
     }
@@ -222,8 +218,6 @@ describe('DeltaStreamHandler', () => {
     registerDeltaStreamHandler(mockApp, mockUnitsManager, true)
 
     expect(mockUnitsManager.setPreferencesChangeCallback).toHaveBeenCalledTimes(1)
-    expect(mockUnitsManager.setPreferencesChangeCallback).toHaveBeenCalledWith(
-      expect.any(Function)
-    )
+    expect(mockUnitsManager.setPreferencesChangeCallback).toHaveBeenCalledWith(expect.any(Function))
   })
 })

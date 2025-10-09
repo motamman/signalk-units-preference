@@ -59,7 +59,7 @@ export class ConversionStreamServer {
       const pathname = new URL(request.url, `http://${request.headers.host}`).pathname
 
       if (pathname === '/plugins/signalk-units-preference/stream') {
-        this.wss!.handleUpgrade(request, socket, head, (ws) => {
+        this.wss!.handleUpgrade(request, socket, head, ws => {
           this.wss!.emit('connection', ws, request)
         })
       }
@@ -132,7 +132,7 @@ export class ConversionStreamServer {
         }
       })
 
-      this.signalkWs.on('error', (error) => {
+      this.signalkWs.on('error', error => {
         this.app.error(`SignalK WebSocket error: ${error}`)
       })
 
@@ -179,7 +179,7 @@ export class ConversionStreamServer {
       this.updateSignalKSubscriptions()
     })
 
-    ws.on('error', (error) => {
+    ws.on('error', error => {
       this.app.error(`Client WebSocket error: ${error}`)
     })
   }
@@ -198,7 +198,9 @@ export class ConversionStreamServer {
       for (const sub of message.subscribe) {
         client.subscriptions.add(sub.path)
       }
-      this.app.debug(`Client now has ${client.subscriptions.size} subscriptions for context ${client.context}`)
+      this.app.debug(
+        `Client now has ${client.subscriptions.size} subscriptions for context ${client.context}`
+      )
       this.updateSignalKSubscriptions()
     }
 
@@ -242,10 +244,12 @@ export class ConversionStreamServer {
         policy: 'instant'
       }))
 
-      this.signalkWs.send(JSON.stringify({
-        context,
-        subscribe: subscriptions
-      }))
+      this.signalkWs.send(
+        JSON.stringify({
+          context,
+          subscribe: subscriptions
+        })
+      )
 
       this.app.debug(`Subscribed to ${subscriptions.length} paths for context ${context}`)
     }
@@ -262,8 +266,13 @@ export class ConversionStreamServer {
     const context = delta.context || 'vessels.self'
 
     // Log incoming delta info
-    const totalValues = delta.updates.reduce((sum: number, u: any) => sum + (u.values?.length || 0), 0)
-    this.app.debug(`Received delta from context: ${context}, updates: ${delta.updates.length}, total values: ${totalValues}`)
+    const totalValues = delta.updates.reduce(
+      (sum: number, u: any) => sum + (u.values?.length || 0),
+      0
+    )
+    this.app.debug(
+      `Received delta from context: ${context}, updates: ${delta.updates.length}, total values: ${totalValues}`
+    )
 
     for (const update of delta.updates) {
       if (!update.values || update.values.length === 0) {
@@ -302,14 +311,14 @@ export class ConversionStreamServer {
             // Send converted value at the ORIGINAL path (not .unitsConverted)
             // This dedicated stream is meant to provide converted values transparently
             convertedValues.push({
-              path: path,  // Use original path, NOT path.unitsConverted
+              path: path, // Use original path, NOT path.unitsConverted
               value: converted
             })
 
             // Build metadata entry if sendMeta is enabled
             if (this.sendMeta) {
               metadataEntries.push({
-                path: path,  // Metadata for original path
+                path: path, // Metadata for original path
                 value: this.buildMetadata(path, conversion)
               })
             }
@@ -339,7 +348,9 @@ export class ConversionStreamServer {
           updates: [deltaUpdate]
         }
 
-        this.app.debug(`Broadcasting ${convertedValues.length} converted values for context ${context}`)
+        this.app.debug(
+          `Broadcasting ${convertedValues.length} converted values for context ${context}`
+        )
         this.broadcastToClients(convertedDelta, context)
       }
     }
@@ -354,7 +365,9 @@ export class ConversionStreamServer {
       displayFormat: conversion.displayFormat || '0.0',
       description: `${originalPath} (converted from ${conversion.baseUnit || 'base unit'})`,
       originalUnits: conversion.baseUnit || '',
-      displayName: conversion.symbol ? `${originalPath.split('.').pop()} (${conversion.symbol})` : undefined
+      displayName: conversion.symbol
+        ? `${originalPath.split('.').pop()} (${conversion.symbol})`
+        : undefined
     }
   }
 
@@ -366,8 +379,11 @@ export class ConversionStreamServer {
       return true
     }
 
-    if (conversion.targetUnit && conversion.baseUnit &&
-        conversion.targetUnit === conversion.baseUnit) {
+    if (
+      conversion.targetUnit &&
+      conversion.baseUnit &&
+      conversion.targetUnit === conversion.baseUnit
+    ) {
       return true
     }
 
@@ -457,7 +473,9 @@ export class ConversionStreamServer {
 
     let matchedClients = 0
     for (const client of this.clients) {
-      this.app.debug(`  Client context: ${client.context}, subscriptions: ${client.subscriptions.size}`)
+      this.app.debug(
+        `  Client context: ${client.context}, subscriptions: ${client.subscriptions.size}`
+      )
 
       // Only send to clients subscribed to this context
       if (client.context !== context) {

@@ -29,7 +29,6 @@ export function registerDeltaStreamHandler(
   enabled: boolean = true,
   sendMeta: boolean = true
 ): () => void {
-
   if (!enabled) {
     app.debug('Delta stream handler disabled by configuration')
     return () => {} // No-op unregister function
@@ -81,7 +80,6 @@ function processDelta(
   cache: ConversionCache,
   sendMeta: boolean
 ): void {
-
   if (!delta.updates || delta.updates.length === 0) {
     return
   }
@@ -141,7 +139,6 @@ function processDelta(
             })
           }
         }
-
       } catch (error) {
         app.debug(`Failed to convert ${path}: ${error}`)
         // Don't break the chain on conversion errors
@@ -163,13 +160,10 @@ function processDelta(
         deltaUpdate.meta = metadataEntries
       }
 
-      app.handleMessage(
-        'signalk-units-preference',
-        {
-          context: delta.context || 'vessels.self',
-          updates: [deltaUpdate]
-        } as any
-      )
+      app.handleMessage('signalk-units-preference', {
+        context: delta.context || 'vessels.self',
+        updates: [deltaUpdate]
+      } as any)
     }
   }
 }
@@ -183,7 +177,9 @@ function buildMetadata(originalPath: string, conversion: any): any {
     displayFormat: conversion.displayFormat || '0.0',
     description: `${originalPath} (converted from ${conversion.baseUnit || 'base unit'})`,
     originalUnits: conversion.baseUnit || '',
-    displayName: conversion.symbol ? `${originalPath.split('.').pop()} (${conversion.symbol})` : undefined
+    displayName: conversion.symbol
+      ? `${originalPath.split('.').pop()} (${conversion.symbol})`
+      : undefined
   }
 }
 
@@ -197,8 +193,11 @@ function isPassThrough(conversion: any): boolean {
   }
 
   // If target unit equals base unit, it's a pass-through
-  if (conversion.targetUnit && conversion.baseUnit &&
-      conversion.targetUnit === conversion.baseUnit) {
+  if (
+    conversion.targetUnit &&
+    conversion.baseUnit &&
+    conversion.targetUnit === conversion.baseUnit
+  ) {
     return true
   }
 
@@ -214,7 +213,6 @@ function convertValue(
   value: any,
   conversion: any
 ): any | null {
-
   const valueType = conversion.valueType || 'unknown'
 
   switch (valueType) {
@@ -246,12 +244,7 @@ function convertValue(
 /**
  * Convert numeric values (speed, temperature, pressure, etc.)
  */
-function convertNumericValue(
-  unitsManager: UnitsManager,
-  path: string,
-  value: any
-): any | null {
-
+function convertNumericValue(unitsManager: UnitsManager, path: string, value: any): any | null {
   // Validate numeric input
   if (typeof value !== 'number' || !isFinite(value)) {
     return null
@@ -279,7 +272,6 @@ function convertDateValue(
   value: any,
   conversion: any
 ): any | null {
-
   // Handle numeric epoch values
   if (typeof value === 'number') {
     const normalizedBase = (conversion.baseUnit || '').toLowerCase()
@@ -320,7 +312,6 @@ function convertDateValue(
  * Convert boolean values (mostly pass-through)
  */
 function convertBooleanValue(value: any): any | null {
-
   if (typeof value !== 'boolean') {
     return null
   }
@@ -336,7 +327,6 @@ function convertBooleanValue(value: any): any | null {
  * Convert string values (mostly pass-through)
  */
 function convertStringValue(value: any): any | null {
-
   if (typeof value !== 'string') {
     return null
   }
@@ -352,7 +342,6 @@ function convertStringValue(value: any): any | null {
  * Convert object values (mostly pass-through)
  */
 function convertObjectValue(value: any): any | null {
-
   if (value === null || typeof value !== 'object') {
     return null
   }

@@ -20,13 +20,15 @@ module.exports = (app: ServerAPI): Plugin => {
       enableDeltaInjection: {
         type: 'boolean',
         title: 'Enable Delta Stream Injection (Legacy)',
-        description: 'DEPRECATED: Inject converted values into SignalK delta stream as .unitsConverted paths. Use the plugin\'s dedicated WebSocket endpoint instead.',
+        description:
+          "DEPRECATED: Inject converted values into SignalK delta stream as .unitsConverted paths. Use the plugin's dedicated WebSocket endpoint instead.",
         default: false
       },
       sendMeta: {
         type: 'boolean',
         title: 'Send Metadata with Every Delta',
-        description: 'Include metadata (units, displayFormat, description) in every delta message. Disable for optimization if metadata rarely changes.',
+        description:
+          'Include metadata (units, displayFormat, description) in every delta message. Disable for optimization if metadata rarely changes.',
         default: true
       }
     }
@@ -64,13 +66,24 @@ module.exports = (app: ServerAPI): Plugin => {
         // Use the plugin's dedicated WebSocket endpoint instead
         const enableDeltaInjection = config.enableDeltaInjection === true // Default to false
         const sendMeta = config.sendMeta !== false // Default to true
-        unsubscribeDeltaHandler = registerDeltaStreamHandler(app, unitsManager, enableDeltaInjection, sendMeta)
+        unsubscribeDeltaHandler = registerDeltaStreamHandler(
+          app,
+          unitsManager,
+          enableDeltaInjection,
+          sendMeta
+        )
 
         if (enableDeltaInjection) {
-          app.debug('LEGACY: Delta stream injection enabled - converted values will be available at .unitsConverted paths')
-          app.debug('RECOMMENDED: Disable this and use the plugin WebSocket endpoint at /plugins/signalk-units-preference/stream')
+          app.debug(
+            'LEGACY: Delta stream injection enabled - converted values will be available at .unitsConverted paths'
+          )
+          app.debug(
+            'RECOMMENDED: Disable this and use the plugin WebSocket endpoint at /plugins/signalk-units-preference/stream'
+          )
         } else {
-          app.debug('Delta stream injection disabled (recommended) - use plugin WebSocket endpoint for conversions')
+          app.debug(
+            'Delta stream injection disabled (recommended) - use plugin WebSocket endpoint for conversions'
+          )
         }
 
         // Start dedicated conversion stream server
@@ -78,7 +91,9 @@ module.exports = (app: ServerAPI): Plugin => {
         const httpServer = (app as any).server
         if (httpServer) {
           conversionStreamServer.start(httpServer)
-          app.debug('Conversion stream server started - clients can connect to ws://host/plugins/signalk-units-preference/stream')
+          app.debug(
+            'Conversion stream server started - clients can connect to ws://host/plugins/signalk-units-preference/stream'
+          )
         } else {
           app.error('Cannot start conversion stream server - app.server is not available')
         }
@@ -451,16 +466,20 @@ module.exports = (app: ServerAPI): Plugin => {
         })
 
         // Add metadata for API responses (always send for API calls)
-        baseUpdate.meta = [{
-          path: pathStr,
-          value: {
-            units: symbol,
-            displayFormat,
-            description: `${pathStr} (${conversionInfo.category || 'converted'})`,
-            originalUnits: conversionInfo.baseUnit || '',
-            displayName: conversionInfo.symbol ? `${pathStr.split('.').pop()} (${conversionInfo.symbol})` : undefined
+        baseUpdate.meta = [
+          {
+            path: pathStr,
+            value: {
+              units: symbol,
+              displayFormat,
+              description: `${pathStr} (${conversionInfo.category || 'converted'})`,
+              originalUnits: conversionInfo.baseUnit || '',
+              displayName: conversionInfo.symbol
+                ? `${pathStr.split('.').pop()} (${conversionInfo.symbol})`
+                : undefined
+            }
           }
-        }]
+        ]
 
         return envelope
       }
@@ -494,7 +513,9 @@ module.exports = (app: ServerAPI): Plugin => {
 
           // If value query param provided, return conversion result
           if (valueParam !== undefined) {
-            app.debug(`Converting value ${valueParam} for path: ${pathStr} (context: ${contextParam || 'vessels.self'})`)
+            app.debug(
+              `Converting value ${valueParam} for path: ${pathStr} (context: ${contextParam || 'vessels.self'})`
+            )
             const result = buildDeltaResponse(pathStr, valueParam, {
               typeHint: typeof typeParam === 'string' ? toSupportedValueType(typeParam) : undefined,
               timestamp: typeof timestampParam === 'string' ? timestampParam : undefined,
@@ -651,8 +672,7 @@ module.exports = (app: ServerAPI): Plugin => {
             typeof req.body.type === 'string' ? toSupportedValueType(req.body.type) : undefined
           const timestampBody =
             typeof req.body.timestamp === 'string' ? req.body.timestamp : undefined
-          const contextBody =
-            typeof req.body.context === 'string' ? req.body.context : undefined
+          const contextBody = typeof req.body.context === 'string' ? req.body.context : undefined
 
           // If value is a string from form data, try to parse it as JSON
           if (typeof value === 'string' && value !== '') {
@@ -671,7 +691,9 @@ module.exports = (app: ServerAPI): Plugin => {
             )
           }
 
-          app.debug(`Converting value for path: ${path}, value: ${value} (context: ${contextBody || 'vessels.self'})`)
+          app.debug(
+            `Converting value for path: ${path}, value: ${value} (context: ${contextBody || 'vessels.self'})`
+          )
 
           const result = buildDeltaResponse(path, value, {
             typeHint: typeHintBody,
@@ -1559,7 +1581,9 @@ module.exports = (app: ServerAPI): Plugin => {
             // Security: CRITICAL - Validate the resolved path doesn't escape allowed directory
             const normalizedTarget = path.normalize(targetPath)
             if (!normalizedTarget.startsWith(allowedBaseDir)) {
-              app.error(`Security: Zip entry attempts to escape directory: ${entryName} -> ${normalizedTarget}`)
+              app.error(
+                `Security: Zip entry attempts to escape directory: ${entryName} -> ${normalizedTarget}`
+              )
               throw new ValidationError(
                 'Invalid zip entry path',
                 `Entry "${entryName}" attempts to write outside allowed directory`,
