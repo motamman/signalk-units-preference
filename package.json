@@ -4,8 +4,7 @@
   "description": "SignalK webapp/utility for managing path value/unit conversions and display preferences",
   "main": "dist/index.js",
   "scripts": {
-    "build": "tsc --diagnostics",
-    "prepare": "tsc",
+    "build": "tsc",
     "watch": "tsc --watch",
     "prepublishOnly": "npm run build",
     "lint": "eslint \"{src,public}/**/*.{ts,js}\"",
@@ -55,29 +54,29 @@
     "appIcon": "units.png"
   },
   "dependencies": {
-    "@types/adm-zip": "^0.5.7",
-    "@types/archiver": "^6.0.3",
-    "@types/express": "^4.17.21",
-    "@types/node": "^20.0.0",
-    "@types/ws": "^8.5.13",
     "adm-zip": "^0.5.16",
     "archiver": "^7.0.1",
     "date-fns": "^4.1.0",
     "date-fns-tz": "^3.2.0",
     "express": "^4.18.2",
     "mathjs": "^14.8.2",
-    "typescript": "^5.3.0",
     "ws": "^8.18.0"
   },
   "devDependencies": {
     "@signalk/server-api": "^2.8.0",
+    "@types/adm-zip": "^0.5.7",
+    "@types/archiver": "^6.0.3",
+    "@types/express": "^4.17.21",
     "@types/jest": "^30.0.0",
+    "@types/node": "^20.0.0",
+    "@types/ws": "^8.5.13",
     "@typescript-eslint/eslint-plugin": "^6.21.0",
     "@typescript-eslint/parser": "^6.21.0",
     "eslint": "^8.57.0",
     "jest": "^30.2.0",
     "prettier": "^3.6.2",
-    "ts-jest": "^29.4.4"
+    "ts-jest": "^29.4.4",
+    "typescript": "^5.3.0"
   },
   "signalk-plugin-enabled-by-default": true
 }
