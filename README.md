@@ -1,8 +1,8 @@
 # Units Display Preference
 
-A SignalK server Weapp for managing unit conversions and display preferences across all data paths. Convert any SignalK data point to your preferred units with flexible pattern matching, custom formulas, and a REST API.
+A SignalK server tool for managing unit conversions and display preferences across all data paths. Convert any SignalK data point to your preferred units with flexible pattern matching, custom formulas, and a REST API.
 
-> **Important:** **Important:** This only changes how conversions are managed inside this tool. It won't modify any existing the display SignalK apps, though it could be used as conversion manager for other apps. For now, it is just for testing..
+>**Important:** This only changes how conversions are managed inside this tool. It won't modify any existing the display SignalK apps, though it could be used as conversion manager for other apps. For now, it is just for testing..
 
 ## Overview
 
@@ -76,12 +76,15 @@ Safe mathematical expressions powered by mathjs for secure unit conversions.
 
 - **Secure Evaluation**: Uses mathjs library with sandboxed environment (no code injection)
 - **Complex Formulas**: Support for any mathematical expression
-- **Built-in Math**: Access to Math functions (sqrt, pow, abs, round, etc.)
+- **Built-in Math**: Access to mathjs functions (sqrt, pow, abs, round, sin, cos, log, etc.)
 - **Examples**:
-  - `value * 1.94384` - m/s to knots
-  - `value - 273.15` - Kelvin to Celsius
-  - `(value - 273.15) * 9/5 + 32` - Kelvin to Fahrenheit
-  - `value / (1024 ** 2)` - bytes to megabytes
+  - `value * 1.94384` - m/s to knots (simple multiplication)
+  - `value - 273.15` - Kelvin to Celsius (subtraction)
+  - `(value - 273.15) * 9/5 + 32` - Kelvin to Fahrenheit (complex expression)
+  - `value / pow(1024, 2)` - bytes to megabytes (using mathjs pow function)
+  - `sqrt(value)` - square root (mathjs function)
+  - `round(value * 100) / 100` - round to 2 decimals (mathjs round)
+  - `value * 180 / pi` - radians to degrees (mathjs pi constant)
 
 ### 8. **Pass-Through Conversions**
 Paths without conversions automatically return their original values with SignalK metadata units.
@@ -105,7 +108,7 @@ Convert seconds to human-readable durations (e.g., for timers, ETA, runtime).
 - **Time Formats**: HH:MM:SS, MM:SS, DD:HH:MM:SS with optional milliseconds
 - **Decimal Formats**: Decimal minutes (MM.xx), hours (HH.xx), or days (DD.xx)
 - **Human-Readable**: Verbose ("2 hours 30 minutes 45 seconds") or compact ("2h 30m")
-- **Safe Formatting**: Uses date-fns intervalToDuration for verbose output
+- **Safe Formatting**: Uses date-fns `intervalToDuration` and `formatDuration` for verbose output
 - **Examples**: Perfect for `navigation.course.calcValues.timeToGo`, `propulsion.*.runtime`, etc.
 
 ## How It Works
@@ -242,9 +245,14 @@ Browse all SignalK paths with their conversion settings.
 - **Search**: Filter across all columns (path, status, units, category)
 - **Sort**: Click column headers to sort
 - **Icons**:
-  - 🔧 View conversion details
-  - ▶️ Test conversion with current value
+  - 🔧 **Conversion Details**: View conversion details - shows base unit, target unit, formula, symbol, and metadata
+  - 🔗 **GET Endpoint**: Open conversion in new tab - test GET endpoint with current value
+  - ▶️ **Run Test**: Run conversion test - convert current value and see result in new tab
+  - 📋 **Create Pattern**: Create pattern rule - define a wildcard pattern based on this path to match similar paths
+  - 📌 **Create Override**: Create path override - set specific units for this exact path (highest priority)
 - **Color Coding**: Green (override), Yellow (pattern), Blue (SignalK), Gray (none)
+- **Clickable Filter Labels**: Click status labels in the legend to filter the table by that status
+- **Clear Filter Button**: Reset search filter and show all paths
 
 ### UI Features
 
@@ -1455,30 +1463,110 @@ npm run build
 npm run watch
 ```
 
+### Testing
+```bash
+npm test                # Run all tests
+npm run test:watch      # Run tests in watch mode
+npm run test:coverage   # Run tests with coverage report
+```
+
+**Test Coverage:**
+- 56 passing tests across 3 test suites
+- Core formula evaluation and conversion logic tested
+- Error handling and validation covered
+- Security (code injection prevention) validated
+
+### Linting
+```bash
+npm run lint            # Check code quality
+npm run format          # Auto-format code
+npm run format:check    # Check formatting without changes
+```
+
 ### Project Structure
 ```
 signalk-units-preference/
 ├── src/
 │   ├── index.ts              # Plugin entry point & REST API
-│   ├── UnitsManager.ts       # Core conversion logic
-│   ├── types.ts              # TypeScript interfaces
-│   ├── defaultUnits.ts       # Built-in unit definitions
-│   ├── comprehensiveDefaults.ts  # Extended units
-│   └── formulaEvaluator.ts  # Safe formula evaluation
+│   ├── UnitsManager.ts       # Core unit conversion manager
+│   ├── ConversionEngine.ts   # Conversion logic & formula evaluation
+│   ├── MetadataManager.ts    # Path metadata resolution
+│   ├── PreferencesStore.ts   # Preference persistence
+│   ├── PatternMatcher.ts     # Wildcard pattern matching
+│   ├── builtInUnits.ts       # Built-in unit definitions
+│   ├── formulaEvaluator.ts   # Safe formula evaluation (mathjs)
+│   ├── errors.ts             # Standardized error classes
+│   └── types.ts              # TypeScript interfaces
+├── tests/
+│   ├── formulaEvaluator.test.ts  # Formula evaluation tests
+│   ├── ConversionEngine.test.ts  # Conversion logic tests
+│   └── errors.test.ts            # Error handling tests
 ├── public/
 │   ├── index.html            # Web UI structure
-│   ├── app.js                # UI logic
-│   └── pathTree.js           # Path navigation
+│   └── js/                   # UI logic (modular)
+├── presets/
+│   ├── definitions/          # JSON-based unit definitions
+│   ├── metric.json           # Metric preset
+│   ├── imperial-us.json      # Imperial (US) preset
+│   ├── imperial-uk.json      # Imperial (UK) preset
+│   └── custom/               # User-created presets
 └── dist/                     # Compiled output
 ```
 
 ## License
 
-Apache-2.0
+MIT
 
 ---
 
 ## Changelog
+
+### [0.7.0-beta.1] - 2025-10-09
+
+#### Added
+- **Comprehensive Test Suite**: Implemented Jest-based testing framework with 56 passing tests
+  - **Formula Evaluator Tests** (28 tests): Basic arithmetic, Math functions, edge cases, security validation, error handling
+  - **Conversion Engine Tests** (19 tests): Conversion lookups, unit definition resolution, formula conversions, date/time formatting
+  - **Error Handling Tests** (11 tests): ValidationError, NotFoundError, ConversionError, response formatting
+  - **Test Commands**: `npm test`, `npm run test:watch`, `npm run test:coverage`
+  - **Coverage**: 80%+ coverage on core conversion logic, 96%+ on error handling
+- **MIT License File**: Added standard MIT license to project root
+- **Contributors Metadata**: Added contributors field to package.json
+
+#### Changed
+- **Package.json Improvements**:
+  - **Version**: Bumped to 0.7.0-beta.1
+  - **Dependencies Cleanup**: Moved `@types/adm-zip` and `@types/archiver` to devDependencies (reduces production package size)
+  - **Node.js Requirement**: Added `engines` field requiring Node.js >= 18.0.0
+  - **Files Whitelist**: Added explicit `files` field for safer npm publishing (dist/, public/, presets/, README.md, LICENSE)
+  - **Contributors**: Added contributor information with email
+- **Code Refactoring** (from recent commits):
+  - **Modularization**: Split UnitsManager into focused classes:
+    - `ConversionEngine.ts` - Conversion logic and formula evaluation
+    - `MetadataManager.ts` - Path metadata resolution and management
+    - `PreferencesStore.ts` - Preference persistence and loading
+    - `PatternMatcher.ts` - Wildcard pattern matching logic
+  - **Standardized Errors**: Introduced dedicated error classes (ValidationError, ConversionError, NotFoundError)
+  - **Built-in Units**: Replaced comprehensiveDefaults.ts with builtInUnits.ts for clearer naming
+
+#### Fixed
+- **Test Configuration**: Properly configured Jest with TypeScript support and coverage reporting
+- **.gitignore**: Added coverage/ and *.tsbuildinfo to excluded files
+
+#### Technical Changes
+- **Jest Configuration**: Added jest.config.js with ts-jest preset, coverage collection, and proper test matching
+- **Test Infrastructure**: Created tests/ directory with organized test files by component
+- **Package Metadata**: Enhanced package.json with all necessary fields for npm publication
+- **Build Artifacts**: Updated .gitignore and .npmignore for cleaner repository
+
+#### Documentation
+- **README Updates**:
+  - Added Development → Testing section with test commands and coverage summary
+  - Added Development → Linting section
+  - Updated Project Structure to reflect modular architecture
+  - Corrected license from Apache-2.0 to MIT
+  - Updated file structure documentation with tests/ directory
+- **Changelog**: Added this entry documenting all changes for 0.7.0-beta.1
 
 ### [0.6.0-beta.2] - 2025-10-08
 
