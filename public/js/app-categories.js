@@ -482,17 +482,15 @@ async function saveEditCategory(category) {
 
     await apiUpdateCategory(category, categoryPref)
 
-    // Update local preferences
-    if (!preferences.categories) {
-      preferences.categories = {}
-    }
-    preferences.categories[category] = categoryPref
-
     showStatus(`Updated category: ${category}`, 'success')
 
     // Clear dirty tracking
     categoryFormOriginalState = null
     currentlyEditingCategory = null
+
+    // Reload categories from server to ensure data consistency
+    const categoriesData = await apiLoadCategories()
+    preferences.categories = categoriesData
 
     // Check if preset is now dirty and re-render
     checkPresetDirty()
