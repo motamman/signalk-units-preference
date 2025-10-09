@@ -370,8 +370,8 @@
             content: attr(data-tooltip);
             position: absolute;
             bottom: 125%;
-            left: 50%;
-            transform: translateX(-50%);
+            left: 0;
+            transform: translateX(-8px);
             background: #2c3e50;
             color: white;
             padding: 8px 12px;
@@ -412,7 +412,7 @@
             content: '';
             position: absolute;
             bottom: 115%;
-            left: 50%;
+            left: 8px;
             transform: translateX(-50%);
             border: 5px solid transparent;
             border-top-color: #2c3e50;
@@ -811,22 +811,35 @@
                     </p>
                     <div class="add-override" style="grid-template-columns: 1fr 1fr 1fr 1fr auto;">
                         <div class="input-group">
-                            <label>Category Name</label>
+                            <label>
+                                Category Name
+                                <span class="tooltip-icon" data-tooltip="Semantic grouping for related measurements (e.g., 'speed', 'temperature'). Use categories to apply unit preferences to multiple paths at once.">?</span>
+                            </label>
                             <input type="text" id="newCategoryName" placeholder="e.g., fuelConsumption">
                         </div>
                         <div class="input-group">
-                            <label>Base Unit</label>
+                            <label>
+                                Base Unit
+                                <span class="tooltip-icon" data-tooltip="Physical measurement unit from SignalK spec (e.g., 'm/s', 'K', 'Pa'). This is what SignalK provides - your raw sensor data unit.">?</span>
+                            </label>
                             <div id="newCategoryBaseContainer"></div>
                             <input type="text" id="newCategoryBaseCustom" placeholder="Enter custom base unit" style="display: none; margin-top: 5px;">
                         </div>
                         <div class="input-group">
-                            <label>Target Unit</label>
+                            <label>
+                                Target Unit
+                                <span class="tooltip-icon" data-tooltip="Display unit you want to see (e.g., 'knots', '°C', 'psi'). This is what you prefer to see in the UI.">?</span>
+                            </label>
                             <div id="newCategoryTargetContainer"></div>
                             <input type="text" id="newCategoryTargetCustom" placeholder="Enter custom target unit" style="display: none; margin-top: 5px;">
                         </div>
                         <div class="input-group">
-                            <label>Display Format</label>
-                            <input type="text" id="newCategoryFormat" placeholder="e.g., 0.0" value="0.0">
+                            <label>
+                                Display Format
+                                <span class="tooltip-icon tooltip-right" data-tooltip="Decimal places for numbers. Examples: '0' = whole numbers (13), '0.0' = 1 decimal (12.6), '0.00' = 2 decimals (12.56)">?</span>
+                            </label>
+                            <input type="text" id="newCategoryFormat" placeholder="e.g., 0.0" value="0.0" oninput="updateFormatPreview('newCategoryFormat', 'newCategoryFormatPreview')">
+                            <small id="newCategoryFormatPreview" style="color: #667eea; display: block; margin-top: 4px; font-weight: 500;">Preview: 12.568 → 12.6</small>
                         </div>
                         <button class="btn-success" onclick="addCustomCategory()">Add Category</button>
                     </div>
@@ -835,9 +848,17 @@
 
             <div class="section">
                 <h2>Category Preferences</h2>
-                <p style="color: #7f8c8d; margin-bottom: 20px;">
+                <p style="color: #7f8c8d; margin-bottom: 10px;">
                     Set default units for each category. These apply to all paths unless overridden.
                 </p>
+                <div style="background: #e3f2fd; border-left: 4px solid #2196f3; padding: 12px 15px; margin-bottom: 20px; border-radius: 4px;">
+                    <strong style="color: #1976d2;">💡 Understanding Base Unit vs Target Unit:</strong>
+                    <ul style="margin: 8px 0 0 20px; color: #555;">
+                        <li><strong>Base Unit</strong> = What SignalK provides (raw sensor data, e.g., "m/s", "K")</li>
+                        <li><strong>Target Unit</strong> = What you want to see displayed (e.g., "knots", "°C")</li>
+                        <li><strong>Category</strong> = Semantic grouping (e.g., "speed", "temperature") to apply preferences to many paths at once</li>
+                    </ul>
+                </div>
                 <div id="currentPreset" style="margin-bottom: 20px;"></div>
                 <div id="categoryList" class="category-list loader">Loading...</div>
             </div>
@@ -902,9 +923,17 @@
                     <span class="collapse-icon">▼</span>
                 </div>
                 <div id="pathPatternsContent" class="collapsible-content">
-                    <p style="color: #7f8c8d; margin-bottom: 20px;">
+                    <p style="color: #7f8c8d; margin-bottom: 10px;">
                         Patterns are checked in priority order (higher = first). Example: *.temperature matches any path ending in .temperature
                     </p>
+                    <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 12px 15px; margin-bottom: 20px; border-radius: 4px;">
+                        <strong style="color: #856404;">🔍 When to use Patterns vs Overrides:</strong>
+                        <ul style="margin: 8px 0 0 20px; color: #555;">
+                            <li><strong>Patterns</strong> = Auto-categorize many similar paths (e.g., "**.temperature" catches all temperature paths)</li>
+                            <li><strong>Overrides</strong> = Configure one specific path differently (e.g., "engine.coolant.temperature" needs different units)</li>
+                            <li><strong>Priority</strong> = Override > Pattern > Category (highest to lowest precedence)</li>
+                        </ul>
+                    </div>
                     <div id="patternList" class="override-list loader">Loading...</div>
                 </div>
             </div>
@@ -1004,25 +1033,41 @@
                     <div class="add-override" style="background: #f8f9fa; padding: 20px; border-radius: 6px; border: 1px solid #e9ecef;">
                         <div style="display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 0.8fr; gap: 12px; margin-bottom: 15px;">
                             <div class="input-group" style="margin: 0; position: relative;">
-                                <label style="font-weight: 500; margin-bottom: 6px; display: block; font-size: 13px;">Path</label>
+                                <label style="font-weight: 500; margin-bottom: 6px; display: block; font-size: 13px;">
+                                    Path
+                                    <span class="tooltip-icon" data-tooltip="Specific SignalK path to override (e.g., 'navigation.speedOverGround'). Overrides take precedence over patterns and category defaults.">?</span>
+                                </label>
                                 <input type="text" id="overridePathInput" placeholder="Type to search paths..." style="width: 100%;" autocomplete="off">
                                 <div id="overridePathAutocomplete" style="display: none; position: absolute; z-index: 1000; background: white; border: 1px solid #dee2e6; border-radius: 4px; max-height: 300px; overflow-y: auto; width: 100%; margin-top: 2px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"></div>
                             </div>
                             <div class="input-group" style="margin: 0;">
-                                <label style="font-weight: 500; margin-bottom: 6px; display: block; font-size: 13px;">Base Unit</label>
+                                <label style="font-weight: 500; margin-bottom: 6px; display: block; font-size: 13px;">
+                                    Base Unit
+                                    <span class="tooltip-icon" data-tooltip="Physical unit from SignalK (e.g., 'm/s'). Usually auto-detected from SignalK metadata.">?</span>
+                                </label>
                                 <div id="overrideBaseUnitContainer"></div>
                             </div>
                             <div class="input-group" style="margin: 0;">
-                                <label style="font-weight: 500; margin-bottom: 6px; display: block; font-size: 13px;">Category</label>
+                                <label style="font-weight: 500; margin-bottom: 6px; display: block; font-size: 13px;">
+                                    Category
+                                    <span class="tooltip-icon" data-tooltip="Semantic category (e.g., 'speed', 'temperature'). Used to group related paths.">?</span>
+                                </label>
                                 <div id="overrideCategoryContainer"></div>
                             </div>
                             <div class="input-group" style="margin: 0;">
-                                <label style="font-weight: 500; margin-bottom: 6px; display: block; font-size: 13px;">Target Unit</label>
+                                <label style="font-weight: 500; margin-bottom: 6px; display: block; font-size: 13px;">
+                                    Target Unit
+                                    <span class="tooltip-icon" data-tooltip="Your preferred display unit (e.g., 'knots', '°F'). Conversion formula is applied automatically.">?</span>
+                                </label>
                                 <div id="overrideTargetUnitContainer"></div>
                             </div>
                             <div class="input-group" style="margin: 0;">
-                                <label style="font-weight: 500; margin-bottom: 6px; display: block; font-size: 13px;">Display Format</label>
-                                <input type="text" id="overrideFormat" placeholder="e.g., 0.0" value="0.0" style="width: 100%;">
+                                <label style="font-weight: 500; margin-bottom: 6px; display: block; font-size: 13px;">
+                                    Display Format
+                                    <span class="tooltip-icon tooltip-right" data-tooltip="Decimal precision: '0' = 13, '0.0' = 12.6, '0.00' = 12.56">?</span>
+                                </label>
+                                <input type="text" id="overrideFormat" placeholder="e.g., 0.0" value="0.0" style="width: 100%;" oninput="updateFormatPreview('overrideFormat', 'overrideFormatPreview')">
+                                <small id="overrideFormatPreview" style="color: #667eea; display: block; margin-top: 4px; font-weight: 500; font-size: 11px;">Preview: 12.568 → 12.6</small>
                             </div>
                         </div>
                         <button class="btn-success" onclick="addPathOverride()" style="padding: 10px 24px; width: 100%;">Add Override</button>
@@ -1036,9 +1081,13 @@
                     <span class="collapse-icon">▼</span>
                 </div>
                 <div id="pathOverridesContent" class="collapsible-content">
-                    <p style="color: #7f8c8d; margin-bottom: 20px;">
+                    <p style="color: #7f8c8d; margin-bottom: 10px;">
                         Specific path configurations that override pattern and category defaults.
                     </p>
+                    <div style="background: #d1ecf1; border-left: 4px solid #17a2b8; padding: 12px 15px; margin-bottom: 20px; border-radius: 4px;">
+                        <strong style="color: #0c5460;">⚙️ Tip: Override Precedence</strong>
+                        <p style="margin: 8px 0 0 0; color: #555;">Path overrides have <strong>highest priority</strong> - they always win over patterns and categories. Use sparingly for paths that need special handling.</p>
+                    </div>
                     <div id="pathOverridesList" class="loader">Loading...</div>
                 </div>
             </div>
@@ -1414,6 +1463,35 @@
                 content.classList.add('collapsed');
                 icon.classList.add('collapsed');
             }
+        }
+
+        // Update display format preview
+        function updateFormatPreview(inputId, previewId) {
+            const input = document.getElementById(inputId);
+            const preview = document.getElementById(previewId);
+            if (!input || !preview) return;
+
+            const format = input.value.trim();
+            const testValue = 12.568;
+
+            // Parse format to determine decimal places
+            let formatted = '';
+            if (format === '0') {
+                formatted = Math.round(testValue).toString();
+            } else if (format.match(/^0\.0+$/)) {
+                const decimals = format.split('.')[1]?.length || 0;
+                formatted = testValue.toFixed(decimals);
+            } else if (format === '') {
+                formatted = testValue.toString();
+            } else {
+                // Invalid format
+                preview.textContent = 'Invalid format (use 0, 0.0, 0.00, etc.)';
+                preview.style.color = '#e74c3c';
+                return;
+            }
+
+            preview.textContent = `Preview: ${testValue} → ${formatted}`;
+            preview.style.color = '#667eea';
         }
     </script>
     <!-- Modular app scripts (loaded in dependency order) -->
