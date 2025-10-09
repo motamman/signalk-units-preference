@@ -46,7 +46,7 @@
   ],
   "signalk": {
     "appSupport": "webapp",
-    "compatibility": ">=2.13.0",
+    "compatibility": ">=2.15.0",
     "displayName": "Units Display Selector",
     "appIcon": "units.png"
   },
