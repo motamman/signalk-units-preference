@@ -4,6 +4,9 @@
 # Tests and configs
 .github/
 .gitignore
+.claude/
+jest.config.js
+coverage/
 *.log
 
 # Local data not meant for package
