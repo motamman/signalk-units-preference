@@ -39,6 +39,11 @@ export class UnitsManager {
   private dateFormatsData: any = {}
   private definitionsDir: string
 
+  // Simple time-based cache for getUnitSchema
+  private cachedSchema: ReturnType<UnitsManager['buildUnitSchema']> | null = null
+  private schemaCacheTimestamp: number = 0
+  private readonly SCHEMA_CACHE_TTL_MS = 15000 // 15 seconds
+
   constructor(
     private app: ServerAPI,
     private dataDir: string
@@ -889,8 +894,43 @@ export class UnitsManager {
 
   /**
    * Get unit schema (base units, categories, target units mapping)
+   * Uses a 15-second TTL cache for performance
    */
   getUnitSchema(): {
+    baseUnits: Array<{ value: string; label: string }>
+    categories: string[]
+    targetUnitsByBase: Record<string, string[]>
+    categoryToBaseUnit: Record<string, string>
+    coreCategories: string[]
+    baseUnitDefinitions: Record<
+      string,
+      { conversions: Record<string, any>; description?: string; isCustom?: boolean }
+    >
+  } {
+    const now = Date.now()
+
+    // Return cached schema if it's still fresh
+    if (this.cachedSchema && (now - this.schemaCacheTimestamp) < this.SCHEMA_CACHE_TTL_MS) {
+      this.app.debug('Returning cached schema')
+      return this.cachedSchema
+    }
+
+    // Cache expired or doesn't exist - rebuild it
+    this.app.debug('Building fresh schema (cache expired or empty)')
+    const schema = this.buildUnitSchema()
+
+    // Update cache
+    this.cachedSchema = schema
+    this.schemaCacheTimestamp = now
+
+    return schema
+  }
+
+  /**
+   * Build unit schema from scratch (expensive operation)
+   * Called by getUnitSchema() when cache is stale
+   */
+  private buildUnitSchema(): {
     baseUnits: Array<{ value: string; label: string }>
     categories: string[]
     targetUnitsByBase: Record<string, string[]>

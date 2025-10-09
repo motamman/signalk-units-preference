@@ -7,11 +7,14 @@ import {
   ConvertValueResponse
 } from './types'
 import { evaluateFormula, formatNumber, formatDate } from './formulaEvaluator'
+import { ConversionError } from './errors'
 
-export class UnitConversionError extends Error {
+/**
+ * @deprecated Use ConversionError from errors.ts instead
+ */
+export class UnitConversionError extends ConversionError {
   constructor(message: string) {
     super(message)
-    this.name = 'UnitConversionError'
   }
 }
 
@@ -103,7 +106,11 @@ export class ConversionEngine {
     if (formatKey === 'epoch-seconds') {
       const date = new Date(isoValue)
       if (isNaN(date.getTime())) {
-        throw new UnitConversionError('Invalid ISO-8601 date value')
+        throw new ConversionError(
+          `Invalid ISO-8601 date value: ${isoValue}`,
+          'The date value is not in a valid format',
+          'Please provide a valid ISO-8601 date string (e.g., "2025-10-08T14:30:45Z")'
+        )
       }
       const epochSeconds = Math.floor(date.getTime() / 1000)
       return {
@@ -137,7 +144,11 @@ export class ConversionEngine {
           dateFormat: displayFormat
         }
       } catch (error) {
-        throw new UnitConversionError(`Failed to format date: ${error}`)
+        throw new ConversionError(
+          `Failed to format date with pattern '${dateFnsPattern}': ${error}`,
+          `Unable to format date: ${isoValue}`,
+          'Check that the date value is valid and the format pattern is supported'
+        )
       }
     }
 
@@ -292,12 +303,20 @@ export class ConversionEngine {
     )
 
     if (!definition) {
-      throw new UnitConversionError(`Unknown base unit: ${baseUnit}`)
+      throw new ConversionError(
+        `Unknown base unit: ${baseUnit}`,
+        `The base unit "${baseUnit}" is not recognized`,
+        'Please check that the base unit exists in your configuration or use a standard unit like "m/s", "K", or "Pa"'
+      )
     }
 
     const conversion = definition.conversions?.[targetUnit]
     if (!conversion) {
-      throw new UnitConversionError(`No conversion defined from ${baseUnit} to ${targetUnit}`)
+      throw new ConversionError(
+        `No conversion defined from ${baseUnit} to ${targetUnit}`,
+        `Cannot convert from ${baseUnit} to ${targetUnit}`,
+        `Add a conversion definition for "${targetUnit}" in the ${baseUnit} base unit configuration`
+      )
     }
 
     const normalizedBaseUnit = (baseUnit || '').toLowerCase()
@@ -315,11 +334,19 @@ export class ConversionEngine {
         const isEpochBase = (baseUnit || '').toLowerCase().includes('epoch')
         const date = new Date(rawValue * (isEpochBase ? 1000 : 1))
         if (Number.isNaN(date.getTime())) {
-          throw new UnitConversionError('Invalid epoch value supplied for date conversion')
+          throw new ConversionError(
+            `Invalid epoch value: ${rawValue}`,
+            `The epoch timestamp ${rawValue} is not valid`,
+            'Please provide a valid epoch timestamp (seconds since Jan 1, 1970)'
+          )
         }
         isoString = date.toISOString()
       } else {
-        throw new UnitConversionError('Date conversions require ISO-8601 string or epoch value')
+        throw new ConversionError(
+          `Invalid value type for date conversion: ${typeof rawValue}`,
+          'Date conversions require a date string or timestamp',
+          'Please provide either an ISO-8601 date string (e.g., "2025-10-08T14:30:45Z") or an epoch timestamp'
+        )
       }
 
       const dateResult = this.formatDateValue(
@@ -347,11 +374,19 @@ export class ConversionEngine {
     } else if (typeof rawValue === 'string' && rawValue.trim() !== '') {
       const parsed = Number(rawValue)
       if (Number.isNaN(parsed)) {
-        throw new UnitConversionError('Value must be numeric for this conversion')
+        throw new ConversionError(
+          `Cannot parse "${rawValue}" as a number`,
+          `The value "${rawValue}" is not a valid number`,
+          'Please provide a numeric value (e.g., 5.2, 100, -3.14)'
+        )
       }
       numericValue = parsed
     } else {
-      throw new UnitConversionError('Value must be numeric for this conversion')
+      throw new ConversionError(
+        `Invalid value for numeric conversion: ${rawValue}`,
+        'This conversion requires a numeric value',
+        'Please provide a number or numeric string'
+      )
     }
 
     // evaluateFormula can return number or string (for duration formatting)

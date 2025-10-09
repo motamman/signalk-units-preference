@@ -2,6 +2,7 @@ import { Plugin, ServerAPI } from '@signalk/server-api'
 import { IRouter, Request, Response } from 'express'
 import { UnitsManager } from './UnitsManager'
 import { ConversionDeltaValue, DeltaResponse, DeltaValueEntry } from './types'
+import { ValidationError, ConversionError, NotFoundError, formatErrorResponse } from './errors'
 import * as path from 'path'
 import * as fs from 'fs'
 import archiver from 'archiver'
@@ -71,12 +72,13 @@ module.exports = (app: ServerAPI): Plugin => {
         }
       }
 
+      /**
+       * @deprecated Use ValidationError directly instead
+       */
       const createBadRequestError = (message: string, details?: unknown) => {
-        const error = new Error(message) as Error & {
-          status?: number
+        const error = new ValidationError(message) as ValidationError & {
           details?: unknown
         }
-        error.status = 400
         if (details !== undefined) {
           error.details = details
         }
@@ -345,7 +347,8 @@ module.exports = (app: ServerAPI): Plugin => {
           res.json({ success: true })
         } catch (error) {
           app.error(`Error setting SignalK metadata: ${error}`)
-          res.status(500).json({ error: 'Internal server error' })
+          const response = formatErrorResponse(error)
+          res.status(response.status).json(response.body)
         }
       })
 
@@ -391,14 +394,9 @@ module.exports = (app: ServerAPI): Plugin => {
 
           res.json(response)
         } catch (error) {
-          if ((error as any).status === 400) {
-            return res.status(400).json({
-              error: (error as Error).message,
-              details: (error as any).details
-            })
-          }
           app.error(`Error getting conversion: ${error}`)
-          res.status(500).json({ error: 'Internal server error' })
+          const response = formatErrorResponse(error)
+          res.status(response.status).json(response.body)
         }
       })
 
@@ -409,13 +407,25 @@ module.exports = (app: ServerAPI): Plugin => {
           const { baseUnit, targetUnit, value, displayFormat, useLocalTime } = req.body || {}
 
           if (!baseUnit || typeof baseUnit !== 'string') {
-            throw createBadRequestError('baseUnit is required')
+            throw new ValidationError(
+              'baseUnit is required',
+              'Missing required parameter: baseUnit',
+              'Please provide a valid base unit (e.g., "m/s", "K", "Pa")'
+            )
           }
           if (!targetUnit || typeof targetUnit !== 'string') {
-            throw createBadRequestError('targetUnit is required')
+            throw new ValidationError(
+              'targetUnit is required',
+              'Missing required parameter: targetUnit',
+              'Please provide a valid target unit for conversion'
+            )
           }
           if (value === undefined || value === null) {
-            throw createBadRequestError('value is required')
+            throw new ValidationError(
+              'value is required',
+              'Missing required parameter: value',
+              'Please provide a value to convert'
+            )
           }
 
           const result = unitsManager.convertUnitValue(baseUnit, targetUnit, value, {
@@ -430,12 +440,9 @@ module.exports = (app: ServerAPI): Plugin => {
             result
           })
         } catch (error) {
-          const err = error as Error & { status?: number; details?: unknown }
-          if (err.status === 400) {
-            res.status(400).json({ error: err.message, details: err.details })
-            return
-          }
-          res.status(400).json({ error: err.message })
+          app.error(`Error in POST /units/conversions: ${error}`)
+          const response = formatErrorResponse(error)
+          res.status(response.status).json(response.body)
         }
       })
 
@@ -457,13 +464,25 @@ module.exports = (app: ServerAPI): Plugin => {
             : req.query.useLocalTime
 
           if (!baseUnitParam || typeof baseUnitParam !== 'string') {
-            throw createBadRequestError('baseUnit query parameter is required')
+            throw new ValidationError(
+              'baseUnit query parameter is required',
+              'Missing query parameter: baseUnit',
+              'Add ?baseUnit=<unit> to the URL (e.g., ?baseUnit=m/s)'
+            )
           }
           if (!targetUnitParam || typeof targetUnitParam !== 'string') {
-            throw createBadRequestError('targetUnit query parameter is required')
+            throw new ValidationError(
+              'targetUnit query parameter is required',
+              'Missing query parameter: targetUnit',
+              'Add &targetUnit=<unit> to the URL (e.g., &targetUnit=knots)'
+            )
           }
           if (valueParam === undefined || valueParam === null || valueParam === '') {
-            throw createBadRequestError('value query parameter is required')
+            throw new ValidationError(
+              'value query parameter is required',
+              'Missing query parameter: value',
+              'Add &value=<number> to the URL (e.g., &value=5.2)'
+            )
           }
 
           const useLocalTime =
@@ -483,12 +502,9 @@ module.exports = (app: ServerAPI): Plugin => {
             result
           })
         } catch (error) {
-          const err = error as Error & { status?: number; details?: unknown }
-          if (err.status === 400) {
-            res.status(400).json({ error: err.message, details: err.details })
-            return
-          }
-          res.status(400).json({ error: err.message })
+          app.error(`Error in GET /units/conversions: ${error}`)
+          const response = formatErrorResponse(error)
+          res.status(response.status).json(response.body)
         }
       })
 
@@ -513,10 +529,11 @@ module.exports = (app: ServerAPI): Plugin => {
           }
 
           if (!path || value === undefined || value === null) {
-            return res.status(400).json({
-              error: 'Missing path or value',
-              received: req.body
-            })
+            throw new ValidationError(
+              'Missing path or value',
+              'Missing required fields: path and value',
+              'Please provide both a path (e.g., "navigation.speedOverGround") and a value to convert'
+            )
           }
 
           app.debug(`Converting value for path: ${path}, value: ${value}`)
@@ -528,7 +545,8 @@ module.exports = (app: ServerAPI): Plugin => {
           return res.json(result)
         } catch (error) {
           app.error(`Error converting value: ${error}`)
-          res.status(500).json({ error: 'Internal server error' })
+          const response = formatErrorResponse(error)
+          res.status(response.status).json(response.body)
         }
       })
 
@@ -540,7 +558,8 @@ module.exports = (app: ServerAPI): Plugin => {
           res.json(pathsMetadata)
         } catch (error) {
           app.error(`Error getting paths metadata: ${error}`)
-          res.status(500).json({ error: 'Internal server error' })
+          const response = formatErrorResponse(error)
+          res.status(response.status).json(response.body)
         }
       })
 
@@ -552,7 +571,8 @@ module.exports = (app: ServerAPI): Plugin => {
           res.json(schema)
         } catch (error) {
           app.error(`Error getting schema: ${error}`)
-          res.status(500).json({ error: 'Internal server error' })
+          const response = formatErrorResponse(error)
+          res.status(response.status).json(response.body)
         }
       })
 
@@ -564,7 +584,8 @@ module.exports = (app: ServerAPI): Plugin => {
           res.json(definitions)
         } catch (error) {
           app.error(`Error getting unit definitions: ${error}`)
-          res.status(500).json({ error: 'Internal server error' })
+          const response = formatErrorResponse(error)
+          res.status(response.status).json(response.body)
         }
       })
 
@@ -574,7 +595,11 @@ module.exports = (app: ServerAPI): Plugin => {
         try {
           const { baseUnit, description, conversions } = req.body
           if (!baseUnit) {
-            return res.status(400).json({ error: 'baseUnit is required' })
+            throw new ValidationError(
+              'baseUnit is required',
+              'Missing required field: baseUnit',
+              'Please provide a base unit identifier (e.g., "m/s", "custom-unit")'
+            )
           }
           await unitsManager.addUnitDefinition(baseUnit, {
             baseUnit,
@@ -584,7 +609,8 @@ module.exports = (app: ServerAPI): Plugin => {
           res.json({ success: true, baseUnit })
         } catch (error) {
           app.error(`Error adding unit definition: ${error}`)
-          res.status(500).json({ error: 'Internal server error' })
+          const response = formatErrorResponse(error)
+          res.status(response.status).json(response.body)
         }
       })
 
@@ -597,7 +623,8 @@ module.exports = (app: ServerAPI): Plugin => {
           res.json({ success: true, baseUnit })
         } catch (error) {
           app.error(`Error deleting unit definition: ${error}`)
-          res.status(500).json({ error: 'Internal server error' })
+          const response = formatErrorResponse(error)
+          res.status(response.status).json(response.body)
         }
       })
 
@@ -610,9 +637,11 @@ module.exports = (app: ServerAPI): Plugin => {
             const baseUnit = req.params.baseUnit
             const { targetUnit, formula, inverseFormula, symbol, longName, key } = req.body
             if (!targetUnit || !formula || !inverseFormula || !symbol) {
-              return res.status(400).json({
-                error: 'targetUnit, formula, inverseFormula, and symbol are required'
-              })
+              throw new ValidationError(
+                'targetUnit, formula, inverseFormula, and symbol are required',
+                'Missing required fields for conversion',
+                'Please provide: targetUnit (e.g., "knots"), formula (e.g., "value * 1.94384"), inverseFormula (e.g., "value * 0.514444"), and symbol (e.g., "kn")'
+              )
             }
             await unitsManager.addConversionToUnit(baseUnit, targetUnit, {
               formula,
@@ -624,9 +653,8 @@ module.exports = (app: ServerAPI): Plugin => {
             res.json({ success: true, baseUnit, targetUnit })
           } catch (error) {
             app.error(`Error adding conversion: ${error}`)
-            res.status(400).json({
-              error: error instanceof Error ? error.message : 'Failed to add conversion'
-            })
+            const response = formatErrorResponse(error)
+            res.status(response.status).json(response.body)
           }
         }
       )
@@ -642,7 +670,8 @@ module.exports = (app: ServerAPI): Plugin => {
             res.json({ success: true, baseUnit, targetUnit })
           } catch (error) {
             app.error(`Error deleting conversion: ${error}`)
-            res.status(500).json({ error: 'Internal server error' })
+            const response = formatErrorResponse(error)
+            res.status(response.status).json(response.body)
           }
         }
       )
@@ -655,7 +684,8 @@ module.exports = (app: ServerAPI): Plugin => {
           res.json(preferences.currentPreset || null)
         } catch (error) {
           app.error(`Error getting current preset: ${error}`)
-          res.status(500).json({ error: 'Internal server error' })
+          const response = formatErrorResponse(error)
+          res.status(response.status).json(response.body)
         }
       })
 
@@ -682,7 +712,8 @@ module.exports = (app: ServerAPI): Plugin => {
           res.json(enhancedCategories)
         } catch (error) {
           app.error(`Error getting categories: ${error}`)
-          res.status(500).json({ error: 'Internal server error' })
+          const response = formatErrorResponse(error)
+          res.status(response.status).json(response.body)
         }
       })
 
@@ -695,10 +726,7 @@ module.exports = (app: ServerAPI): Plugin => {
           const categoryPref = preferences.categories[category]
 
           if (!categoryPref) {
-            return res.status(404).json({
-              error: 'Category not found',
-              category
-            })
+            throw new NotFoundError('Category', category)
           }
 
           // Get base unit for this category
@@ -712,7 +740,8 @@ module.exports = (app: ServerAPI): Plugin => {
           })
         } catch (error) {
           app.error(`Error getting category: ${error}`)
-          res.status(500).json({ error: 'Internal server error' })
+          const response = formatErrorResponse(error)
+          res.status(response.status).json(response.body)
         }
       })
 
@@ -724,17 +753,19 @@ module.exports = (app: ServerAPI): Plugin => {
           const preference = req.body
 
           if (preference.targetUnit === undefined || preference.displayFormat === undefined) {
-            return res.status(400).json({
-              error: 'Invalid preference format',
-              required: ['targetUnit', 'displayFormat']
-            })
+            throw new ValidationError(
+              'Invalid preference format',
+              'Missing required fields: targetUnit and displayFormat',
+              'Please provide both targetUnit and displayFormat in the request body'
+            )
           }
 
           await unitsManager.updateCategoryPreference(category, preference)
           res.json({ success: true, category })
         } catch (error) {
           app.error(`Error updating category preference: ${error}`)
-          res.status(500).json({ error: 'Internal server error' })
+          const response = formatErrorResponse(error)
+          res.status(response.status).json(response.body)
         }
       })
 
@@ -745,9 +776,11 @@ module.exports = (app: ServerAPI): Plugin => {
           const baseUnit = req.query.baseUnit as string
 
           if (!baseUnit) {
-            return res.status(400).json({
-              error: 'Missing required query parameter: baseUnit'
-            })
+            throw new ValidationError(
+              'Missing required query parameter: baseUnit',
+              'The baseUnit query parameter is required',
+              'Add ?baseUnit=<unit> to the URL (e.g., ?baseUnit=m/s)'
+            )
           }
 
           const categories = unitsManager.getCategoriesForBaseUnit(baseUnit)
@@ -759,7 +792,8 @@ module.exports = (app: ServerAPI): Plugin => {
           })
         } catch (error) {
           app.error(`Error getting categories for base unit: ${error}`)
-          res.status(500).json({ error: 'Internal server error' })
+          const response = formatErrorResponse(error)
+          res.status(response.status).json(response.body)
         }
       })
 
@@ -772,7 +806,8 @@ module.exports = (app: ServerAPI): Plugin => {
           res.json({ success: true, category })
         } catch (error) {
           app.error(`Error deleting category preference: ${error}`)
-          res.status(500).json({ error: 'Internal server error' })
+          const response = formatErrorResponse(error)
+          res.status(response.status).json(response.body)
         }
       })
 
@@ -784,7 +819,8 @@ module.exports = (app: ServerAPI): Plugin => {
           res.json(preferences.pathOverrides || {})
         } catch (error) {
           app.error(`Error getting overrides: ${error}`)
-          res.status(500).json({ error: 'Internal server error' })
+          const response = formatErrorResponse(error)
+          res.status(response.status).json(response.body)
         }
       })
 
@@ -797,16 +833,14 @@ module.exports = (app: ServerAPI): Plugin => {
           const pathOverride = preferences.pathOverrides[pathStr]
 
           if (!pathOverride) {
-            return res.status(404).json({
-              error: 'Path override not found',
-              path: pathStr
-            })
+            throw new NotFoundError('Path override', pathStr)
           }
 
           res.json(pathOverride)
         } catch (error) {
           app.error(`Error getting path override: ${error}`)
-          res.status(500).json({ error: 'Internal server error' })
+          const response = formatErrorResponse(error)
+          res.status(response.status).json(response.body)
         }
       })
 
@@ -818,17 +852,19 @@ module.exports = (app: ServerAPI): Plugin => {
           const preference = req.body
 
           if (!preference.targetUnit || !preference.displayFormat) {
-            return res.status(400).json({
-              error: 'Invalid preference format',
-              required: ['targetUnit', 'displayFormat']
-            })
+            throw new ValidationError(
+              'Invalid preference format',
+              'Missing required fields: targetUnit and displayFormat',
+              'Please provide both targetUnit and displayFormat in the request body'
+            )
           }
 
           await unitsManager.updatePathOverride(pathStr, preference)
           res.json({ success: true, path: pathStr })
         } catch (error) {
           app.error(`Error updating path override: ${error}`)
-          res.status(500).json({ error: 'Internal server error' })
+          const response = formatErrorResponse(error)
+          res.status(response.status).json(response.body)
         }
       })
 
@@ -841,7 +877,8 @@ module.exports = (app: ServerAPI): Plugin => {
           res.json({ success: true, path: pathStr })
         } catch (error) {
           app.error(`Error deleting path override: ${error}`)
-          res.status(500).json({ error: 'Internal server error' })
+          const response = formatErrorResponse(error)
+          res.status(response.status).json(response.body)
         }
       })
 
@@ -853,7 +890,8 @@ module.exports = (app: ServerAPI): Plugin => {
           res.json(preferences.pathPatterns || [])
         } catch (error) {
           app.error(`Error getting patterns: ${error}`)
-          res.status(500).json({ error: 'Internal server error' })
+          const response = formatErrorResponse(error)
+          res.status(response.status).json(response.body)
         }
       })
 
@@ -866,16 +904,14 @@ module.exports = (app: ServerAPI): Plugin => {
           const patterns = preferences.pathPatterns || []
 
           if (index < 0 || index >= patterns.length) {
-            return res.status(404).json({
-              error: 'Pattern not found',
-              index
-            })
+            throw new NotFoundError('Pattern', `index ${index}`)
           }
 
           res.json(patterns[index])
         } catch (error) {
           app.error(`Error getting pattern: ${error}`)
-          res.status(500).json({ error: 'Internal server error' })
+          const response = formatErrorResponse(error)
+          res.status(response.status).json(response.body)
         }
       })
 
@@ -885,16 +921,18 @@ module.exports = (app: ServerAPI): Plugin => {
         try {
           const pattern = req.body
           if (!pattern.pattern || !pattern.category) {
-            return res.status(400).json({
-              error: 'Invalid pattern format',
-              required: ['pattern', 'category']
-            })
+            throw new ValidationError(
+              'Invalid pattern format',
+              'Missing required fields: pattern and category',
+              'Please provide both pattern (e.g., "navigation.*") and category (e.g., "speed") in the request body'
+            )
           }
           await unitsManager.addPathPattern(pattern)
           res.json({ success: true })
         } catch (error) {
           app.error(`Error adding pattern: ${error}`)
-          res.status(500).json({ error: 'Internal server error' })
+          const response = formatErrorResponse(error)
+          res.status(response.status).json(response.body)
         }
       })
 
@@ -908,9 +946,8 @@ module.exports = (app: ServerAPI): Plugin => {
           res.json({ success: true, index })
         } catch (error) {
           app.error(`Error updating pattern: ${error}`)
-          res
-            .status(500)
-            .json({ error: error instanceof Error ? error.message : 'Internal server error' })
+          const response = formatErrorResponse(error)
+          res.status(response.status).json(response.body)
         }
       })
 
@@ -923,9 +960,8 @@ module.exports = (app: ServerAPI): Plugin => {
           res.json({ success: true, index })
         } catch (error) {
           app.error(`Error deleting pattern: ${error}`)
-          res
-            .status(500)
-            .json({ error: error instanceof Error ? error.message : 'Internal server error' })
+          const response = formatErrorResponse(error)
+          res.status(response.status).json(response.body)
         }
       })
 
@@ -936,7 +972,11 @@ module.exports = (app: ServerAPI): Plugin => {
           const { presetType } = req.body
 
           if (!presetType || typeof presetType !== 'string') {
-            return res.status(400).json({ error: 'presetType is required' })
+            throw new ValidationError(
+              'presetType is required',
+              'Missing required field: presetType',
+              'Please provide a presetType (e.g., "metric", "imperial-us", "imperial-uk", or a custom preset name)'
+            )
           }
 
           // Check if it's a custom preset first
@@ -957,10 +997,11 @@ module.exports = (app: ServerAPI): Plugin => {
             // Try built-in preset
             presetPath = path.join(__dirname, '..', 'presets', `${presetType}.json`)
             if (!fs.existsSync(presetPath)) {
-              return res.status(400).json({
-                error: 'Invalid preset type',
-                validPresets: ['metric', 'imperial-us', 'imperial-uk', 'or any custom preset']
-              })
+              throw new ValidationError(
+                'Invalid preset type',
+                'The preset type is not recognized',
+                'Use one of: metric, imperial-us, imperial-uk, or a custom preset'
+              )
             }
           }
 
@@ -990,9 +1031,8 @@ module.exports = (app: ServerAPI): Plugin => {
           })
         } catch (error) {
           app.error(`Error applying preset: ${error}`)
-          res
-            .status(500)
-            .json({ error: error instanceof Error ? error.message : 'Internal server error' })
+          const response = formatErrorResponse(error)
+          res.status(response.status).json(response.body)
         }
       })
 
@@ -1004,24 +1044,31 @@ module.exports = (app: ServerAPI): Plugin => {
 
           // Validate name format
           if (!/^[a-zA-Z0-9_-]+$/.test(presetName)) {
-            return res.status(400).json({
-              error:
-                'Invalid preset name. Only letters, numbers, dashes, and underscores are allowed.'
-            })
+            throw new ValidationError(
+              'Invalid preset name',
+              'Preset name contains invalid characters',
+              'Only letters, numbers, dashes, and underscores are allowed'
+            )
           }
 
           // Prevent overwriting built-in presets
           const builtInPresets = ['metric', 'imperial-us', 'imperial-uk']
           if (builtInPresets.includes(presetName.toLowerCase())) {
-            return res.status(400).json({
-              error: 'Cannot overwrite built-in presets'
-            })
+            throw new ValidationError(
+              'Cannot overwrite built-in presets',
+              'The preset name conflicts with a built-in preset',
+              'Choose a different name for your custom preset'
+            )
           }
 
           const { name, categories } = req.body
 
           if (!categories) {
-            return res.status(400).json({ error: 'Missing categories data' })
+            throw new ValidationError(
+              'Missing categories data',
+              'The request body must include categories',
+              'Please provide the categories object in the request body'
+            )
           }
 
           // Create custom presets directory if it doesn't exist
@@ -1084,9 +1131,8 @@ module.exports = (app: ServerAPI): Plugin => {
           })
         } catch (error) {
           app.error(`Error saving custom preset: ${error}`)
-          res
-            .status(500)
-            .json({ error: error instanceof Error ? error.message : 'Internal server error' })
+          const response = formatErrorResponse(error)
+          res.status(response.status).json(response.body)
         }
       })
 
@@ -1121,9 +1167,8 @@ module.exports = (app: ServerAPI): Plugin => {
           res.json(presets)
         } catch (error) {
           app.error(`Error listing custom presets: ${error}`)
-          res
-            .status(500)
-            .json({ error: error instanceof Error ? error.message : 'Internal server error' })
+          const response = formatErrorResponse(error)
+          res.status(response.status).json(response.body)
         }
       })
 
@@ -1135,7 +1180,7 @@ module.exports = (app: ServerAPI): Plugin => {
           const presetPath = path.join(__dirname, '..', 'presets', 'custom', `${presetName}.json`)
 
           if (!fs.existsSync(presetPath)) {
-            return res.status(404).json({ error: 'Custom preset not found' })
+            throw new NotFoundError('Custom preset', presetName)
           }
 
           res.setHeader('Content-Type', 'application/json')
@@ -1143,9 +1188,8 @@ module.exports = (app: ServerAPI): Plugin => {
           res.sendFile(presetPath)
         } catch (error) {
           app.error(`Error downloading custom preset: ${error}`)
-          res
-            .status(500)
-            .json({ error: error instanceof Error ? error.message : 'Internal server error' })
+          const response = formatErrorResponse(error)
+          res.status(response.status).json(response.body)
         }
       })
 
@@ -1157,13 +1201,21 @@ module.exports = (app: ServerAPI): Plugin => {
           const presetPath = path.join(__dirname, '..', 'presets', 'custom', `${presetName}.json`)
 
           if (!req.body) {
-            return res.status(400).json({ error: 'No preset data provided' })
+            throw new ValidationError(
+              'No preset data provided',
+              'The request body is empty',
+              'Please provide the preset data in the request body'
+            )
           }
 
           // Validate JSON structure
           const data = req.body
           if (typeof data !== 'object') {
-            return res.status(400).json({ error: 'Invalid JSON data' })
+            throw new ValidationError(
+              'Invalid JSON data',
+              'The request body must be a valid JSON object',
+              'Ensure the request body contains valid JSON'
+            )
           }
 
           // Ensure custom directory exists
@@ -1180,9 +1232,8 @@ module.exports = (app: ServerAPI): Plugin => {
           app.debug(`Custom preset uploaded: ${presetName}.json`)
         } catch (error) {
           app.error(`Error uploading custom preset: ${error}`)
-          res
-            .status(500)
-            .json({ error: error instanceof Error ? error.message : 'Internal server error' })
+          const response = formatErrorResponse(error)
+          res.status(response.status).json(response.body)
         }
       })
 
@@ -1192,7 +1243,7 @@ module.exports = (app: ServerAPI): Plugin => {
           const presetPath = path.join(__dirname, '..', 'presets', 'custom', `${presetName}.json`)
 
           if (!fs.existsSync(presetPath)) {
-            return res.status(404).json({ error: 'Custom preset not found' })
+            throw new NotFoundError('Custom preset', presetName)
           }
 
           fs.unlinkSync(presetPath)
@@ -1203,9 +1254,8 @@ module.exports = (app: ServerAPI): Plugin => {
           })
         } catch (error) {
           app.error(`Error deleting custom preset: ${error}`)
-          res
-            .status(500)
-            .json({ error: error instanceof Error ? error.message : 'Internal server error' })
+          const response = formatErrorResponse(error)
+          res.status(response.status).json(response.body)
         }
       })
 
@@ -1278,9 +1328,8 @@ module.exports = (app: ServerAPI): Plugin => {
           app.debug('Backup created successfully')
         } catch (error) {
           app.error(`Error creating backup: ${error}`)
-          res
-            .status(500)
-            .json({ error: error instanceof Error ? error.message : 'Internal server error' })
+          const response = formatErrorResponse(error)
+          res.status(response.status).json(response.body)
         }
       })
 
@@ -1289,7 +1338,11 @@ module.exports = (app: ServerAPI): Plugin => {
       router.post('/backups', async (req: Request, res: Response) => {
         try {
           if (!req.body || !req.body.zipData) {
-            return res.status(400).json({ error: 'No zip data provided' })
+            throw new ValidationError(
+              'No zip data provided',
+              'The request body is missing zipData',
+              'Please provide the backup zip file as base64-encoded data in the zipData field'
+            )
           }
 
           const dataDir = app.getDataDirPath()
@@ -1341,9 +1394,8 @@ module.exports = (app: ServerAPI): Plugin => {
           app.debug(`Backup restored: ${restoredFiles.join(', ')}`)
         } catch (error) {
           app.error(`Error restoring backup: ${error}`)
-          res
-            .status(500)
-            .json({ error: error instanceof Error ? error.message : 'Internal server error' })
+          const response = formatErrorResponse(error)
+          res.status(response.status).json(response.body)
         }
       })
 
@@ -1356,7 +1408,11 @@ module.exports = (app: ServerAPI): Plugin => {
           // Validate file type
           const validTypes = ['standard-units', 'categories', 'date-formats']
           if (!validTypes.includes(fileType)) {
-            return res.status(400).json({ error: 'Invalid file type' })
+            throw new ValidationError(
+              'Invalid file type',
+              'The file type is not recognized',
+              'Use one of: standard-units, categories, date-formats'
+            )
           }
 
           // Map to actual file names
@@ -1369,7 +1425,7 @@ module.exports = (app: ServerAPI): Plugin => {
           const filePath = path.join(__dirname, '..', 'presets', 'definitions', fileName)
 
           if (!fs.existsSync(filePath)) {
-            return res.status(404).json({ error: 'File not found' })
+            throw new NotFoundError('Definition file', fileName)
           }
 
           res.setHeader('Content-Type', 'application/json')
@@ -1377,9 +1433,8 @@ module.exports = (app: ServerAPI): Plugin => {
           res.sendFile(filePath)
         } catch (error) {
           app.error(`Error downloading definition file: ${error}`)
-          res
-            .status(500)
-            .json({ error: error instanceof Error ? error.message : 'Internal server error' })
+          const response = formatErrorResponse(error)
+          res.status(response.status).json(response.body)
         }
       })
 
@@ -1392,11 +1447,19 @@ module.exports = (app: ServerAPI): Plugin => {
           // Validate file type
           const validTypes = ['standard-units', 'categories', 'date-formats']
           if (!validTypes.includes(fileType)) {
-            return res.status(400).json({ error: 'Invalid file type' })
+            throw new ValidationError(
+              'Invalid file type',
+              'The file type is not recognized',
+              'Use one of: standard-units, categories, date-formats'
+            )
           }
 
           if (!req.body) {
-            return res.status(400).json({ error: 'No file data provided' })
+            throw new ValidationError(
+              'No file data provided',
+              'The request body is empty',
+              'Please provide the file data in the request body'
+            )
           }
 
           // Map to actual file names
@@ -1411,7 +1474,11 @@ module.exports = (app: ServerAPI): Plugin => {
           // Validate JSON structure
           const data = req.body
           if (typeof data !== 'object') {
-            return res.status(400).json({ error: 'Invalid JSON data' })
+            throw new ValidationError(
+              'Invalid JSON data',
+              'The request body must be a valid JSON object',
+              'Ensure the request body contains valid JSON'
+            )
           }
 
           // Write file
@@ -1425,9 +1492,8 @@ module.exports = (app: ServerAPI): Plugin => {
           app.debug(`Definition file uploaded: ${fileName}`)
         } catch (error) {
           app.error(`Error uploading definition file: ${error}`)
-          res
-            .status(500)
-            .json({ error: error instanceof Error ? error.message : 'Internal server error' })
+          const response = formatErrorResponse(error)
+          res.status(response.status).json(response.body)
         }
       })
 
@@ -1458,11 +1524,15 @@ module.exports = (app: ServerAPI): Plugin => {
               fileName = 'custom-units-definitions.json'
               break
             default:
-              return res.status(400).json({ error: 'Invalid file type' })
+              throw new ValidationError(
+                'Invalid file type',
+                'The file type is not recognized',
+                'Use one of: imperial-us, imperial-uk, metric, units-preferences, custom-units-definitions'
+              )
           }
 
           if (!fs.existsSync(filePath)) {
-            return res.status(404).json({ error: 'File not found' })
+            throw new NotFoundError('Config file', fileName)
           }
 
           res.setHeader('Content-Type', 'application/json')
@@ -1470,9 +1540,8 @@ module.exports = (app: ServerAPI): Plugin => {
           res.sendFile(filePath)
         } catch (error) {
           app.error(`Error downloading config file: ${error}`)
-          res
-            .status(500)
-            .json({ error: error instanceof Error ? error.message : 'Internal server error' })
+          const response = formatErrorResponse(error)
+          res.status(response.status).json(response.body)
         }
       })
 
@@ -1484,7 +1553,11 @@ module.exports = (app: ServerAPI): Plugin => {
           const dataDir = app.getDataDirPath()
 
           if (!req.body) {
-            return res.status(400).json({ error: 'No file data provided' })
+            throw new ValidationError(
+              'No file data provided',
+              'The request body is empty',
+              'Please provide the file data in the request body'
+            )
           }
 
           let filePath: string
@@ -1503,13 +1576,21 @@ module.exports = (app: ServerAPI): Plugin => {
               filePath = path.join(dataDir, 'custom-units-definitions.json')
               break
             default:
-              return res.status(400).json({ error: 'Invalid file type' })
+              throw new ValidationError(
+                'Invalid file type',
+                'The file type is not recognized',
+                'Use one of: imperial-us, imperial-uk, metric, units-preferences, custom-units-definitions'
+              )
           }
 
           // Validate JSON structure
           const data = req.body
           if (typeof data !== 'object') {
-            return res.status(400).json({ error: 'Invalid JSON data' })
+            throw new ValidationError(
+              'Invalid JSON data',
+              'The request body must be a valid JSON object',
+              'Ensure the request body contains valid JSON'
+            )
           }
 
           // Validate structure based on file type
@@ -1518,33 +1599,40 @@ module.exports = (app: ServerAPI): Plugin => {
             const invalidKeys = ['categories', 'pathOverrides', 'pathPatterns', 'currentPreset']
             for (const key of invalidKeys) {
               if (key in data) {
-                return res.status(400).json({
-                  error: `Invalid structure: "${key}" belongs in units-preferences.json, not custom-units-definitions.json. Please upload the correct file.`
-                })
+                throw new ValidationError(
+                  'Invalid structure',
+                  `"${key}" belongs in units-preferences.json, not custom-units-definitions.json`,
+                  'Please upload the correct file'
+                )
               }
             }
 
             // Validate that it contains valid unit definitions structure
             for (const [baseUnit, def] of Object.entries(data)) {
               if (typeof def !== 'object' || def === null) {
-                return res.status(400).json({
-                  error: `Invalid unit definition for "${baseUnit}": must be an object`
-                })
+                throw new ValidationError(
+                  'Invalid unit definition',
+                  `Unit definition for "${baseUnit}" must be an object`,
+                  'Check the structure of your unit definitions'
+                )
               }
               const unitDef = def as any
               if (!unitDef.category && !unitDef.conversions) {
-                return res.status(400).json({
-                  error: `Invalid unit definition for "${baseUnit}": must have "category" or "conversions" property`
-                })
+                throw new ValidationError(
+                  'Invalid unit definition',
+                  `Unit definition for "${baseUnit}" must have "category" or "conversions" property`,
+                  'Ensure each unit definition has the required properties'
+                )
               }
             }
           } else if (fileType === 'units-preferences') {
             // units-preferences.json should contain preferences structure
             if (!data.categories && !data.pathOverrides && !data.pathPatterns) {
-              return res.status(400).json({
-                error:
-                  'Invalid structure: units-preferences.json must contain at least one of: categories, pathOverrides, or pathPatterns'
-              })
+              throw new ValidationError(
+                'Invalid structure',
+                'units-preferences.json must contain at least one of: categories, pathOverrides, or pathPatterns',
+                'Ensure your preferences file has the correct structure'
+              )
             }
 
             // Check for mistakenly uploaded units-definitions
@@ -1561,17 +1649,20 @@ module.exports = (app: ServerAPI): Plugin => {
               }
             }
             if (hasUnitDefStructure) {
-              return res.status(400).json({
-                error:
-                  'Invalid structure: This looks like units-definitions.json. Please upload the correct file.'
-              })
+              throw new ValidationError(
+                'Invalid structure',
+                'This looks like units-definitions.json',
+                'Please upload the correct file'
+              )
             }
           } else if (['imperial-us', 'imperial-uk', 'metric'].includes(fileType)) {
             // Preset files should have categories
             if (!data.categories) {
-              return res.status(400).json({
-                error: 'Invalid preset structure: must contain "categories" property'
-              })
+              throw new ValidationError(
+                'Invalid preset structure',
+                'Preset file must contain "categories" property',
+                'Ensure the preset file has the correct structure'
+              )
             }
           }
 
@@ -1586,9 +1677,8 @@ module.exports = (app: ServerAPI): Plugin => {
           app.debug(`Config file uploaded: ${fileType}.json`)
         } catch (error) {
           app.error(`Error uploading config file: ${error}`)
-          res
-            .status(500)
-            .json({ error: error instanceof Error ? error.message : 'Internal server error' })
+          const response = formatErrorResponse(error)
+          res.status(response.status).json(response.body)
         }
       })
 
