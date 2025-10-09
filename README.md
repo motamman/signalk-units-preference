@@ -1,4 +1,4 @@
-# <img src="public/units.png" alt="SignalK Units Preference" width="72" height="72" style="vertical-align: middle; margin-right: 20px;"> SignalK Units Display Selector
+#<img src="public/units.png" alt="SignalK Units Display Preference" width="72" height="72" style="vertical-align: middle; margin-right: 20px;"> Units Display Preference
 
 A SignalK server for managing unit conversions and display preferences across all data paths. Convert any SignalK data point to your preferred units with flexible pattern matching, custom formulas, and a full-featured web interface and REST API.
 
