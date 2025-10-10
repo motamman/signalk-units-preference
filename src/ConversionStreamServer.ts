@@ -305,7 +305,7 @@ export class ConversionStreamServer {
           const conversion = this.unitsManager.getConversion(path)
 
           // Try to convert the value
-          let converted = this.convertValue(path, value, conversion)
+          let converted = this.convertValue(path, value)
 
           // If conversion failed or is pass-through, send original value as-is
           if (!converted) {
@@ -390,73 +390,20 @@ export class ConversionStreamServer {
   }
 
   /**
-   * Convert a value
+   * Convert a value using the UNIFIED conversion method
    */
-  private convertValue(path: string, value: any, conversion: any): any | null {
-    const valueType = conversion.valueType || 'unknown'
-
-    switch (valueType) {
-      case 'number':
-        if (typeof value !== 'number' || !isFinite(value)) {
-          return null
-        }
-        try {
-          const result = this.unitsManager.convertValue(path, value)
-          return {
-            converted: result.convertedValue,
-            formatted: result.formatted,
-            original: value
-          }
-        } catch (error) {
-          return null
-        }
-
-      case 'date': {
-        // Handle date conversion
-        let isoValue: string
-        if (typeof value === 'number') {
-          const normalizedBase = (conversion.baseUnit || '').toLowerCase()
-          const isEpochBase = normalizedBase.includes('epoch')
-          const date = new Date(value * (isEpochBase ? 1000 : 1))
-          if (isNaN(date.getTime())) {
-            return null
-          }
-          isoValue = date.toISOString()
-        } else if (typeof value === 'string') {
-          isoValue = value
-        } else {
-          return null
-        }
-
-        try {
-          const result = this.unitsManager.formatDateValue(
-            isoValue,
-            conversion.targetUnit || '',
-            conversion.dateFormat,
-            conversion.useLocalTime
-          )
-          return {
-            converted: result.convertedValue,
-            formatted: result.formatted,
-            original: value
-          }
-        } catch (error) {
-          return null
-        }
+  private convertValue(path: string, value: any): any | null {
+    try {
+      // Use the UNIFIED conversion method - ONE source of truth!
+      const result = this.unitsManager.convertPathValue(path, value)
+      return {
+        converted: result.converted,
+        formatted: result.formatted,
+        original: result.original
       }
-
-      case 'boolean':
-      case 'string':
-      case 'object':
-        // Pass-through for these types
-        return {
-          converted: value,
-          formatted: typeof value === 'object' ? JSON.stringify(value) : String(value),
-          original: value
-        }
-
-      default:
-        return null
+    } catch (error) {
+      this.app.debug(`Conversion failed for ${path}: ${error}`)
+      return null
     }
   }
 

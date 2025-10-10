@@ -328,12 +328,14 @@ async function subscribeToConvertedPaths() {
     if (subscriptionMode === 'single' && singlePathSubscription) {
       // Unsubscribe from ALL paths, then subscribe to single path
       unsubscriptions = allPaths.map(path => ({ path }))
-      subscriptions = [{
-        path: singlePathSubscription,
-        period: 1000,
-        format: 'delta',
-        policy: 'instant'
-      }]
+      subscriptions = [
+        {
+          path: singlePathSubscription,
+          period: 1000,
+          format: 'delta',
+          policy: 'instant'
+        }
+      ]
     } else {
       // Subscribe to all paths (no need to unsubscribe in this case, just re-subscribe)
       subscriptions = allPaths.map(path => ({
@@ -431,11 +433,11 @@ function updateStreamDisplay() {
 
   if (streamDataMap.size === 0) {
     // Show appropriate message based on subscription mode
-    const message = subscriptionMode === 'single'
-      ? `Waiting for data from path: ${singlePathSubscription}...`
-      : 'Waiting for data...'
-    streamDataDiv.innerHTML =
-      `<div style="color: #6c757d; text-align: center; padding: 40px;">${message}</div>`
+    const message =
+      subscriptionMode === 'single'
+        ? `Waiting for data from path: ${singlePathSubscription}...`
+        : 'Waiting for data...'
+    streamDataDiv.innerHTML = `<div style="color: #6c757d; text-align: center; padding: 40px;">${message}</div>`
     return
   }
 
@@ -468,7 +470,8 @@ function updateStreamDisplay() {
     const timestamp = new Date(data.timestamp).toLocaleTimeString()
     const source = data.source || 'unknown'
     const baseUnit = data.baseUnit || (data.convertedValue && data.convertedValue.baseUnit) || ''
-    const targetUnit = data.targetUnit || (data.convertedValue && data.convertedValue.targetUnit) || ''
+    const targetUnit =
+      data.targetUnit || (data.convertedValue && data.convertedValue.targetUnit) || ''
 
     // Check if this is the currently subscribed single path
     const isActiveSinglePath = subscriptionMode === 'single' && path === singlePathSubscription

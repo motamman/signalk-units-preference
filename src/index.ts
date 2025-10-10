@@ -216,108 +216,23 @@ module.exports = (app: ServerAPI): Plugin => {
         }
       }
 
-      const normalizeValueForConversion = (
-        rawValue: unknown,
-        expectedType: string,
-        typeHint?: SupportedValueType
-      ): { value: unknown; usedType: SupportedValueType } => {
-        const targetType =
-          typeHint !== undefined && typeHint !== 'unknown'
-            ? typeHint
-            : toSupportedValueType(expectedType)
-
-        if (targetType === 'number') {
-          if (typeof rawValue === 'number' && Number.isFinite(rawValue)) {
-            return { value: rawValue, usedType: 'number' }
-          }
-          if (typeof rawValue === 'string' && rawValue.trim() !== '') {
-            const parsed = Number(rawValue)
-            if (!Number.isNaN(parsed)) {
-              return { value: parsed, usedType: 'number' }
-            }
-          }
-          throw createBadRequestError('Expected numeric value', { received: rawValue })
-        }
-
-        if (targetType === 'boolean') {
-          if (typeof rawValue === 'boolean') {
-            return { value: rawValue, usedType: 'boolean' }
-          }
-          if (typeof rawValue === 'number') {
-            if (rawValue === 0 || rawValue === 1) {
-              return { value: rawValue === 1, usedType: 'boolean' }
-            }
-          }
-          if (typeof rawValue === 'string' && rawValue.trim() !== '') {
-            const normalized = rawValue.trim().toLowerCase()
-            if (['true', '1', 'yes', 'y', 'on'].includes(normalized)) {
-              return { value: true, usedType: 'boolean' }
-            }
-            if (['false', '0', 'no', 'n', 'off'].includes(normalized)) {
-              return { value: false, usedType: 'boolean' }
-            }
-          }
-          throw createBadRequestError('Expected boolean value', { received: rawValue })
-        }
-
-        if (targetType === 'date') {
-          if (rawValue instanceof Date && !Number.isNaN(rawValue.getTime())) {
-            return { value: rawValue.toISOString(), usedType: 'date' }
-          }
-          if (typeof rawValue === 'string' && rawValue.trim() !== '') {
-            const parsed = new Date(rawValue)
-            if (!Number.isNaN(parsed.getTime())) {
-              return { value: parsed.toISOString(), usedType: 'date' }
-            }
-          }
-          throw createBadRequestError('Expected ISO-8601 date value', { received: rawValue })
-        }
-
-        if (targetType === 'string') {
-          if (typeof rawValue === 'string') {
-            return { value: rawValue, usedType: 'string' }
-          }
-          if (rawValue === null || rawValue === undefined) {
-            return { value: '', usedType: 'string' }
-          }
-          return { value: String(rawValue), usedType: 'string' }
-        }
-
-        if (targetType === 'object') {
-          if (rawValue !== null && typeof rawValue === 'object') {
-            return { value: rawValue, usedType: 'object' }
-          }
-          if (typeof rawValue === 'string' && rawValue.trim() !== '') {
-            try {
-              const parsed = JSON.parse(rawValue)
-              if (parsed !== null && typeof parsed === 'object') {
-                return { value: parsed, usedType: 'object' }
-              }
-              throw createBadRequestError('Expected JSON object or array', { received: rawValue })
-            } catch (err) {
-              if ((err as any).status === 400) {
-                throw err
-              }
-              throw createBadRequestError('Invalid JSON payload', { received: rawValue })
-            }
-          }
-          throw createBadRequestError('Expected JSON object or array', { received: rawValue })
-        }
-
-        return { value: rawValue, usedType: 'unknown' }
-      }
-
       const buildDeltaResponse = (
         pathStr: string,
         rawValue: unknown,
         options?: { typeHint?: SupportedValueType; timestamp?: string; context?: string }
       ): DeltaResponse => {
         const conversionInfo = unitsManager.getConversion(pathStr)
-        const normalized = normalizeValueForConversion(
-          rawValue,
-          conversionInfo.valueType,
-          options?.typeHint
-        )
+
+        // Use the UNIFIED conversion method - ONE source of truth!
+        let result
+        try {
+          result = unitsManager.convertPathValue(pathStr, rawValue)
+        } catch (error) {
+          throw createBadRequestError((error as Error).message, {
+            path: pathStr,
+            value: rawValue
+          })
+        }
 
         const baseUpdate: DeltaResponse['updates'][number] = {
           $source: conversionInfo.signalkSource || undefined,
@@ -330,134 +245,10 @@ module.exports = (app: ServerAPI): Plugin => {
           updates: [baseUpdate]
         }
 
-        const resolvedType =
-          normalized.usedType !== 'unknown'
-            ? normalized.usedType
-            : toSupportedValueType(conversionInfo.valueType)
-
-        const normalizedValue = normalized.value
-
-        let convertedValue: any = normalizedValue
-        let formatted = ''
-        let displayFormat = conversionInfo.displayFormat
-        let symbol = conversionInfo.symbol || ''
-
-        const isDateCategory =
-          conversionInfo.category === 'dateTime' || conversionInfo.category === 'epoch'
-        let typeToUse = resolvedType
-        if (conversionInfo.dateFormat || isDateCategory) {
-          typeToUse = 'date'
-        }
-
-        switch (typeToUse) {
-          case 'number': {
-            if (typeof normalizedValue !== 'number') {
-              throw createBadRequestError('Expected numeric value for conversion', {
-                received: normalizedValue,
-                path: pathStr
-              })
-            }
-            const numericResult = unitsManager.convertValue(pathStr, normalizedValue)
-            convertedValue = numericResult.convertedValue
-            formatted = numericResult.formatted
-            displayFormat = numericResult.displayFormat
-            symbol = numericResult.symbol || conversionInfo.symbol || ''
-            baseUpdate.$source =
-              numericResult.signalkSource || conversionInfo.signalkSource || baseUpdate.$source
-            baseUpdate.timestamp = numericResult.signalkTimestamp || baseUpdate.timestamp
-            break
-          }
-          case 'boolean': {
-            if (typeof normalizedValue !== 'boolean') {
-              throw createBadRequestError('Expected boolean value for conversion', {
-                received: normalizedValue,
-                path: pathStr
-              })
-            }
-            convertedValue = normalizedValue
-            formatted = normalizedValue ? 'true' : 'false'
-            displayFormat = 'boolean'
-            symbol = ''
-            break
-          }
-          case 'date': {
-            let isoValue: string
-            if (typeof normalizedValue === 'string') {
-              isoValue = normalizedValue
-            } else if (typeof normalizedValue === 'number') {
-              const normalizedBase = (conversionInfo.baseUnit || '').toLowerCase()
-              const isEpochBase = normalizedBase.includes('epoch')
-              const date = new Date(normalizedValue * (isEpochBase ? 1000 : 1))
-              if (Number.isNaN(date.getTime())) {
-                throw createBadRequestError('Expected epoch seconds number for conversion', {
-                  received: normalizedValue,
-                  path: pathStr
-                })
-              }
-              isoValue = date.toISOString()
-            } else {
-              throw createBadRequestError('Expected date value for conversion', {
-                received: normalizedValue,
-                path: pathStr
-              })
-            }
-            try {
-              const formattedDate = unitsManager.formatDateValue(
-                isoValue,
-                conversionInfo.targetUnit || '',
-                conversionInfo.dateFormat,
-                conversionInfo.useLocalTime
-              )
-              convertedValue = formattedDate.convertedValue
-              formatted = formattedDate.formatted
-              displayFormat = formattedDate.displayFormat
-              symbol = conversionInfo.symbol || ''
-            } catch (err) {
-              if ((err as any).name === 'UnitConversionError') {
-                throw createBadRequestError((err as Error).message, {
-                  received: normalizedValue,
-                  path: pathStr
-                })
-              }
-              throw err
-            }
-            break
-          }
-          case 'string': {
-            convertedValue = String(normalizedValue)
-            formatted = convertedValue
-            displayFormat = 'string'
-            symbol = symbol || ''
-            break
-          }
-          case 'object': {
-            if (normalizedValue === null || typeof normalizedValue !== 'object') {
-              throw createBadRequestError('Expected JSON object or array', {
-                received: normalizedValue,
-                path: pathStr
-              })
-            }
-            convertedValue = normalizedValue
-            formatted = JSON.stringify(normalizedValue)
-            displayFormat = 'json'
-            symbol = ''
-            break
-          }
-          default: {
-            formatted = String(normalizedValue)
-            symbol = symbol || ''
-            break
-          }
-        }
-
-        if (!baseUpdate.$source) {
-          baseUpdate.$source = conversionInfo.signalkSource
-        }
-
         const payload: ConversionDeltaValue = {
-          converted: convertedValue,
-          formatted,
-          original: normalizedValue
+          converted: result.converted,
+          formatted: result.formatted,
+          original: result.original
         }
 
         baseUpdate.values.push({
@@ -469,15 +260,7 @@ module.exports = (app: ServerAPI): Plugin => {
         baseUpdate.meta = [
           {
             path: pathStr,
-            value: {
-              units: symbol,
-              displayFormat,
-              description: `${pathStr} (${conversionInfo.category || 'converted'})`,
-              originalUnits: conversionInfo.baseUnit || '',
-              displayName: conversionInfo.symbol
-                ? `${pathStr.split('.').pop()} (${conversionInfo.symbol})`
-                : undefined
-            }
+            value: result.metadata
           }
         ]
 

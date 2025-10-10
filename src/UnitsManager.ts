@@ -495,7 +495,151 @@ export class UnitsManager {
   }
 
   /**
-   * Convert a value using the conversion formula
+   * UNIFIED conversion method - handles ALL value types (number, date, boolean, string, object)
+   * This is the SINGLE source of truth for conversions used by both API and WebSocket
+   */
+  convertPathValue(
+    pathStr: string,
+    value: unknown
+  ): {
+    converted: any
+    formatted: string
+    original: any
+    metadata: {
+      units: string
+      displayFormat: string
+      description: string
+      originalUnits: string
+      displayName?: string
+    }
+  } {
+    const conversionInfo = this.getConversion(pathStr)
+
+    // Runtime check: if value is an object (but not null), pass it through regardless of metadata
+    if (value !== null && typeof value === 'object' && !(value instanceof Date)) {
+      return {
+        converted: value,
+        formatted: JSON.stringify(value),
+        original: value,
+        metadata: {
+          units: conversionInfo.symbol || '',
+          displayFormat: conversionInfo.displayFormat,
+          description: `${pathStr} (${conversionInfo.category || 'converted'})`,
+          originalUnits: conversionInfo.baseUnit || '',
+          displayName: conversionInfo.symbol
+            ? `${pathStr.split('.').pop()} (${conversionInfo.symbol})`
+            : undefined
+        }
+      }
+    }
+
+    // Determine value type - use category as secondary check for dates
+    const isDateCategory =
+      conversionInfo.category === 'dateTime' || conversionInfo.category === 'epoch'
+    const valueType =
+      isDateCategory || conversionInfo.valueType === 'date' ? 'date' : conversionInfo.valueType
+
+    let converted: any
+    let formatted: string
+
+    switch (valueType) {
+      case 'number': {
+        if (typeof value !== 'number' || !isFinite(value)) {
+          throw new Error(`Expected numeric value for path ${pathStr}, got ${typeof value}`)
+        }
+        const result = this.conversionEngine.convertWithFormula(
+          value,
+          conversionInfo.formula,
+          conversionInfo.symbol || '',
+          conversionInfo.displayFormat
+        )
+        converted = result.convertedValue
+        formatted = result.formatted
+        break
+      }
+
+      case 'date': {
+        let isoValue: string
+        if (typeof value === 'number') {
+          // Handle epoch timestamps (assume seconds, check baseUnit for multiplier)
+          const normalizedBase = (conversionInfo.baseUnit || '').toLowerCase()
+          const isEpochBase = normalizedBase.includes('epoch')
+          const date = new Date(value * (isEpochBase ? 1000 : 1))
+          if (isNaN(date.getTime())) {
+            throw new Error(`Invalid epoch timestamp: ${value}`)
+          }
+          isoValue = date.toISOString()
+        } else if (typeof value === 'string') {
+          isoValue = value
+        } else if (value instanceof Date) {
+          isoValue = value.toISOString()
+        } else {
+          throw new Error(
+            `Expected date/number/string for date path ${pathStr}, got ${typeof value}`
+          )
+        }
+
+        const dateResult = this.conversionEngine.formatDateValue(
+          isoValue,
+          conversionInfo.targetUnit || '',
+          conversionInfo.dateFormat,
+          conversionInfo.useLocalTime
+        )
+        converted = dateResult.convertedValue
+        formatted = dateResult.formatted
+        break
+      }
+
+      case 'boolean': {
+        if (typeof value !== 'boolean') {
+          throw new Error(`Expected boolean value for path ${pathStr}, got ${typeof value}`)
+        }
+        converted = value
+        formatted = value ? 'true' : 'false'
+        break
+      }
+
+      case 'string': {
+        converted = String(value)
+        formatted = converted
+        break
+      }
+
+      case 'object': {
+        if (value === null || typeof value !== 'object') {
+          throw new Error(`Expected object for path ${pathStr}, got ${typeof value}`)
+        }
+        converted = value
+        formatted = JSON.stringify(value)
+        break
+      }
+
+      default: {
+        // Unknown type - pass through
+        converted = value
+        formatted = String(value)
+        break
+      }
+    }
+
+    return {
+      converted,
+      formatted,
+      original: value,
+      metadata: {
+        units: conversionInfo.symbol || '',
+        displayFormat: conversionInfo.displayFormat,
+        description: `${pathStr} (${conversionInfo.category || 'converted'})`,
+        originalUnits: conversionInfo.baseUnit || '',
+        displayName: conversionInfo.symbol
+          ? `${pathStr.split('.').pop()} (${conversionInfo.symbol})`
+          : undefined
+      }
+    }
+  }
+
+  /**
+   * Convert a value using the conversion formula (DEPRECATED: use convertPathValue instead)
    */
   convertValue(pathStr: string, value: number): ConvertValueResponse {
     const conversionInfo = this.getConversion(pathStr)
