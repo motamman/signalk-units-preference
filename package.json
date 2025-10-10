@@ -41,10 +41,15 @@
     "node": ">=18.0.0"
   },
   "files": [
-    "dist/**/*",
-    "src/**/*",
+    "dist/**/*.js",
+    "dist/**/*.d.ts",
+    "dist/**/*.js.map",
+    "dist/**/*.d.ts.map",
+    "!dist/**/*.test.*",
+    "!dist/__tests__",
     "public/**/*",
     "presets/**/*",
+    "!presets/custom/",
     "tsconfig.json",
     "README.md",
     "LICENSE"
