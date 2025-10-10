@@ -890,23 +890,29 @@ ws.onclose = () => {
 
 **Subscription Protocol:**
 
-The dedicated endpoint uses a simple subscription protocol:
+The dedicated endpoint uses a simple subscription protocol supporting **explicit path-based subscriptions**:
 
 ```typescript
 // Subscription message format
 {
   context?: string       // Vessel context (default: 'vessels.self')
-  subscribe?: [{
+  subscribe?: [{         // Array - subscribe to one or many paths
     path: string        // SignalK path to subscribe to
     period?: number     // Update period in ms (default: 1000)
     format?: string     // Format type (default: 'delta')
     policy?: string     // Policy (default: 'instant')
   }]
-  unsubscribe?: [{
+  unsubscribe?: [{       // Array - unsubscribe from one or many paths
     path: string        // Path to unsubscribe from
   }]
 }
 ```
+
+**Important Notes:**
+- ✅ **Multiple paths**: Send an array with as many paths as needed
+- ❌ **No wildcards**: Each path must be explicitly listed (no `*` or `**` patterns)
+- 🔄 **Unsubscribe first**: Process order is `unsubscribe` → `subscribe` (allows atomic path switching)
+- 📋 **Get all paths**: Use `/plugins/signalk-units-preference/paths` to fetch available paths
 
 **Response Format:**
 
@@ -936,6 +942,56 @@ The dedicated endpoint uses a simple subscription protocol:
     }]
   }]
 }
+```
+
+**Subscribe to Multiple Paths:**
+
+```javascript
+// Subscribe to specific paths (1 to N paths)
+ws.send(JSON.stringify({
+  context: 'vessels.self',
+  subscribe: [
+    { path: 'navigation.speedOverGround', period: 1000 },
+    { path: 'navigation.courseOverGroundTrue', period: 1000 },
+    { path: 'environment.wind.speedApparent', period: 1000 },
+    { path: 'environment.wind.directionApparent', period: 1000 },
+    { path: 'electrical.batteries.0.voltage', period: 2000 }
+    // ... add as many paths as needed
+  ]
+}))
+```
+
+**Subscribe to All Available Paths:**
+
+```javascript
+// Fetch list of all available paths
+const response = await fetch('/plugins/signalk-units-preference/paths')
+const pathsData = await response.json()
+const allPaths = Object.keys(pathsData)
+
+// Subscribe to all of them
+ws.send(JSON.stringify({
+  context: 'vessels.self',
+  subscribe: allPaths.map(path => ({
+    path: path,
+    period: 1000,
+    format: 'delta',
+    policy: 'instant'
+  }))
+}))
+```
+
+**Switch to Single Path Subscription:**
+
+```javascript
+// Unsubscribe from all, then subscribe to one specific path
+ws.send(JSON.stringify({
+  context: 'vessels.self',
+  unsubscribe: allPaths.map(path => ({ path })),  // Unsubscribe from all
+  subscribe: [
+    { path: 'navigation.speedOverGround', period: 1000 }  // Subscribe to one
+  ]
+}))
 ```
 
 **Multi-Vessel Example:**
