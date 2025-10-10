@@ -47,6 +47,8 @@
     "dist/**/*.d.ts.map",
     "!dist/**/*.test.*",
     "!dist/__tests__",
+    "src/**/*",
+    "!src/__tests__",
     "public/**/*",
     "presets/**/*",
     "!presets/custom/",
