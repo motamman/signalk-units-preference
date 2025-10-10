@@ -767,9 +767,11 @@ export class UnitsManager {
     const unitDefinitions = this.preferencesStore.getUnitDefinitions()
 
     try {
-      const allSignalKMeta = this.metadataManager.getAllSignalKMetadata()
-      const pathsSet = new Set<string>(Object.keys(allSignalKMeta))
+      // Collect paths directly from SignalK API instead of relying on signalKMetadata
+      // which may be empty if frontend hasn't called POST /signalk-metadata
+      const pathsSet = await this.metadataManager.collectSignalKPaths()
 
+      // Also include any path overrides that may not be in SignalK
       Object.keys(preferences.pathOverrides || {}).forEach(path => pathsSet.add(path))
 
       for (const path of pathsSet) {
