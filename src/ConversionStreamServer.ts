@@ -298,35 +298,47 @@ export class ConversionStreamServer {
           // Get conversion info
           const conversion = this.unitsManager.getConversion(path)
 
-          // Skip pass-through conversions
-          if (this.isPassThrough(conversion)) {
-            this.app.debug(`  Skipping pass-through for ${path}`)
-            continue
-          }
+          // Try to convert the value
+          let converted = this.convertValue(path, value, conversion)
 
-          // Convert the value
-          const converted = this.convertValue(path, value, conversion)
-
-          if (converted) {
-            // Send converted value at the ORIGINAL path (not .unitsConverted)
-            // This dedicated stream is meant to provide converted values transparently
-            convertedValues.push({
-              path: path, // Use original path, NOT path.unitsConverted
-              value: converted
-            })
-
-            // Build metadata entry if sendMeta is enabled
-            if (this.sendMeta) {
-              metadataEntries.push({
-                path: path, // Metadata for original path
-                value: this.buildMetadata(path, conversion)
-              })
+          // If conversion failed or is pass-through, send original value as-is
+          if (!converted) {
+            this.app.debug(`  No conversion for ${path}, sending original value`)
+            converted = {
+              converted: value,
+              formatted: typeof value === 'object' ? JSON.stringify(value) : String(value),
+              original: value
             }
-
-            this.app.debug(`  Converted ${path}: ${value} -> ${converted.converted}`)
           }
+
+          // Send converted value at the ORIGINAL path (not .unitsConverted)
+          // This dedicated stream is meant to provide converted values transparently
+          convertedValues.push({
+            path: path, // Use original path, NOT path.unitsConverted
+            value: converted
+          })
+
+          // Build metadata entry if sendMeta is enabled
+          if (this.sendMeta) {
+            metadataEntries.push({
+              path: path, // Metadata for original path
+              value: this.buildMetadata(path, conversion)
+            })
+          }
+
+          this.app.debug(`  Converted ${path}: ${value} -> ${converted.converted}`)
         } catch (error) {
           this.app.debug(`Failed to convert ${path}: ${error}`)
+          // Even on error, send the original value through
+          const converted = {
+            converted: value,
+            formatted: typeof value === 'object' ? JSON.stringify(value) : String(value),
+            original: value
+          }
+          convertedValues.push({
+            path: path,
+            value: converted
+          })
         }
       }
 
@@ -369,25 +381,6 @@ export class ConversionStreamServer {
         ? `${originalPath.split('.').pop()} (${conversion.symbol})`
         : undefined
     }
-  }
-
-  /**
-   * Check if conversion is pass-through
-   */
-  private isPassThrough(conversion: any): boolean {
-    if (conversion.formula === 'value') {
-      return true
-    }
-
-    if (
-      conversion.targetUnit &&
-      conversion.baseUnit &&
-      conversion.targetUnit === conversion.baseUnit
-    ) {
-      return true
-    }
-
-    return false
   }
 
   /**

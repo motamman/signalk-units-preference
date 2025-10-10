@@ -353,13 +353,13 @@ function updateStreamDisplay() {
   for (const path of sortedPaths) {
     const data = streamDataMap.get(path)
 
-    // Only show paths with converted values
-    if (!data.convertedValue) continue
+    // Skip paths without any data
+    if (!data) continue
 
     const timestamp = new Date(data.timestamp).toLocaleTimeString()
     const source = data.source || 'unknown'
-    const baseUnit = data.baseUnit || data.convertedValue.baseUnit || ''
-    const targetUnit = data.targetUnit || data.convertedValue.targetUnit || ''
+    const baseUnit = data.baseUnit || (data.convertedValue && data.convertedValue.baseUnit) || ''
+    const targetUnit = data.targetUnit || (data.convertedValue && data.convertedValue.targetUnit) || ''
 
     html += `
             <div style="background: white; border: 1px solid #dee2e6; border-radius: 4px; padding: 12px;">
@@ -384,16 +384,16 @@ function updateStreamDisplay() {
                 }
 
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                    <div style="background: #f8f9fa; padding: 8px; border-radius: 3px;">
+                    <div style="background: #f8f9fa; padding: 8px; border-radius: 3px; max-width: 40vw; overflow: hidden;">
                         <div style="font-size: 11px; color: #6c757d; margin-bottom: 4px;">Original (${escapeHtml(baseUnit || '')})</div>
-                        <div style="font-weight: 500; color: #6c757d;">
+                        <div style="font-weight: 500; color: #6c757d; word-wrap: break-word; overflow-wrap: break-word;">
                             ${formatOriginalValue(data.originalValue)}
                         </div>
                     </div>
 
-                    <div style="background: #e3f2fd; padding: 8px; border-radius: 3px;">
+                    <div style="background: #e3f2fd; padding: 8px; border-radius: 3px; max-width: 40vw; overflow: hidden;">
                         <div style="font-size: 11px; color: #1976d2; margin-bottom: 4px;">Converted (${escapeHtml(targetUnit || '')})</div>
-                        <div style="font-weight: 600; color: #1976d2;">
+                        <div style="font-weight: 600; color: #1976d2; word-wrap: break-word; overflow-wrap: break-word;">
                             ${formatConvertedValue(data.convertedValue)}
                         </div>
                     </div>
