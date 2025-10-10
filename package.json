@@ -8,7 +8,6 @@
     "watch": "tsc --watch",
     "prepublishOnly": "npm run build",
     "prepare": "npm run build",
-    "postinstall": "echo 'Building TypeScript...' && npm run build",
     "dev": "npm run build && npm run watch",
     "lint": "eslint \"{src,public}/**/*.{ts,js}\"",
     "format": "prettier --write \"{src,public}/**/*.{ts,js,json}\"",
