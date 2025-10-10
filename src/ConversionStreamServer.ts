@@ -193,21 +193,27 @@ export class ConversionStreamServer {
       client.context = message.context
     }
 
+    // IMPORTANT: Process unsubscribe BEFORE subscribe
+    // This allows clients to clear all subscriptions and then add new ones atomically
+    if (message.unsubscribe) {
+      this.app.debug(`Client unsubscribing from ${message.unsubscribe.length} paths`)
+      for (const unsub of message.unsubscribe) {
+        client.subscriptions.delete(unsub.path)
+      }
+    }
+
     if (message.subscribe) {
       this.app.debug(`Client subscribing to ${message.subscribe.length} paths`)
       for (const sub of message.subscribe) {
         client.subscriptions.add(sub.path)
       }
+    }
+
+    // Update SignalK subscriptions and log final state
+    if (message.subscribe || message.unsubscribe) {
       this.app.debug(
         `Client now has ${client.subscriptions.size} subscriptions for context ${client.context}`
       )
-      this.updateSignalKSubscriptions()
-    }
-
-    if (message.unsubscribe) {
-      for (const unsub of message.unsubscribe) {
-        client.subscriptions.delete(unsub.path)
-      }
       this.updateSignalKSubscriptions()
     }
   }

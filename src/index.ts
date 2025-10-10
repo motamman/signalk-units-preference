@@ -708,6 +708,22 @@ module.exports = (app: ServerAPI): Plugin => {
         }
       })
 
+      // GET /plugins/signalk-units-preference/self
+      // Return the self vessel ID
+      router.get('/self', (req: Request, res: Response) => {
+        try {
+          res.json({
+            selfId: app.selfId,
+            selfContext: app.selfContext,
+            selfType: app.selfType
+          })
+        } catch (error) {
+          app.error(`Error getting self vessel ID: ${error}`)
+          const response = formatErrorResponse(error)
+          res.status(response.status).json(response.body)
+        }
+      })
+
       // GET /plugins/signalk-units-preference/paths
       // Return metadata definitions for all discovered SignalK paths
       router.get('/paths', async (req: Request, res: Response) => {

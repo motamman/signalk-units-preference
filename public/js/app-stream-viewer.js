@@ -7,8 +7,10 @@ let streamWebSocket = null
 let streamDataMap = new Map() // Store path data for display
 let isStreamConnected = false
 let reconnectTimeout = null
-let availableContexts = ['vessels.self'] // Will be populated from SignalK
+let availableContexts = [] // Will be populated from SignalK
 let contextsRefreshInterval = null
+let subscriptionMode = 'all' // 'all' or 'single'
+let singlePathSubscription = null // Stores the path when in single mode
 
 /**
  * Populate context dropdown with available vessels
@@ -16,21 +18,35 @@ let contextsRefreshInterval = null
 async function populateContexts(showNotification = false) {
   try {
     // Fetch available vessels from SignalK API
-    const response = await fetch('/signalk/v1/api/vessels')
-    const vessels = await response.json()
+    const vesselsResponse = await fetch('/signalk/v1/api/vessels')
+    const vessels = await vesselsResponse.json()
+
+    // Fetch self vessel ID from our plugin endpoint (uses app.selfId)
+    const selfResponse = await fetch('/plugins/signalk-units-preference/self')
+    const selfData = await selfResponse.json()
+    const selfId = selfData.selfId || 'self'
 
     const oldCount = availableContexts.length
-    availableContexts = ['vessels.self']
+    availableContexts = []
 
-    // Add other vessels if they exist
+    // Add all vessels with special marking for self
     if (vessels && typeof vessels === 'object') {
       for (const vesselId of Object.keys(vessels)) {
         const context = `vessels.${vesselId}`
-        if (context !== 'vessels.self' && !availableContexts.includes(context)) {
+        if (!availableContexts.includes(context)) {
           availableContexts.push(context)
         }
       }
     }
+
+    // Sort so self vessel is first
+    availableContexts.sort((a, b) => {
+      const aIsSelf = a.includes(selfId)
+      const bIsSelf = b.includes(selfId)
+      if (aIsSelf && !bIsSelf) return -1
+      if (!aIsSelf && bIsSelf) return 1
+      return a.localeCompare(b)
+    })
 
     // Update dropdown
     const contextSelect = document.getElementById('streamContext')
@@ -47,13 +63,16 @@ async function populateContexts(showNotification = false) {
         const option = document.createElement('option')
         option.value = context
 
-        if (context === 'vessels.self') {
-          option.textContent = 'vessels.self (This Vessel)'
+        // Try to get vessel name
+        const vesselId = context.replace('vessels.', '')
+        const vesselData = vessels[vesselId]
+        const vesselName = vesselData?.name || vesselId
+
+        // Check if this is the self vessel
+        const isSelf = context.includes(selfId) || vesselId === 'self'
+        if (isSelf) {
+          option.textContent = `${context} (${vesselName} - This Vessel)`
         } else {
-          // Try to get vessel name
-          const vesselId = context.replace('vessels.', '')
-          const vesselData = vessels[vesselId]
-          const vesselName = vesselData?.name || vesselId
           option.textContent = `${context} (${vesselName})`
         }
 
@@ -244,37 +263,99 @@ function disconnectFromStream() {
 }
 
 /**
+ * Subscribe to a single path
+ */
+function subscribeToSinglePath(path) {
+  // If already subscribed to this path, toggle it off
+  if (subscriptionMode === 'single' && singlePathSubscription === path) {
+    subscribeToAllPaths()
+    return
+  }
+
+  subscriptionMode = 'single'
+  singlePathSubscription = path
+  console.log(`Switching to single path subscription: ${path}`)
+
+  // Clear existing data and resubscribe
+  clearStreamData()
+  subscribeToConvertedPaths()
+
+  // Update display to show subscription mode
+  updateStreamDisplay()
+}
+
+/**
+ * Subscribe to all paths
+ */
+function subscribeToAllPaths() {
+  subscriptionMode = 'all'
+  singlePathSubscription = null
+  console.log('Switching to all paths subscription')
+
+  // Clear existing data and resubscribe
+  clearStreamData()
+  subscribeToConvertedPaths()
+
+  // Update display to show subscription mode
+  updateStreamDisplay()
+}
+
+/**
  * Subscribe to paths for conversion
  */
 async function subscribeToConvertedPaths() {
   try {
     // Get selected context
     const contextSelect = document.getElementById('streamContext')
-    const selectedContext = contextSelect ? contextSelect.value : 'vessels.self'
+    if (!contextSelect || !contextSelect.value) {
+      console.warn('No context selected, waiting for contexts to load...')
+      return
+    }
+    const selectedContext = contextSelect.value
 
-    // Get all paths from the metadata
+    // Get all available paths (for unsubscribing)
     const response = await fetch('/plugins/signalk-units-preference/paths')
     const pathsData = await response.json()
+    const allPaths = Object.keys(pathsData)
 
-    // Create subscriptions (plugin will convert and stream back)
-    const subscriptions = Object.keys(pathsData).map(path => ({
-      path: path,
-      period: 1000,
-      format: 'delta',
-      policy: 'instant'
-    }))
+    let subscriptions = []
+    let unsubscriptions = []
+
+    if (subscriptionMode === 'single' && singlePathSubscription) {
+      // Unsubscribe from ALL paths, then subscribe to single path
+      unsubscriptions = allPaths.map(path => ({ path }))
+      subscriptions = [{
+        path: singlePathSubscription,
+        period: 1000,
+        format: 'delta',
+        policy: 'instant'
+      }]
+    } else {
+      // Subscribe to all paths (no need to unsubscribe in this case, just re-subscribe)
+      subscriptions = allPaths.map(path => ({
+        path: path,
+        period: 1000,
+        format: 'delta',
+        policy: 'instant'
+      }))
+    }
 
     // Send subscription message with selected context
     if (streamWebSocket && streamWebSocket.readyState === WebSocket.OPEN) {
-      streamWebSocket.send(
-        JSON.stringify({
-          context: selectedContext,
-          subscribe: subscriptions
-        })
-      )
+      const message = {
+        context: selectedContext,
+        subscribe: subscriptions,
+        ...(unsubscriptions.length > 0 && { unsubscribe: unsubscriptions })
+      }
+
+      streamWebSocket.send(JSON.stringify(message))
+
       console.log(
-        `Subscribed to ${subscriptions.length} paths for conversion (context: ${selectedContext})`
+        `Subscribed to ${subscriptions.length} paths for conversion (context: ${selectedContext}, mode: ${subscriptionMode})`
       )
+      if (unsubscriptions.length > 0) {
+        console.log(`Unsubscribed from ${unsubscriptions.length} paths`)
+      }
     }
   } catch (error) {
     console.error('Error subscribing to paths:', error)
@@ -298,6 +379,11 @@ function handleDeltaMessage(delta) {
       // The value object contains both converted and original data
       if (!path || !value) continue
 
+      // If in single path mode, only process the subscribed path
+      if (subscriptionMode === 'single' && path !== singlePathSubscription) {
+        continue // Skip paths that aren't the selected one
+      }
+
       // Store or update the data
       let pathData = streamDataMap.get(path) || {
         originalPath: path,
@@ -311,7 +397,7 @@ function handleDeltaMessage(delta) {
 
       // Value from plugin contains conversion info
       pathData.convertedValue = value
-      pathData.originalValue = value.original || null
+      pathData.originalValue = value.original !== undefined ? value.original : null
       pathData.timestamp = update.timestamp || new Date().toISOString()
       pathData.source = update.$source || 'unknown'
 
@@ -340,8 +426,12 @@ function updateStreamDisplay() {
   if (!streamDataDiv) return
 
   if (streamDataMap.size === 0) {
+    // Show appropriate message based on subscription mode
+    const message = subscriptionMode === 'single'
+      ? `Waiting for data from path: ${singlePathSubscription}...`
+      : 'Waiting for data...'
     streamDataDiv.innerHTML =
-      '<div style="color: #6c757d; text-align: center; padding: 40px;">Waiting for data...</div>'
+      `<div style="color: #6c757d; text-align: center; padding: 40px;">${message}</div>`
     return
   }
 
@@ -349,6 +439,21 @@ function updateStreamDisplay() {
   const sortedPaths = Array.from(streamDataMap.keys()).sort()
 
   let html = '<div style="display: grid; gap: 10px;">'
+
+  // Add subscription mode indicator
+  if (subscriptionMode === 'single') {
+    html += `
+      <div style="background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; padding: 10px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
+        <div>
+          <strong style="color: #856404;">Single Path Mode:</strong>
+          <span style="font-family: 'Courier New', monospace; margin-left: 8px;">${escapeHtml(singlePathSubscription)}</span>
+        </div>
+        <button onclick="subscribeToAllPaths()" style="background: #007bff; color: white; border: none; padding: 6px 12px; border-radius: 3px; cursor: pointer; font-size: 12px;">
+          Show All Paths
+        </button>
+      </div>
+    `
+  }
 
   for (const path of sortedPaths) {
     const data = streamDataMap.get(path)
@@ -361,11 +466,31 @@ function updateStreamDisplay() {
     const baseUnit = data.baseUnit || (data.convertedValue && data.convertedValue.baseUnit) || ''
     const targetUnit = data.targetUnit || (data.convertedValue && data.convertedValue.targetUnit) || ''
 
+    // Check if this is the currently subscribed single path
+    const isActiveSinglePath = subscriptionMode === 'single' && path === singlePathSubscription
+    const borderColor = isActiveSinglePath ? '#ffc107' : '#dee2e6'
+    const borderWidth = isActiveSinglePath ? '2px' : '1px'
+
     html += `
-            <div style="background: white; border: 1px solid #dee2e6; border-radius: 4px; padding: 12px;">
+            <div style="background: white; border: ${borderWidth} solid ${borderColor}; border-radius: 4px; padding: 12px;">
                 <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
-                    <div style="font-weight: 600; color: #2c3e50; font-size: 13px; font-family: 'Courier New', monospace; flex: 1;">
-                        ${escapeHtml(path)}
+                    <div style="display: flex; align-items: center; gap: 8px; flex: 1;">
+                        <button
+                            onclick="subscribeToSinglePath('${escapeHtml(path).replace(/'/g, "\\'")}')"
+                            title="Subscribe to this path only"
+                            style="background: ${isActiveSinglePath ? '#ffc107' : '#e3f2fd'};
+                                   border: 1px solid ${isActiveSinglePath ? '#ffc107' : '#2196f3'};
+                                   color: ${isActiveSinglePath ? '#856404' : '#1976d2'};
+                                   cursor: pointer;
+                                   padding: 4px 8px;
+                                   border-radius: 3px;
+                                   font-size: 11px;
+                                   font-weight: 600;">
+                            ${isActiveSinglePath ? '●' : '○'}
+                        </button>
+                        <div style="font-weight: 600; color: #2c3e50; font-size: 13px; font-family: 'Courier New', monospace;">
+                            ${escapeHtml(path)}
+                        </div>
                     </div>
                     <div style="font-size: 11px; color: #95a5a6; margin-left: 10px; text-align: right;">
                         <div>${timestamp}</div>
@@ -476,9 +601,15 @@ function updateStreamStatus(status, color) {
   if (statusDiv) {
     // Get current context
     const contextSelect = document.getElementById('streamContext')
-    const selectedContext = contextSelect ? contextSelect.value : 'vessels.self'
-    const contextDisplay =
-      selectedContext === 'vessels.self' ? 'self' : selectedContext.replace('vessels.', '')
+    const selectedContext = contextSelect ? contextSelect.value : ''
+
+    // Extract just the vessel ID part for display
+    let contextDisplay = selectedContext.replace('vessels.', '')
+
+    // Shorten long URNs for display
+    if (contextDisplay.startsWith('urn:mrn:imo:mmsi:')) {
+      contextDisplay = contextDisplay.replace('urn:mrn:imo:mmsi:', '')
+    }
 
     statusDiv.textContent = `${status} (${contextDisplay})`
     statusDiv.style.background = color + '20' // 20% opacity
