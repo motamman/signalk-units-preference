@@ -1169,10 +1169,20 @@ module.exports = (app: ServerAPI): Plugin => {
 
           // Update all categories from the preset (create if missing, update if exists)
           for (const [category, settings] of Object.entries(preset)) {
-            await unitsManager.updateCategoryPreference(category, {
+            const preference: any = {
               targetUnit: (settings as any).targetUnit,
               displayFormat: (settings as any).displayFormat
-            })
+            }
+
+            // Include baseUnit and category if they exist in the preset
+            if ((settings as any).baseUnit) {
+              preference.baseUnit = (settings as any).baseUnit
+            }
+            if ((settings as any).category) {
+              preference.category = (settings as any).category
+            }
+
+            await unitsManager.updateCategoryPreference(category, preference)
             updatedCount++
           }
 

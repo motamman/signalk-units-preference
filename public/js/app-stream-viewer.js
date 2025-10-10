@@ -304,7 +304,9 @@ function handleDeltaMessage(delta) {
         originalValue: null,
         convertedValue: null,
         timestamp: null,
-        source: null
+        source: null,
+        baseUnit: null,
+        targetUnit: null
       }
 
       // Value from plugin contains conversion info
@@ -312,6 +314,16 @@ function handleDeltaMessage(delta) {
       pathData.originalValue = value.original || null
       pathData.timestamp = update.timestamp || new Date().toISOString()
       pathData.source = update.$source || 'unknown'
+
+      // Extract metadata for units information
+      if (update.meta && Array.isArray(update.meta)) {
+        const metaEntry = update.meta.find(m => m.path === path)
+        if (metaEntry && metaEntry.value) {
+          pathData.baseUnit = metaEntry.value.originalUnits || metaEntry.value.baseUnit || null
+          pathData.targetUnit = metaEntry.value.units || null
+        }
+      }
+
       streamDataMap.set(path, pathData)
     }
   }
@@ -346,8 +358,8 @@ function updateStreamDisplay() {
 
     const timestamp = new Date(data.timestamp).toLocaleTimeString()
     const source = data.source || 'unknown'
-    const baseUnit = data.convertedValue.baseUnit || ''
-    const targetUnit = data.convertedValue.targetUnit || ''
+    const baseUnit = data.baseUnit || data.convertedValue.baseUnit || ''
+    const targetUnit = data.targetUnit || data.convertedValue.targetUnit || ''
 
     html += `
             <div style="background: white; border: 1px solid #dee2e6; border-radius: 4px; padding: 12px;">
@@ -373,7 +385,7 @@ function updateStreamDisplay() {
 
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
                     <div style="background: #f8f9fa; padding: 8px; border-radius: 3px;">
-                        <div style="font-size: 11px; color: #6c757d; margin-bottom: 4px;">Original (${escapeHtml(baseUnit || 'SI')})</div>
+                        <div style="font-size: 11px; color: #6c757d; margin-bottom: 4px;">Original (${escapeHtml(baseUnit || '')})</div>
                         <div style="font-weight: 500; color: #6c757d;">
                             ${formatOriginalValue(data.originalValue)}
                         </div>
