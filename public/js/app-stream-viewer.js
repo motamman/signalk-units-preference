@@ -156,6 +156,10 @@ function showTemporaryMessage(buttonId, message, duration) {
 function handleContextChange() {
   console.log('Context changed, clearing data...')
 
+  // Reset to all paths mode when switching contexts
+  subscriptionMode = 'all'
+  singlePathSubscription = null
+
   // Clear current data
   clearStreamData()
 
