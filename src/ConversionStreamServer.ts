@@ -193,21 +193,27 @@ export class ConversionStreamServer {
       client.context = message.context
     }
 
+    // IMPORTANT: Process unsubscribe BEFORE subscribe
+    // This allows clients to clear all subscriptions and then add new ones atomically
+    if (message.unsubscribe) {
+      this.app.debug(`Client unsubscribing from ${message.unsubscribe.length} paths`)
+      for (const unsub of message.unsubscribe) {
+        client.subscriptions.delete(unsub.path)
+      }
+    }
+
     if (message.subscribe) {
       this.app.debug(`Client subscribing to ${message.subscribe.length} paths`)
       for (const sub of message.subscribe) {
         client.subscriptions.add(sub.path)
       }
+    }
+
+    // Update SignalK subscriptions and log final state
+    if (message.subscribe || message.unsubscribe) {
       this.app.debug(
         `Client now has ${client.subscriptions.size} subscriptions for context ${client.context}`
       )
-      this.updateSignalKSubscriptions()
-    }
-
-    if (message.unsubscribe) {
-      for (const unsub of message.unsubscribe) {
-        client.subscriptions.delete(unsub.path)
-      }
       this.updateSignalKSubscriptions()
     }
   }
@@ -298,35 +304,47 @@ export class ConversionStreamServer {
           // Get conversion info
           const conversion = this.unitsManager.getConversion(path)
 
-          // Skip pass-through conversions
-          if (this.isPassThrough(conversion)) {
-            this.app.debug(`  Skipping pass-through for ${path}`)
-            continue
-          }
+          // Try to convert the value
+          let converted = this.convertValue(path, value)
 
-          // Convert the value
-          const converted = this.convertValue(path, value, conversion)
-
-          if (converted) {
-            // Send converted value at the ORIGINAL path (not .unitsConverted)
-            // This dedicated stream is meant to provide converted values transparently
-            convertedValues.push({
-              path: path, // Use original path, NOT path.unitsConverted
-              value: converted
-            })
-
-            // Build metadata entry if sendMeta is enabled
-            if (this.sendMeta) {
-              metadataEntries.push({
-                path: path, // Metadata for original path
-                value: this.buildMetadata(path, conversion)
-              })
+          // If conversion failed or is pass-through, send original value as-is
+          if (!converted) {
+            this.app.debug(`  No conversion for ${path}, sending original value`)
+            converted = {
+              converted: value,
+              formatted: typeof value === 'object' ? JSON.stringify(value) : String(value),
+              original: value
             }
-
-            this.app.debug(`  Converted ${path}: ${value} -> ${converted.converted}`)
           }
+
+          // Send converted value at the ORIGINAL path (not .unitsConverted)
+          // This dedicated stream is meant to provide converted values transparently
+          convertedValues.push({
+            path: path, // Use original path, NOT path.unitsConverted
+            value: converted
+          })
+
+          // Build metadata entry if sendMeta is enabled
+          if (this.sendMeta) {
+            metadataEntries.push({
+              path: path, // Metadata for original path
+              value: this.buildMetadata(path, conversion)
+            })
+          }
+
+          this.app.debug(`  Converted ${path}: ${value} -> ${converted.converted}`)
         } catch (error) {
           this.app.debug(`Failed to convert ${path}: ${error}`)
+          // Even on error, send the original value through
+          const converted = {
+            converted: value,
+            formatted: typeof value === 'object' ? JSON.stringify(value) : String(value),
+            original: value
+          }
+          convertedValues.push({
+            path: path,
+            value: converted
+          })
         }
       }
 
@@ -372,92 +390,20 @@ export class ConversionStreamServer {
   }
 
   /**
-   * Check if conversion is pass-through
+   * Convert a value using the UNIFIED conversion method
    */
-  private isPassThrough(conversion: any): boolean {
-    if (conversion.formula === 'value') {
-      return true
-    }
-
-    if (
-      conversion.targetUnit &&
-      conversion.baseUnit &&
-      conversion.targetUnit === conversion.baseUnit
-    ) {
-      return true
-    }
-
-    return false
-  }
-
-  /**
-   * Convert a value
-   */
-  private convertValue(path: string, value: any, conversion: any): any | null {
-    const valueType = conversion.valueType || 'unknown'
-
-    switch (valueType) {
-      case 'number':
-        if (typeof value !== 'number' || !isFinite(value)) {
-          return null
-        }
-        try {
-          const result = this.unitsManager.convertValue(path, value)
-          return {
-            converted: result.convertedValue,
-            formatted: result.formatted,
-            original: value
-          }
-        } catch (error) {
-          return null
-        }
-
-      case 'date': {
-        // Handle date conversion
-        let isoValue: string
-        if (typeof value === 'number') {
-          const normalizedBase = (conversion.baseUnit || '').toLowerCase()
-          const isEpochBase = normalizedBase.includes('epoch')
-          const date = new Date(value * (isEpochBase ? 1000 : 1))
-          if (isNaN(date.getTime())) {
-            return null
-          }
-          isoValue = date.toISOString()
-        } else if (typeof value === 'string') {
-          isoValue = value
-        } else {
-          return null
-        }
-
-        try {
-          const result = this.unitsManager.formatDateValue(
-            isoValue,
-            conversion.targetUnit || '',
-            conversion.dateFormat,
-            conversion.useLocalTime
-          )
-          return {
-            converted: result.convertedValue,
-            formatted: result.formatted,
-            original: value
-          }
-        } catch (error) {
-          return null
-        }
+  private convertValue(path: string, value: any): any | null {
+    try {
+      // Use the UNIFIED conversion method - ONE source of truth!
+      const result = this.unitsManager.convertPathValue(path, value)
+      return {
+        converted: result.converted,
+        formatted: result.formatted,
+        original: result.original
       }
-
-      case 'boolean':
-      case 'string':
-      case 'object':
-        // Pass-through for these types
-        return {
-          converted: value,
-          formatted: typeof value === 'object' ? JSON.stringify(value) : String(value),
-          original: value
-        }
-
-      default:
-        return null
+    } catch (error) {
+      this.app.debug(`Conversion failed for ${path}: ${error}`)
+      return null
     }
   }
 

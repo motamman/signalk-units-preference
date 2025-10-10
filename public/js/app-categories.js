@@ -558,25 +558,10 @@ async function saveCustomPreset() {
   }
 
   try {
-    // Ensure custom categories include baseUnit and category fields
-    const categoriesToSave = {}
-    for (const [category, pref] of Object.entries(preferences.categories)) {
-      const isCustomCategory = !unitSchema.coreCategories?.includes(category)
-      categoriesToSave[category] = {
-        ...pref,
-        // Include category field for all categories
-        category: pref.category || category,
-        // Include baseUnit if it exists, or infer it for custom categories
-        ...(pref.baseUnit || isCustomCategory
-          ? { baseUnit: pref.baseUnit || unitSchema.categoryToBaseUnit[category] || null }
-          : {})
-      }
-    }
-
     // Create preset data
     const presetData = {
       name: presetName,
-      categories: categoriesToSave
+      categories: preferences.categories
     }
 
     const result = await apiSaveCustomPreset(presetName, presetData)

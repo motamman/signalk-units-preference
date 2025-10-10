@@ -63,7 +63,7 @@ export class MetadataManager {
    */
   detectValueType(units?: string, value?: any): PathValueType {
     // Date detection from units
-    if (units === 'RFC 3339 (UTC)' || units === 'ISO-8601 (UTC)') {
+    if (units === 'RFC 3339 (UTC)' || units === 'ISO-8601 (UTC)' || units === 'Epoch Seconds') {
       return 'date'
     }
 

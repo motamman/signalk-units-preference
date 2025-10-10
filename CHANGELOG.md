@@ -5,6 +5,77 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.1-beta.1] - 2025-10-10
+
+### Added
+- **Self Vessel ID Endpoint**: New REST endpoint to retrieve the self vessel ID
+  - **Endpoint**: `GET /plugins/signalk-units-preference/self`
+  - **Returns**: `{ selfId, selfContext, selfType }`
+  - **Impact**: Improves multi-vessel context handling in stream viewer
+  - **Location**: `src/index.ts:711-725`
+
+### Fixed
+- **Path Discovery**: Fixed `/paths` endpoint returning limited paths on remote servers
+  - **Root Cause**: `getPathsMetadata()` relied on `getAllSignalKMetadata()` which was empty if frontend hadn't called `POST /signalk-metadata`
+  - **Solution**: Changed to use `collectSignalKPaths()` which directly fetches from SignalK API
+  - **Impact**: Stream viewer now subscribes to all available paths consistently. Fixed a multitude of responsive issues in the stream viewer
+  - **Location**: `src/UnitsManager.ts:772`
+
+- **Epoch Timestamp Conversion in WebSocket Stream**: Fixed Epoch timestamps not converting to formatted dates
+  - **Root Cause**: `detectValueType()` didn't recognize `'Epoch Seconds'` as a date type, causing API and WebSocket to behave differently
+  - **Solution**: Added `'Epoch Seconds'` to date detection logic in `detectValueType()`
+  - **Impact**: Single source of truth for date detection - both API and WebSocket now use same logic
+  - **Location**: `src/MetadataManager.ts:66`
+  - **Example**: `1760101789` now displays as `9:09:49 AM` in stream viewer
+
+- **Stream Viewer Context Switching**: Fixed subscription mode not resetting when switching vessel contexts
+  - **Root Cause**: Subscription mode persisted across context changes, causing incorrect data filtering
+  - **Solution**: Reset subscription mode to 'all paths' mode on context change
+  - **Impact**: Stream viewer now properly displays all paths when switching between vessels
+  - **Location**: `public/js/app-stream-viewer.js`
+
+- **Unified Conversion Pathway**: Eliminated duplicate conversion logic between API and WebSocket
+  - **Root Cause**: Two separate conversion implementations caused inconsistent behavior between API and WebSocket endpoints
+  - **Solution**: Created single `convertPathValue()` method in `UnitsManager` that handles ALL value types (number, date, boolean, string, object)
+  - **Impact**: Reduced code duplication by 220+ lines, ensures consistent conversion behavior across all endpoints
+  - **Location**: `src/UnitsManager.ts:501-619`, `src/index.ts:320`, `src/ConversionStreamServer.ts:398`
+  - **Benefits**: Single source of truth for conversions, easier maintenance, consistent behavior
+
+- **Object Value Passthrough**: Fixed objects being converted to `[object Object]` string
+  - **Root Cause**: Type detection used metadata instead of runtime value, causing objects to hit default case with `String(value)`
+  - **Solution**: Added runtime check for object values that bypasses metadata-based type detection
+  - **Impact**: Objects now consistently pass through with proper JSON formatting regardless of metadata
+  - **Location**: `src/UnitsManager.ts:519-535`
+  - **Example**: `{"distance":80.066,"timeTo":-327.81}` now displays correctly instead of `[object Object]`
+
+### Changed
+- **Conversion Architecture Refactor**: Unified conversion logic across all endpoints
+  - API `buildDeltaResponse()` simplified from 150+ lines to ~50 lines
+  - WebSocket `convertValue()` simplified from 70+ lines to ~15 lines
+  - Both now delegate to single `UnitsManager.convertPathValue()` method
+  - Guarantees consistent behavior between API and WebSocket conversions
+
+- **Stream Display Improvements**: Enhanced data handling in stream viewer and conversion server
+  - Improved data processing reliability in `app-stream-viewer.js`
+  - Enhanced conversion logic in `ConversionStreamServer.ts`
+  - Better error handling and state management
+
+- **Category Preference Updates**: Streamlined category preference update logic
+  - Simplified API endpoint interaction
+  - Removed 20+ lines of redundant code
+  - Improved maintainability of preference handling
+
+### Technical
+- **Unified Conversion Architecture**: Single method for all conversion operations
+  - `UnitsManager.convertPathValue()` - One method to rule them all
+  - Handles all value types: number, date, boolean, string, object
+  - Runtime type detection with fallback to metadata
+  - Both API (`buildDeltaResponse`) and WebSocket (`ConversionStreamServer.convertValue`) now call this single method
+  - Eliminated 220+ lines of duplicate conversion code
+- **Code Consistency**: Unified date type detection logic across API and WebSocket paths
+- **Reliability**: Path discovery now works consistently regardless of frontend metadata cache state
+- **Subscription Handling**: Improved multi-vessel subscription logic in stream viewer
+
 ## [0.7.0-beta.2] - 2025-10-09
 
 ### Added ⭐ Major Architecture Overhaul
