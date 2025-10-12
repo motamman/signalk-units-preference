@@ -68,7 +68,7 @@ function isConversionFormDirty() {
 // Add a new base unit
 async function addBaseUnit() {
   const symbol = document.getElementById('newBaseUnitSymbol').value.trim()
-  const description = document.getElementById('newBaseUnitDesc').value.trim()
+  const longName = document.getElementById('newBaseUnitDesc').value.trim()
 
   if (!symbol) {
     showStatus('Please enter a base unit symbol', 'error')
@@ -78,7 +78,7 @@ async function addBaseUnit() {
   try {
     await apiCreateBaseUnit({
       baseUnit: symbol,
-      description: description || undefined,
+      longName: longName || undefined,
       conversions: {}
     })
 
@@ -191,7 +191,7 @@ function editBaseUnit(baseUnit) {
 
   const safeBaseUnit = sanitizeIdSegment(baseUnit)
   const def = unitDefinitions[baseUnit] || {}
-  const description = def.description || ''
+  const longName = def.longName || def.description || ''
 
   const viewDiv = document.getElementById(`unit-view-${safeBaseUnit}`)
   const editDiv = document.getElementById(`unit-edit-${safeBaseUnit}`)
@@ -211,7 +211,7 @@ function editBaseUnit(baseUnit) {
         </div>
         <div class="input-group">
           <label>Description (optional)</label>
-          <input type="text" id="${descInputId}" value="${description}" placeholder="e.g., flow rate, energy">
+          <input type="text" id="${descInputId}" value="${longName}" placeholder="e.g., flow rate, energy">
         </div>
       </div>
       <div style="display: flex; gap: 10px;">
@@ -247,14 +247,14 @@ function editBaseUnit(baseUnit) {
 async function saveEditBaseUnit(baseUnit) {
   const safeBaseUnit = sanitizeIdSegment(baseUnit)
   const descInputId = `edit-unit-desc-${safeBaseUnit}`
-  const description = document.getElementById(descInputId).value.trim()
+  const longName = document.getElementById(descInputId).value.trim()
 
   try {
-    // Get the existing unit definition and update only the description
+    // Get the existing unit definition and update only the longName
     const existingDef = unitDefinitions[baseUnit] || { conversions: {} }
     const updatedDef = {
       baseUnit: baseUnit,
-      description: description || undefined,
+      longName: longName || undefined,
       conversions: existingDef.conversions || {}
     }
 
@@ -268,7 +268,7 @@ async function saveEditBaseUnit(baseUnit) {
 
     // Update local unitDefinitions
     if (unitDefinitions[baseUnit]) {
-      unitDefinitions[baseUnit].description = description
+      unitDefinitions[baseUnit].longName = longName
     }
 
     // Reload and re-render

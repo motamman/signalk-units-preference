@@ -1228,6 +1228,14 @@ export class UnitsManager {
       label: this.getBaseUnitLabel(unit)
     }))
 
+    // Ensure each base unit is always included in its own target units list
+    for (const baseUnit of baseUnitsArray) {
+      if (!targetUnitsByBase[baseUnit]) {
+        targetUnitsByBase[baseUnit] = new Set()
+      }
+      targetUnitsByBase[baseUnit].add(baseUnit)
+    }
+
     const targetUnitsMap: Record<string, string[]> = {}
     for (const [baseUnit, units] of Object.entries(targetUnitsByBase)) {
       targetUnitsMap[baseUnit] = Array.from(units).sort((a, b) =>
@@ -1280,7 +1288,7 @@ export class UnitsManager {
       } else {
         baseUnitDefinitions[baseUnit] = {
           conversions: customDef.conversions || {},
-          description: customDef.description,
+          description: customDef.longName || customDef.description,
           isCustom: true
         }
       }
@@ -1310,10 +1318,13 @@ export class UnitsManager {
       return `${standardDef.longName} (${unit})`
     }
 
-    // Try custom definitions
+    // Try custom definitions (check both longName and description for backwards compatibility)
     const customDef = unitDefinitions[unit]
     if (customDef?.longName) {
       return `${customDef.longName} (${unit})`
+    }
+    if (customDef?.description) {
+      return `${customDef.description} (${unit})`
     }
 
     // Fallback to hardcoded labels
