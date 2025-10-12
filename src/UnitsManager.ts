@@ -188,7 +188,20 @@ export class UnitsManager {
    * This is exposed on UnitsManager to support the DeltaStreamHandler's cache clearing mechanism.
    */
   setPreferencesChangeCallback(callback: () => void): void {
-    this.preferencesStore.setOnPreferencesChanged(callback)
+    // Wrap the callback to also clear our schema cache
+    this.preferencesStore.setOnPreferencesChanged(() => {
+      this.clearSchemaCache()
+      callback()
+    })
+  }
+
+  /**
+   * Clear the schema cache to force rebuild on next access
+   */
+  private clearSchemaCache(): void {
+    this.cachedSchema = null
+    this.schemaCacheTimestamp = 0
+    this.app.debug('Schema cache cleared due to preferences change')
   }
 
   /**
@@ -1228,6 +1241,14 @@ export class UnitsManager {
       label: this.getBaseUnitLabel(unit)
     }))
 
+    // Ensure each base unit is always included in its own target units list
+    for (const baseUnit of baseUnitsArray) {
+      if (!targetUnitsByBase[baseUnit]) {
+        targetUnitsByBase[baseUnit] = new Set()
+      }
+      targetUnitsByBase[baseUnit].add(baseUnit)
+    }
+
     const targetUnitsMap: Record<string, string[]> = {}
     for (const [baseUnit, units] of Object.entries(targetUnitsByBase)) {
       targetUnitsMap[baseUnit] = Array.from(units).sort((a, b) =>
@@ -1280,8 +1301,22 @@ export class UnitsManager {
       } else {
         baseUnitDefinitions[baseUnit] = {
           conversions: customDef.conversions || {},
-          description: customDef.description,
+          description: customDef.longName || customDef.description,
           isCustom: true
+        }
+      }
+    }
+
+    // Ensure each base unit has a self-conversion (pass-through)
+    for (const baseUnit of baseUnitsArray) {
+      if (baseUnitDefinitions[baseUnit] && !baseUnitDefinitions[baseUnit].conversions[baseUnit]) {
+        // Include longName/description in the self-conversion so it appears properly in dropdowns
+        const description = baseUnitDefinitions[baseUnit].description
+        baseUnitDefinitions[baseUnit].conversions[baseUnit] = {
+          formula: 'value',
+          inverseFormula: 'value',
+          symbol: baseUnit,
+          longName: description || undefined
         }
       }
     }
@@ -1310,10 +1345,13 @@ export class UnitsManager {
       return `${standardDef.longName} (${unit})`
     }
 
-    // Try custom definitions
+    // Try custom definitions (check both longName and description for backwards compatibility)
     const customDef = unitDefinitions[unit]
     if (customDef?.longName) {
       return `${customDef.longName} (${unit})`
+    }
+    if (customDef?.description) {
+      return `${customDef.description} (${unit})`
     }
 
     // Fallback to hardcoded labels

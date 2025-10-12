@@ -5,6 +5,51 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.1-beta.2] - 2025-10-12
+
+### Added
+- **Base Unit Self-Conversion**: Base units now always appear in their own target unit dropdowns
+  - **Feature**: Can now select base unit as target (e.g., select "lx" for "lx" base unit)
+  - **Implementation**: Automatically adds pass-through conversion (formula: "value") for each base unit
+  - **Location**: `src/UnitsManager.ts:1231-1237`, `src/UnitsManager.ts:1297-1309`
+  - **Impact**: Enables "no conversion" option by selecting the base unit itself
+
+### Fixed
+- **Custom Base Unit Descriptions in Dropdowns**: Fixed custom base unit descriptions not appearing in target unit dropdowns
+  - **Root Cause**: Self-conversion for base units didn't include the `longName` field
+  - **Solution**: Pass-through conversions now include `longName` from base unit's description
+  - **Location**: `src/UnitsManager.ts:1297-1309`
+  - **Impact**: Custom base units like "lx" now show as "lumen per square meter (lx)" in target dropdowns
+  - **Example**: Custom "W/m²" base unit now displays as "watts per square meter (W/m²)"
+
+- **Custom Base Unit Naming Mismatch**: Fixed frontend/backend inconsistency in custom base unit field names
+  - **Root Cause**: Frontend sent `description`, backend expected `longName` to match standard base units
+  - **Solution**: Frontend now sends `longName`, backend accepts both `longName` and `description` for backwards compatibility
+  - **Locations**: `public/js/app-unit-definitions.js:69-82`, `src/index.ts:553-565`, `src/UnitsManager.ts:1314-1320`
+  - **Impact**: New custom base units properly save and display descriptions; existing units with `description` still work
+
+- **Schema Cache Not Invalidating**: Fixed category/pattern dropdowns not updating after preference changes
+  - **Root Cause**: Schema cache used 15-second TTL but wasn't invalidated on preference changes
+  - **Solution**: Added cache invalidation callback that clears schema cache when preferences are saved
+  - **Location**: `src/UnitsManager.ts:190-205`
+  - **Impact**: New categories immediately appear in pattern form dropdowns without page refresh
+
+- **Pattern List Overflow**: Fixed pattern list being cut off when exceeding max-height
+  - **Root Cause**: Collapsible content had `overflow: hidden` with 2000px max-height
+  - **Solution**: Changed to `overflow-y: auto` to enable scrolling when content exceeds max-height
+  - **Location**: `public/index.html:589-600`
+  - **Impact**: Can now scroll through large pattern lists instead of content being cut off
+
+### Technical
+- **Schema Cache Management**: Enhanced cache invalidation strategy
+  - Added `clearSchemaCache()` method to force schema rebuild
+  - Integrated with preferences change callback
+  - Maintains 15-second TTL while supporting immediate invalidation
+- **Backwards Compatibility**: Dual-field support for base unit descriptions
+  - Frontend sends `longName`, backend stores as `longName`
+  - Backend reads `longName` first, falls back to `description` for old data
+  - Schema builder checks both fields when building labels
+
 ## [0.7.1-beta.1] - 2025-10-10
 
 ### Added
