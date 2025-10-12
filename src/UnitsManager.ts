@@ -188,7 +188,20 @@ export class UnitsManager {
    * This is exposed on UnitsManager to support the DeltaStreamHandler's cache clearing mechanism.
    */
   setPreferencesChangeCallback(callback: () => void): void {
-    this.preferencesStore.setOnPreferencesChanged(callback)
+    // Wrap the callback to also clear our schema cache
+    this.preferencesStore.setOnPreferencesChanged(() => {
+      this.clearSchemaCache()
+      callback()
+    })
+  }
+
+  /**
+   * Clear the schema cache to force rebuild on next access
+   */
+  private clearSchemaCache(): void {
+    this.cachedSchema = null
+    this.schemaCacheTimestamp = 0
+    this.app.debug('Schema cache cleared due to preferences change')
   }
 
   /**
@@ -1290,6 +1303,20 @@ export class UnitsManager {
           conversions: customDef.conversions || {},
           description: customDef.longName || customDef.description,
           isCustom: true
+        }
+      }
+    }
+
+    // Ensure each base unit has a self-conversion (pass-through)
+    for (const baseUnit of baseUnitsArray) {
+      if (baseUnitDefinitions[baseUnit] && !baseUnitDefinitions[baseUnit].conversions[baseUnit]) {
+        // Include longName/description in the self-conversion so it appears properly in dropdowns
+        const description = baseUnitDefinitions[baseUnit].description
+        baseUnitDefinitions[baseUnit].conversions[baseUnit] = {
+          formula: 'value',
+          inverseFormula: 'value',
+          symbol: baseUnit,
+          longName: description || undefined
         }
       }
     }

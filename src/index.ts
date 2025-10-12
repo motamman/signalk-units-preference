@@ -550,7 +550,7 @@ module.exports = (app: ServerAPI): Plugin => {
       // Add a new base unit
       router.post('/unit-definitions', async (req: Request, res: Response) => {
         try {
-          const { baseUnit, description, conversions } = req.body
+          const { baseUnit, longName, description, conversions } = req.body
           if (!baseUnit) {
             throw new ValidationError(
               'baseUnit is required',
@@ -560,7 +560,7 @@ module.exports = (app: ServerAPI): Plugin => {
           }
           await unitsManager.addUnitDefinition(baseUnit, {
             baseUnit,
-            description: description || undefined,
+            longName: longName || description || undefined,
             conversions: conversions || {}
           })
           res.json({ success: true, baseUnit })
