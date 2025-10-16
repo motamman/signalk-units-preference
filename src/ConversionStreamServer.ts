@@ -37,6 +37,7 @@ export class ConversionStreamServer {
   private clients: Set<StreamClient> = new Set()
   private signalkWs: WebSocket | null = null
   private reconnectTimer: NodeJS.Timeout | null = null
+  private pendingSubscriptionUpdate: boolean = false // Track if subscriptions need updating when connection opens
 
   constructor(app: ServerAPI, unitsManager: UnitsManager, sendMeta: boolean = true) {
     this.app = app
@@ -59,7 +60,15 @@ export class ConversionStreamServer {
       const pathname = new URL(request.url, `http://${request.headers.host}`).pathname
 
       if (pathname === '/plugins/signalk-units-preference/stream') {
+        // Log the upgrade attempt
+        this.app.debug(`WebSocket upgrade request received for ${pathname}`)
+        this.app.debug(`  Headers: ${JSON.stringify(request.headers)}`)
+
+        // Accept all connections (authentication happens at SignalK level)
+        // The Authorization header is checked by SignalK's security middleware
+        // during the HTTP upgrade process
         this.wss!.handleUpgrade(request, socket, head, ws => {
+          this.app.debug('WebSocket upgrade successful, emitting connection event')
           this.wss!.emit('connection', ws, request)
         })
       }
@@ -119,7 +128,16 @@ export class ConversionStreamServer {
 
       this.signalkWs.on('open', () => {
         this.app.debug('Connected to SignalK WebSocket')
-        // Subscribe to all paths from all contexts
+
+        // Log if there were pending subscription updates
+        if (this.pendingSubscriptionUpdate) {
+          this.app.debug(
+            `Processing ${this.clients.size} client(s) with pending subscription updates`
+          )
+        }
+
+        // Always process subscriptions when connection opens
+        // This handles subscriptions that arrived before the connection was ready
         this.updateSignalKSubscriptions()
       })
 
@@ -139,6 +157,14 @@ export class ConversionStreamServer {
       this.signalkWs.on('close', () => {
         this.app.debug('SignalK WebSocket closed, reconnecting in 5s...')
         this.signalkWs = null
+
+        // Mark that subscriptions need to be resent when reconnected
+        if (this.clients.size > 0) {
+          this.pendingSubscriptionUpdate = true
+          this.app.debug(
+            `${this.clients.size} client(s) will be resubscribed after reconnection`
+          )
+        }
 
         // Reconnect after 5 seconds
         this.reconnectTimer = setTimeout(() => {
@@ -222,9 +248,17 @@ export class ConversionStreamServer {
    * Update SignalK subscriptions based on all clients
    */
   private updateSignalKSubscriptions(): void {
+    // Check if internal SignalK connection is ready
     if (!this.signalkWs || this.signalkWs.readyState !== WebSocket.OPEN) {
+      this.pendingSubscriptionUpdate = true
+      this.app.debug(
+        'SignalK WebSocket not ready - subscriptions will be processed when connection opens'
+      )
       return
     }
+
+    // Clear pending flag - we're processing now
+    this.pendingSubscriptionUpdate = false
 
     // Collect all unique subscriptions across all clients
     const allPaths = new Set<string>()
@@ -238,8 +272,13 @@ export class ConversionStreamServer {
     }
 
     if (allPaths.size === 0) {
+      this.app.debug('No client subscriptions to process')
       return // No subscriptions yet
     }
+
+    this.app.debug(
+      `Processing subscriptions from ${this.clients.size} client(s): ${allPaths.size} unique paths across ${allContexts.size} context(s)`
+    )
 
     // Subscribe to each context separately
     for (const context of allContexts) {
@@ -257,7 +296,9 @@ export class ConversionStreamServer {
         })
       )
 
-      this.app.debug(`Subscribed to ${subscriptions.length} paths for context ${context}`)
+      this.app.debug(
+        `✓ Subscribed to ${subscriptions.length} paths for context ${context} on internal SignalK stream`
+      )
     }
   }
 

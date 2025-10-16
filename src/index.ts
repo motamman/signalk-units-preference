@@ -296,10 +296,28 @@ module.exports = (app: ServerAPI): Plugin => {
 
           // If value query param provided, return conversion result
           if (valueParam !== undefined) {
+            // Parse value from query string (always comes as string from URL)
+            let parsedValue: unknown = valueParam
+            if (typeof valueParam === 'string' && valueParam !== '') {
+              // Try to parse as number first
+              const numValue = Number(valueParam)
+              if (!isNaN(numValue)) {
+                parsedValue = numValue
+              } else {
+                // Try to parse as JSON (for objects, arrays, booleans, etc.)
+                try {
+                  parsedValue = JSON.parse(valueParam)
+                } catch (e) {
+                  // Keep as string if parsing fails
+                  parsedValue = valueParam
+                }
+              }
+            }
+
             app.debug(
-              `Converting value ${valueParam} for path: ${pathStr} (context: ${contextParam || 'vessels.self'})`
+              `Converting value ${parsedValue} for path: ${pathStr} (context: ${contextParam || 'vessels.self'})`
             )
-            const result = buildDeltaResponse(pathStr, valueParam, {
+            const result = buildDeltaResponse(pathStr, parsedValue, {
               typeHint: typeof typeParam === 'string' ? toSupportedValueType(typeParam) : undefined,
               timestamp: typeof timestampParam === 'string' ? timestampParam : undefined,
               context: typeof contextParam === 'string' ? contextParam : undefined

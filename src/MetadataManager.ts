@@ -37,11 +37,23 @@ export class MetadataManager {
   }
 
   /**
-   * Set SignalK metadata from frontend
+   * Set SignalK metadata from frontend or auto-initialization
+   * Merges new metadata with existing cache to handle paths appearing over time
    */
   setSignalKMetadata(metadata: Record<string, SignalKPathMetadata>): void {
-    this.signalKMetadata = metadata
-    this.app.debug(`Received SignalK metadata for ${Object.keys(metadata).length} paths`)
+    const existingCount = Object.keys(this.signalKMetadata).length
+    const newCount = Object.keys(metadata).length
+
+    // Merge new metadata with existing (new paths win on conflicts)
+    this.signalKMetadata = {
+      ...this.signalKMetadata,
+      ...metadata
+    }
+
+    const totalCount = Object.keys(this.signalKMetadata).length
+    this.app.debug(
+      `Metadata cache updated: ${existingCount} existing + ${newCount} new = ${totalCount} total paths`
+    )
   }
 
   /**
@@ -325,7 +337,28 @@ export class MetadataManager {
 
     // Fall back to SignalK metadata units
     if (!metadata) {
-      const skMetadata = this.signalKMetadata[pathStr]
+      // First try cached metadata
+      let skMetadata = this.signalKMetadata[pathStr]
+
+      // If not in cache, try live query to SignalK server
+      if (!skMetadata?.units) {
+        const liveMetadata = this.app.getMetadata(pathStr)
+        if (liveMetadata?.units) {
+          this.app.debug(
+            `Live metadata fallback for ${pathStr}: found units=${liveMetadata.units}`
+          )
+          // Cache it for future use
+          skMetadata = {
+            units: liveMetadata.units,
+            description: liveMetadata.description,
+            value: undefined,
+            $source: undefined,
+            timestamp: undefined
+          }
+          // Add to cache
+          this.signalKMetadata[pathStr] = skMetadata
+        }
+      }
 
       if (skMetadata?.units) {
         const inferred = this.inferMetadataFromSignalK(
@@ -425,6 +458,109 @@ export class MetadataManager {
 
     // Found category but no conversions - return null to let fallback code handle it
     return null
+  }
+
+  /**
+   * Auto-initialize SignalK metadata cache by fetching from SignalK API
+   * This eliminates the need for the web app to POST metadata
+   */
+  async autoInitializeSignalKMetadata(): Promise<void> {
+    try {
+      this.app.debug('Auto-initializing SignalK metadata cache...')
+
+      let hostname = 'localhost'
+      let port = 3000
+      let protocol = 'http'
+
+      const configSettings = (this.app as any).config?.settings
+      if (configSettings) {
+        hostname = configSettings.hostname || hostname
+        port = configSettings.port || port
+        protocol = configSettings.ssl ? 'https' : protocol
+      }
+
+      const apiUrl = `${protocol}://${hostname}:${port}/signalk/v1/api/`
+
+      const globalFetch = (globalThis as any).fetch
+      if (typeof globalFetch !== 'function') {
+        this.app.error(
+          'Fetch API unavailable. Metadata will not be auto-initialized. Conversions will still work but may be limited until metadata is received.'
+        )
+        return
+      }
+
+      const fetchFn = globalFetch.bind(globalThis) as (
+        input: string,
+        init?: any
+      ) => Promise<{ ok: boolean; statusText: string; json(): Promise<any> }>
+
+      this.app.debug(`Fetching SignalK metadata from: ${apiUrl}`)
+      const response = await fetchFn(apiUrl)
+
+      if (!response.ok) {
+        this.app.error(
+          `Failed to auto-initialize metadata: ${response.statusText}. Conversions will still work but may be limited.`
+        )
+        return
+      }
+
+      const data = await response.json()
+
+      // Extract metadata just like the web app does
+      const metadataMap: Record<string, SignalKPathMetadata> = {}
+
+      const extractMeta = (obj: any, prefix = ''): void => {
+        if (!obj || typeof obj !== 'object') return
+
+        for (const key in obj) {
+          if (
+            key === 'meta' ||
+            key === 'timestamp' ||
+            key === 'source' ||
+            key === '$source' ||
+            key === 'values' ||
+            key === 'sentence'
+          ) {
+            continue
+          }
+
+          const currentPath = prefix ? `${prefix}.${key}` : key
+
+          if (obj[key] && typeof obj[key] === 'object') {
+            // If this object has meta, capture it
+            if (obj[key].meta) {
+              metadataMap[currentPath] = {
+                ...obj[key].meta,
+                value: obj[key].value,
+                $source: obj[key].$source || obj[key].source,
+                timestamp: obj[key].timestamp
+              }
+            }
+            extractMeta(obj[key], currentPath)
+          }
+        }
+      }
+
+      // Extract from self vessel
+      const selfId = data.self?.replace('vessels.', '')
+      if (data.vessels && selfId && data.vessels[selfId]) {
+        extractMeta(data.vessels[selfId])
+      }
+
+      // Cache the metadata
+      if (Object.keys(metadataMap).length > 0) {
+        this.setSignalKMetadata(metadataMap)
+        this.app.debug(
+          `✓ Auto-initialized ${Object.keys(metadataMap).length} SignalK metadata entries`
+        )
+      } else {
+        this.app.debug('No SignalK metadata found to cache (vessel may have no active paths yet)')
+      }
+    } catch (error) {
+      this.app.error(
+        `Error auto-initializing SignalK metadata: ${error}. Conversions will still work but may be limited.`
+      )
+    }
   }
 
   /**

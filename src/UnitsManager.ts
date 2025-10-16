@@ -181,6 +181,10 @@ export class UnitsManager {
     this.conversionEngine.setDateFormatsData(this.dateFormatsData)
 
     await this.preferencesStore.initialize(this.getCategoryToBaseUnitMap(), this.definitionsDir)
+
+    // Auto-initialize SignalK metadata cache
+    // This makes conversions work immediately without requiring the web app
+    await this.metadataManager.autoInitializeSignalKMetadata()
   }
 
   /**
