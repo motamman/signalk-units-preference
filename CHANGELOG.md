@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.1-beta.3] - 2025-10-16
+
+### Fixed
+- **GET Endpoint Query Parameter Parsing**: Fixed numeric values in query strings not being converted properly
+  - **Root Cause**: Query parameters always come through as strings from URLs, but conversion logic expected numeric types for numeric paths
+  - **Solution**: Added value parsing logic to GET `/conversions/:path` endpoint that parses strings to numbers before conversion
+  - **Location**: `src/index.ts:299-315`
+  - **Impact**: Endpoints like `/conversions/electrical.batteries.512.voltage?value=13.3` now work correctly instead of throwing "Expected numeric value, got string" error
+  - **Consistency**: GET endpoint now parses values the same way as POST `/conversions` endpoint (lines 182-188)
+  - **Parsing Strategy**:
+    1. First attempts to parse as number using `Number()`
+    2. Falls back to JSON parsing for objects, arrays, booleans
+    3. Keeps as string if both parsing methods fail
+  - **Why WebSocket Works**: WebSocket receives JSON-parsed deltas where numbers are already numeric types, while HTTP query params are always strings
+
 ## [0.7.1-beta.2] - 2025-10-12
 
 ### Added
