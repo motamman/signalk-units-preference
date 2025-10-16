@@ -161,9 +161,7 @@ export class ConversionStreamServer {
         // Mark that subscriptions need to be resent when reconnected
         if (this.clients.size > 0) {
           this.pendingSubscriptionUpdate = true
-          this.app.debug(
-            `${this.clients.size} client(s) will be resubscribed after reconnection`
-          )
+          this.app.debug(`${this.clients.size} client(s) will be resubscribed after reconnection`)
         }
 
         // Reconnect after 5 seconds

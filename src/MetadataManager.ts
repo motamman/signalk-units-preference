@@ -344,9 +344,7 @@ export class MetadataManager {
       if (!skMetadata?.units) {
         const liveMetadata = this.app.getMetadata(pathStr)
         if (liveMetadata?.units) {
-          this.app.debug(
-            `Live metadata fallback for ${pathStr}: found units=${liveMetadata.units}`
-          )
+          this.app.debug(`Live metadata fallback for ${pathStr}: found units=${liveMetadata.units}`)
           // Cache it for future use
           skMetadata = {
             units: liveMetadata.units,
