@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.1-beta.4] - 2025-10-17
+
+### Fixed
+- **WebSocket Server Lifecycle Race Condition**: Fixed `TypeError: Cannot read properties of null (reading 'handleUpgrade')` crash
+  - **Root Cause**: HTTP server's `upgrade` event handler was never removed when plugin stopped, causing it to fire with null `wss` reference during restart
+  - **Solution**:
+    - Store references to `httpServer` and `upgradeHandler` for proper cleanup
+    - Added `removeListener('upgrade')` call in `stop()` method to cleanly detach the handler
+    - Added defensive null checks in handler to gracefully reject connections during shutdown
+  - **Location**: `src/ConversionStreamServer.ts:32-113`
+  - **Impact**: Plugin now properly cleans up event handlers on stop, preventing crashes during restarts or lifecycle changes
+  - **Symptoms Fixed**: Eliminates crashes when clients connect during/after plugin restart, particularly critical on embedded systems (Raspberry Pi)
+
+- **WebSocket Stream CPU Performance**: Optimized conversion processing to reduce CPU usage
+  - **Root Cause 1**: Plugin processed ALL incoming deltas before checking if any client wanted them
+  - **Solution 1**: Added early context filtering in `handleSignalKDelta()` to skip processing unwanted vessel data
+  - **Location**: `src/ConversionStreamServer.ts:337-345`
+  - **Impact**: Prevents wasting CPU on AIS targets when clients only want vessels.self
+
+  - **Root Cause 2**: Duplicate `getConversion()` calls - once unnecessarily before conversion, once inside `convertPathValue()`
+  - **Solution 2**: Removed unnecessary `getConversion()` call, only calling it when metadata is actually needed (when `sendMeta` is enabled)
+  - **Location**: `src/ConversionStreamServer.ts:376-405`
+  - **Impact**: Cuts conversion CPU usage in half by eliminating duplicate lookups
+
+### Changed
+- **Metadata Transmission Default**: Changed `sendMeta` default from `true` to `false`
+  - **Rationale**: Metadata rarely changes and doesn't need to be sent with every delta
+  - **Location**: `src/index.ts:27-33`
+  - **Impact**: Reduces bandwidth and eliminates unnecessary `getConversion()` calls per delta, improving performance on resource-constrained devices
+  - **Note**: Users can re-enable in plugin settings if needed
+
 ## [0.7.1-beta.3] - 2025-10-16
 
 ### Fixed
