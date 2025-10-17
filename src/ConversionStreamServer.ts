@@ -38,6 +38,8 @@ export class ConversionStreamServer {
   private signalkWs: WebSocket | null = null
   private reconnectTimer: NodeJS.Timeout | null = null
   private pendingSubscriptionUpdate: boolean = false // Track if subscriptions need updating when connection opens
+  private httpServer: any = null
+  private upgradeHandler: ((request: any, socket: any, head: any) => void) | null = null
 
   constructor(app: ServerAPI, unitsManager: UnitsManager, sendMeta: boolean = true) {
     this.app = app
@@ -49,6 +51,9 @@ export class ConversionStreamServer {
    * Start the WebSocket server
    */
   start(httpServer: any): void {
+    // Save httpServer reference for cleanup
+    this.httpServer = httpServer
+
     // Create WebSocket server on a path
     this.wss = new WebSocket.Server({
       noServer: true,
@@ -56,7 +61,7 @@ export class ConversionStreamServer {
     })
 
     // Handle WebSocket upgrade requests
-    httpServer.on('upgrade', (request: any, socket: any, head: any) => {
+    this.upgradeHandler = (request: any, socket: any, head: any) => {
       const pathname = new URL(request.url, `http://${request.headers.host}`).pathname
 
       if (pathname === '/plugins/signalk-units-preference/stream') {
@@ -64,15 +69,26 @@ export class ConversionStreamServer {
         this.app.debug(`WebSocket upgrade request received for ${pathname}`)
         this.app.debug(`  Headers: ${JSON.stringify(request.headers)}`)
 
+        // Check if wss is still available (server might be stopping)
+        if (!this.wss) {
+          this.app.debug('WebSocket server is not available, rejecting upgrade')
+          socket.destroy()
+          return
+        }
+
         // Accept all connections (authentication happens at SignalK level)
         // The Authorization header is checked by SignalK's security middleware
         // during the HTTP upgrade process
-        this.wss!.handleUpgrade(request, socket, head, ws => {
+        this.wss.handleUpgrade(request, socket, head, ws => {
           this.app.debug('WebSocket upgrade successful, emitting connection event')
-          this.wss!.emit('connection', ws, request)
+          if (this.wss) {
+            this.wss.emit('connection', ws, request)
+          }
         })
       }
-    })
+    }
+
+    httpServer.on('upgrade', this.upgradeHandler)
 
     this.wss.on('connection', (ws: WebSocket) => {
       this.handleClientConnection(ws)
@@ -88,6 +104,14 @@ export class ConversionStreamServer {
    * Stop the WebSocket server
    */
   stop(): void {
+    // Remove upgrade event handler from HTTP server to prevent race conditions
+    if (this.httpServer && this.upgradeHandler) {
+      this.httpServer.removeListener('upgrade', this.upgradeHandler)
+      this.app.debug('Removed upgrade event handler from HTTP server')
+      this.upgradeHandler = null
+      this.httpServer = null
+    }
+
     // Disconnect from SignalK
     if (this.signalkWs) {
       this.signalkWs.close()
