@@ -29,7 +29,7 @@ module.exports = (app: ServerAPI): Plugin => {
         title: 'Send Metadata with Every Delta',
         description:
           'Include metadata (units, displayFormat, description) in every delta message. Disable for optimization if metadata rarely changes.',
-        default: true
+        default: false
       }
     }
   }

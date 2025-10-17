@@ -374,15 +374,11 @@ export class ConversionStreamServer {
         }
 
         try {
-          // Get conversion info
-          const conversion = this.unitsManager.getConversion(path)
-
-          // Try to convert the value
+          // Convert the value
           let converted = this.convertValue(path, value)
 
           // If conversion failed or is pass-through, send original value as-is
           if (!converted) {
-            this.app.debug(`  No conversion for ${path}, sending original value`)
             converted = {
               converted: value,
               formatted: typeof value === 'object' ? JSON.stringify(value) : String(value),
@@ -398,16 +394,15 @@ export class ConversionStreamServer {
           })
 
           // Build metadata entry if sendMeta is enabled
+          // Only call getConversion if we actually need metadata to avoid double calls
           if (this.sendMeta) {
+            const conversion = this.unitsManager.getConversion(path)
             metadataEntries.push({
               path: path, // Metadata for original path
               value: this.buildMetadata(path, conversion)
             })
           }
-
-          this.app.debug(`  Converted ${path}: ${value} -> ${converted.converted}`)
         } catch (error) {
-          this.app.debug(`Failed to convert ${path}: ${error}`)
           // Even on error, send the original value through
           const converted = {
             converted: value,
