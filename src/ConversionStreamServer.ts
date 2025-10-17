@@ -334,6 +334,16 @@ export class ConversionStreamServer {
 
     const context = delta.context || 'vessels.self'
 
+    // CRITICAL: Check if ANY client is interested in this context BEFORE processing
+    // This prevents wasting CPU on AIS targets when clients only want vessels.self
+    const hasInterestedClient = Array.from(this.clients).some(
+      client => client.context === context
+    )
+    if (!hasInterestedClient) {
+      // Don't even log - this would spam for every AIS target
+      return
+    }
+
     // Log incoming delta info
     const totalValues = delta.updates.reduce(
       (sum: number, u: any) => sum + (u.values?.length || 0),
