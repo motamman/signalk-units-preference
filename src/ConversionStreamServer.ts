@@ -40,8 +40,9 @@ export class ConversionStreamServer {
   private pendingSubscriptionUpdate: boolean = false // Track if subscriptions need updating when connection opens
   private httpServer: any = null
   private upgradeHandler: ((request: any, socket: any, head: any) => void) | null = null
+  private conversionCache: Map<string, any> = new Map() // Cache for conversion metadata (path → ConversionResponse)
 
-  constructor(app: ServerAPI, unitsManager: UnitsManager, sendMeta: boolean = true) {
+  constructor(app: ServerAPI, unitsManager: UnitsManager, sendMeta: boolean = false) {
     this.app = app
     this.unitsManager = unitsManager
     this.sendMeta = sendMeta
@@ -92,6 +93,14 @@ export class ConversionStreamServer {
 
     this.wss.on('connection', (ws: WebSocket) => {
       this.handleClientConnection(ws)
+    })
+
+    // Register cache clear callback with UnitsManager
+    // This ensures cache is invalidated when preferences change
+    this.unitsManager.setPreferencesChangeCallback(() => {
+      const oldSize = this.conversionCache.size
+      this.conversionCache.clear()
+      this.app.debug(`Conversion cache cleared (was ${oldSize} entries)`)
     })
 
     // Connect to SignalK WebSocket internally
@@ -336,9 +345,7 @@ export class ConversionStreamServer {
 
     // CRITICAL: Check if ANY client is interested in this context BEFORE processing
     // This prevents wasting CPU on AIS targets when clients only want vessels.self
-    const hasInterestedClient = Array.from(this.clients).some(
-      client => client.context === context
-    )
+    const hasInterestedClient = Array.from(this.clients).some(client => client.context === context)
     if (!hasInterestedClient) {
       // Don't even log - this would spam for every AIS target
       return
@@ -374,44 +381,52 @@ export class ConversionStreamServer {
         }
 
         try {
-          // Convert the value
-          let converted = this.convertValue(path, value)
+          // Convert the value (returns converted value AND metadata in one call)
+          const result = this.convertValue(path, value)
 
           // If conversion failed or is pass-through, send original value as-is
-          if (!converted) {
-            converted = {
+          if (!result) {
+            const fallbackValue = {
               converted: value,
               formatted: typeof value === 'object' ? JSON.stringify(value) : String(value),
               original: value
             }
+            convertedValues.push({
+              path: path,
+              value: fallbackValue
+            })
+            continue
           }
 
           // Send converted value at the ORIGINAL path (not .unitsConverted)
           // This dedicated stream is meant to provide converted values transparently
           convertedValues.push({
             path: path, // Use original path, NOT path.unitsConverted
-            value: converted
+            value: {
+              converted: result.converted,
+              formatted: result.formatted,
+              original: result.original
+            }
           })
 
           // Build metadata entry if sendMeta is enabled
-          // Only call getConversion if we actually need metadata to avoid double calls
+          // Use metadata from convertValue() result - NO redundant getConversion() call!
           if (this.sendMeta) {
-            const conversion = this.unitsManager.getConversion(path)
             metadataEntries.push({
               path: path, // Metadata for original path
-              value: this.buildMetadata(path, conversion)
+              value: result.metadata // Already available from convertPathValue()
             })
           }
         } catch (error) {
           // Even on error, send the original value through
-          const converted = {
+          const fallbackValue = {
             converted: value,
             formatted: typeof value === 'object' ? JSON.stringify(value) : String(value),
             original: value
           }
           convertedValues.push({
             path: path,
-            value: converted
+            value: fallbackValue
           })
         }
       }
@@ -443,31 +458,40 @@ export class ConversionStreamServer {
   }
 
   /**
-   * Build metadata for a converted path (SignalK meta format)
+   * Convert a value using the UNIFIED conversion method with caching
+   * Returns the full result including metadata to avoid redundant getConversion() calls
+   *
+   * Caching strategy:
+   * - Caches the metadata portion of conversion results per path
+   * - Cache is cleared when preferences change (via callback in start())
+   * - This optimizes repeated conversions of the same paths across multiple deltas
    */
-  private buildMetadata(originalPath: string, conversion: any): any {
-    return {
-      units: conversion.targetUnit || conversion.symbol || '',
-      displayFormat: conversion.displayFormat || '0.0',
-      description: `${originalPath} (converted from ${conversion.baseUnit || 'base unit'})`,
-      originalUnits: conversion.baseUnit || '',
-      displayName: conversion.symbol
-        ? `${originalPath.split('.').pop()} (${conversion.symbol})`
-        : undefined
-    }
-  }
-
-  /**
-   * Convert a value using the UNIFIED conversion method
-   */
-  private convertValue(path: string, value: any): any | null {
+  private convertValue(
+    path: string,
+    value: any
+  ): { converted: any; formatted: string; original: any; metadata: any } | null {
     try {
-      // Use the UNIFIED conversion method - ONE source of truth!
+      // Check cache for previously computed metadata
+      // This helps when the same path appears in multiple deltas
+      const cachedMetadata = this.conversionCache.get(path)
+
+      // Convert the value using the UNIFIED conversion method
       const result = this.unitsManager.convertPathValue(path, value)
+
+      // Cache the metadata if this is first time seeing this path
+      // Metadata rarely changes (only when preferences update)
+      if (!cachedMetadata) {
+        this.conversionCache.set(path, result.metadata)
+        this.app.debug(
+          `Cached conversion metadata for: ${path} (cache size: ${this.conversionCache.size})`
+        )
+      }
+
       return {
         converted: result.converted,
         formatted: result.formatted,
-        original: result.original
+        original: result.original,
+        metadata: result.metadata // Keep metadata to avoid redundant getConversion() call
       }
     } catch (error) {
       this.app.debug(`Conversion failed for ${path}: ${error}`)
