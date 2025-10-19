@@ -345,9 +345,7 @@ export class ConversionStreamServer {
 
     // CRITICAL: Check if ANY client is interested in this context BEFORE processing
     // This prevents wasting CPU on AIS targets when clients only want vessels.self
-    const hasInterestedClient = Array.from(this.clients).some(
-      client => client.context === context
-    )
+    const hasInterestedClient = Array.from(this.clients).some(client => client.context === context)
     if (!hasInterestedClient) {
       // Don't even log - this would spam for every AIS target
       return
@@ -475,7 +473,7 @@ export class ConversionStreamServer {
     try {
       // Check cache for previously computed metadata
       // This helps when the same path appears in multiple deltas
-      let cachedMetadata = this.conversionCache.get(path)
+      const cachedMetadata = this.conversionCache.get(path)
 
       // Convert the value using the UNIFIED conversion method
       const result = this.unitsManager.convertPathValue(path, value)
@@ -484,7 +482,9 @@ export class ConversionStreamServer {
       // Metadata rarely changes (only when preferences update)
       if (!cachedMetadata) {
         this.conversionCache.set(path, result.metadata)
-        this.app.debug(`Cached conversion metadata for: ${path} (cache size: ${this.conversionCache.size})`)
+        this.app.debug(
+          `Cached conversion metadata for: ${path} (cache size: ${this.conversionCache.size})`
+        )
       }
 
       return {
