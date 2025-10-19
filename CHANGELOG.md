@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.2-beta.1] - 2025-10-18
+
+### Fixed
+- **WebSocket Stream Performance**: Eliminated redundant `getConversion()` calls in conversion processing
+  - **Root Cause**: `convertPathValue()` was called to get converted values, but then `getConversion()` was called again separately to get metadata when `sendMeta` was enabled
+  - **Solution**:
+    - Modified `convertValue()` method to return full result including metadata from `convertPathValue()`
+    - Reuse metadata already computed during conversion instead of making second expensive call
+    - Removed now-unused `buildMetadata()` helper method
+  - **Location**: `src/ConversionStreamServer.ts:376-412, 453-481`
+  - **Impact**: ~50% reduction in conversion CPU time when `sendMeta=true`, eliminating duplicate metadata resolution for every value in every delta
+  - **Technical Details**: Each `getConversion()` call involves preference lookups, pattern matching, metadata resolution with multiple fallbacks, and conversion definition lookups - eliminating the duplicate call provides significant CPU savings
+
+- **WebSocket Stream Performance**: Added conversion metadata caching for repeated paths
+  - **Root Cause**: Same SignalK paths appear repeatedly in deltas (e.g., navigation.speedOverGround updates at 5Hz), but metadata was recomputed each time
+  - **Solution**:
+    - Added `conversionCache` Map to cache conversion metadata per path
+    - Registered callback with `UnitsManager` to clear cache when preferences change
+    - Cache automatically invalidated when user modifies preferences
+  - **Location**: `src/ConversionStreamServer.ts:43, 98-104, 462-500`
+  - **Impact**: Reduces CPU overhead for repeated path conversions across multiple deltas
+  - **Cache Strategy**: Caches metadata (which rarely changes), not converted values (which change frequently)
+  - **Cache Invalidation**: Automatically cleared when preferences updated to ensure fresh conversion rules
+
 ## [0.7.1-beta.4] - 2025-10-17
 
 ### Fixed
