@@ -42,7 +42,7 @@ export class ConversionStreamServer {
   private upgradeHandler: ((request: any, socket: any, head: any) => void) | null = null
   private conversionCache: Map<string, any> = new Map() // Cache for conversion metadata (path → ConversionResponse)
 
-  constructor(app: ServerAPI, unitsManager: UnitsManager, sendMeta: boolean = true) {
+  constructor(app: ServerAPI, unitsManager: UnitsManager, sendMeta: boolean = false) {
     this.app = app
     this.unitsManager = unitsManager
     this.sendMeta = sendMeta

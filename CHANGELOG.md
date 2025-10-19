@@ -29,6 +29,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Cache Strategy**: Caches metadata (which rarely changes), not converted values (which change frequently)
   - **Cache Invalidation**: Automatically cleared when preferences updated to ensure fresh conversion rules
 
+### Changed
+- **WebSocket Stream Default Behavior**: Changed `sendMeta` constructor default from `true` to `false`
+  - **Rationale**: Metadata (units, displayFormat, description) rarely changes and doesn't need to be sent with every delta message
+  - **Location**: `src/ConversionStreamServer.ts:45`
+  - **Impact**: Reduces bandwidth usage and CPU overhead for metadata transmission on WebSocket stream by default
+  - **Consistency**: Now matches the plugin configuration schema default (which was already `false`)
+  - **User Control**: Users can still enable metadata transmission via plugin settings if needed
+  - **Note**: This change only affects the WebSocket stream (`/plugins/signalk-units-preference/stream`), not REST API endpoints which always include metadata
+
 ## [0.7.1-beta.4] - 2025-10-17
 
 ### Fixed
