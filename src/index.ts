@@ -50,7 +50,74 @@ module.exports = (app: ServerAPI): Plugin => {
       try {
         const dataDir = app.getDataDirPath()
         unitsManager = new UnitsManager(app, dataDir)
+
+        // Expose conversion functions on MULTIPLE places to ensure other plugins can find them
+        // Different plugins may receive different app object references, so we expose on all available objects
+
+        // Track initialization state
+        let isInitialized = false
+
+        const getAllUnitsConversionsFunc = async () => {
+          try {
+            if (!isInitialized) {
+              console.log('[signalk-units-preference] Warning: getAllUnitsConversions called before initialization complete')
+              return {}
+            }
+            const result = await unitsManager.getPathsMetadata()
+            console.log(`[signalk-units-preference] getAllUnitsConversions returning ${Object.keys(result).length} paths`)
+            return result
+          } catch (error) {
+            app.error(`[Units Preference] Error in getAllUnitsConversions: ${error}`)
+            console.error('[signalk-units-preference] Stack:', error)
+            return {}
+          }
+        }
+
+        const getUnitsConversionFunc = (path: string) => {
+          try {
+            if (!isInitialized) {
+              console.log('[signalk-units-preference] Warning: getUnitsConversion called before initialization complete')
+              return null
+            }
+            return unitsManager.getConversion(path)
+          } catch (error) {
+            app.error(`[Units Preference] Error in getUnitsConversion for ${path}: ${error}`)
+            return null
+          }
+        }
+
+        // Expose on the app object
+        ;(app as any).getAllUnitsConversions = getAllUnitsConversionsFunc
+        ;(app as any).getUnitsConversion = getUnitsConversionFunc
+
+        // ALSO expose on the server instance if available (some plugins may access this instead)
+        const serverInstance = (app as any).server || (app as any)._server
+        if (serverInstance && typeof serverInstance === 'object') {
+          ;(serverInstance as any).getAllUnitsConversions = getAllUnitsConversionsFunc
+          ;(serverInstance as any).getUnitsConversion = getUnitsConversionFunc
+          console.log('✅ [signalk-units-preference] Functions also exposed on server instance')
+        }
+
+        // ALSO expose on global SignalK app if it exists
+        if ((global as any).signalkApp) {
+          ;(global as any).signalkApp.getAllUnitsConversions = getAllUnitsConversionsFunc
+          ;(global as any).signalkApp.getUnitsConversion = getUnitsConversionFunc
+          console.log('✅ [signalk-units-preference] Functions also exposed on global signalkApp')
+        }
+
+        // Log to both console and debug to ensure visibility
+        console.log('✅ [signalk-units-preference] Conversion functions exposed on app object')
+        console.log('   - app.getAllUnitsConversions type:', typeof (app as any).getAllUnitsConversions)
+        console.log('   - app.getUnitsConversion type:', typeof (app as any).getUnitsConversion)
+        app.debug('Conversion functions exposed on app object for other plugins')
+
         await unitsManager.initialize()
+
+        // Mark as initialized so functions can return data
+        isInitialized = true
+        const pathsMetadata = await unitsManager.getPathsMetadata()
+        console.log('✅ [signalk-units-preference] UnitsManager initialized, functions ready to use')
+        console.log(`   - Available paths: ${Object.keys(pathsMetadata).length}`)
 
         const openApiPath = path.join(__dirname, 'openapi.json')
         if (fs.existsSync(openApiPath)) {
@@ -525,6 +592,26 @@ module.exports = (app: ServerAPI): Plugin => {
         }
       })
 
+      // GET /plugins/signalk-units-preference/debug/functions
+      // Diagnostic endpoint to check if functions are exposed on app
+      router.get('/debug/functions', (req: Request, res: Response) => {
+        try {
+          const appAny = app as any
+          res.json({
+            functionsExposed: {
+              getAllUnitsConversions: typeof appAny.getAllUnitsConversions,
+              getUnitsConversion: typeof appAny.getUnitsConversion
+            },
+            pluginRunning: true,
+            unitsManagerInitialized: !!unitsManager
+          })
+        } catch (error) {
+          app.error(`Error in debug endpoint: ${error}`)
+          const response = formatErrorResponse(error)
+          res.status(response.status).json(response.body)
+        }
+      })
+
       // GET /plugins/signalk-units-preference/paths
       // Return metadata definitions for all discovered SignalK paths
       router.get('/paths', async (req: Request, res: Response) => {
@@ -533,6 +620,37 @@ module.exports = (app: ServerAPI): Plugin => {
           res.json(pathsMetadata)
         } catch (error) {
           app.error(`Error getting paths metadata: ${error}`)
+          const response = formatErrorResponse(error)
+          res.status(response.status).json(response.body)
+        }
+      })
+
+      // GET /plugins/signalk-units-preference/internal/paths
+      // Internal-only endpoint for plugin-to-plugin communication (no auth required for localhost)
+      // Returns the same data as /paths endpoint
+      router.get('/internal/paths', async (req: Request, res: Response) => {
+        try {
+          // Only allow localhost access for security
+          const clientIp = req.ip || (req.connection as any)?.remoteAddress || req.socket?.remoteAddress
+          const isLocalhost =
+            clientIp === '127.0.0.1' ||
+            clientIp === '::1' ||
+            clientIp === '::ffff:127.0.0.1' ||
+            clientIp?.endsWith('127.0.0.1')
+
+          if (!isLocalhost) {
+            app.debug(
+              `Internal endpoint access denied from ${clientIp} - only localhost allowed`
+            )
+            return res
+              .status(403)
+              .json({ error: 'Forbidden - internal use only (localhost access required)' })
+          }
+
+          const pathsMetadata = await unitsManager.getPathsMetadata()
+          res.json(pathsMetadata)
+        } catch (error) {
+          app.error(`Error getting internal paths metadata: ${error}`)
           const response = formatErrorResponse(error)
           res.status(response.status).json(response.body)
         }

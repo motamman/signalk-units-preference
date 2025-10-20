@@ -568,6 +568,57 @@ export class MetadataManager {
     const pathsSet = new Set<string>()
 
     try {
+      // First try using the direct app API (no authentication needed)
+      console.log('[signalk-units-preference] Attempting to collect paths via direct app API...')
+
+      // Use app.getPath to get the full vessels tree, or try getSelfPath
+      const fullData = this.app.getPath('vessels.self')
+      const vesselData = fullData || this.app.getSelfPath('')
+
+      console.log('[signalk-units-preference] getPath result:', vesselData ? 'has data' : 'null/undefined')
+      console.log('[signalk-units-preference] Vessel data keys:', vesselData && typeof vesselData === 'object' ? Object.keys(vesselData).slice(0, 10).join(', ') : 'none')
+
+      if (vesselData && typeof vesselData === 'object') {
+        console.log('[signalk-units-preference] Using direct app API to collect SignalK paths')
+        this.app.debug('Using direct app API to collect SignalK paths')
+        const data = { vessels: { self: vesselData } }
+
+        const extractPathsRecursive = (obj: any, prefix = ''): void => {
+          if (!obj || typeof obj !== 'object') return
+
+          for (const key in obj) {
+            if (
+              key === 'meta' ||
+              key === 'timestamp' ||
+              key === 'source' ||
+              key === '$source' ||
+              key === 'values' ||
+              key === 'pgn' ||
+              key === 'sentence'
+            )
+              continue
+
+            const currentPath = prefix ? `${prefix}.${key}` : key
+
+            if (obj[key] && typeof obj[key] === 'object') {
+              if ('value' in obj[key]) {
+                pathsSet.add(currentPath)
+              }
+              extractPathsRecursive(obj[key], currentPath)
+            }
+          }
+        }
+
+        extractPathsRecursive(data, '')
+        console.log(`[signalk-units-preference] ✅ Collected ${pathsSet.size} paths from direct app API`)
+        this.app.debug(`Collected ${pathsSet.size} paths from direct app API`)
+        return pathsSet
+      }
+
+      // Fallback to HTTP API if direct API doesn't work
+      console.log('[signalk-units-preference] Direct app API unavailable, falling back to HTTP API')
+      this.app.debug('Direct app API unavailable, falling back to HTTP API')
+
       let hostname = 'localhost'
       let port = 3000
       let protocol = 'http'
