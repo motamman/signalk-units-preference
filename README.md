@@ -488,6 +488,159 @@ Optional parameters (GET query params or POST body):
 curl "http://localhost:3000/plugins/signalk-units-preference/units/conversions?baseUnit=RFC%203339%20(UTC)&targetUnit=time-am/pm-local&value=2025-10-04T00:17:48.000Z"
 ```
 
+### Zones API
+
+The Zones API provides gauge zone/notification range information with automatic unit conversion. Zones define visual ranges for gauges (e.g., normal, warn, alarm states) and are stored in SignalK path metadata.
+
+**Key Features:**
+- Fetches zones from SignalK metadata
+- Automatically converts zone bounds to user's preferred units
+- TTL-based caching for performance (configurable, default 5 minutes)
+- Public endpoints at `/signalk/v1/zones` (works with Bearer tokens, like history API)
+- Supports standard states (normal, nominal, alert, warn, alarm, emergency) and custom states
+
+#### Discovery - Get All Paths with Zones
+```http
+GET /signalk/v1/zones
+```
+
+Returns a list of all SignalK paths that have zones defined.
+
+**Example:**
+```bash
+curl http://localhost:3000/signalk/v1/zones
+```
+
+**Response:**
+```json
+{
+  "paths": [
+    "electrical.batteries.0.power",
+    "environment.outside.rapidWind.windSpeed",
+    "notifications.electrical.batteries.0.power",
+    "notifications.environment.outside.rapidWind.windSpeed"
+  ],
+  "count": 4,
+  "timestamp": "2025-10-20T23:06:17.511Z"
+}
+```
+
+#### Get Zones for Single Path
+```http
+GET /signalk/v1/zones/:path
+```
+
+Returns zone definitions for a specific path with bounds converted to the user's preferred units.
+
+**Example:**
+```bash
+curl http://localhost:3000/signalk/v1/zones/environment.outside.rapidWind.windSpeed
+```
+
+**Response:**
+```json
+{
+  "path": "environment.outside.rapidWind.windSpeed",
+  "baseUnit": "m/s",
+  "targetUnit": "kn",
+  "displayFormat": "0",
+  "zones": [
+    {
+      "state": "warn",
+      "lower": 0,
+      "upper": 19.4384,
+      "message": "Light to moderate winds"
+    },
+    {
+      "state": "emergency",
+      "lower": 19.4384,
+      "upper": 97.192,
+      "message": "Strong to gale force winds"
+    }
+  ],
+  "timestamp": "2025-10-20T23:05:33.846Z"
+}
+```
+
+**Zone Properties:**
+- `state` - Zone state (normal, nominal, alert, warn, alarm, emergency, or custom)
+- `lower` - Lower bound in target units (null if unbounded below)
+- `upper` - Upper bound in target units (null if unbounded above)
+- `message` - Optional description for this zone
+- `custom` - Optional flag indicating custom (user-defined) zone
+
+**Note:** Zone bounds are automatically converted from the base unit (m/s) to the user's preferred target unit (kn). In the example above, the original zone of 10-50 m/s is converted to 19.4384-97.192 kn.
+
+#### Bulk Query - Get Zones for Multiple Paths
+```http
+POST /signalk/v1/zones/bulk
+```
+
+Query zones for multiple paths in a single request for improved performance.
+
+**Request Body:**
+```json
+{
+  "paths": [
+    "environment.outside.rapidWind.windSpeed",
+    "electrical.batteries.0.power"
+  ]
+}
+```
+
+**Example:**
+```bash
+curl -X POST http://localhost:3000/signalk/v1/zones/bulk \
+  -H "Content-Type: application/json" \
+  -d '{"paths": ["environment.outside.rapidWind.windSpeed", "electrical.batteries.0.power"]}'
+```
+
+**Response:**
+```json
+{
+  "zones": {
+    "environment.outside.rapidWind.windSpeed": {
+      "path": "environment.outside.rapidWind.windSpeed",
+      "baseUnit": "m/s",
+      "targetUnit": "kn",
+      "displayFormat": "0",
+      "zones": [
+        {
+          "state": "warn",
+          "lower": 0,
+          "upper": 19.4384,
+          "message": "Light to moderate winds"
+        }
+      ]
+    },
+    "electrical.batteries.0.power": {
+      "path": "electrical.batteries.0.power",
+      "baseUnit": "W",
+      "targetUnit": "kW",
+      "displayFormat": "0.00",
+      "zones": [
+        {
+          "state": "normal",
+          "lower": 0,
+          "upper": 0.025
+        }
+      ]
+    }
+  },
+  "timestamp": "2025-10-20T23:10:00.000Z"
+}
+```
+
+**Configuration:**
+
+The zones cache TTL can be configured in plugin settings:
+- **Setting**: `zonesCacheTTLMinutes`
+- **Default**: 5 minutes
+- **Minimum**: 1 minute
+- **Purpose**: Reduces metadata lookups for frequently accessed paths
+
+Cache is automatically invalidated when unit preferences change.
+
 ### Schema & Metadata
 
 #### Get Unit Schema

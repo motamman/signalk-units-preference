@@ -5,6 +5,74 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0-beta.2] - 2025-10-20
+
+### Added ⭐ Zones API
+- **Zones API Implementation**: New REST endpoints for fetching gauge zone/notification ranges with unit conversion
+  - **Discovery Endpoint**: `GET /signalk/v1/zones` - Returns all paths that have zones defined
+  - **Single Path Endpoint**: `GET /signalk/v1/zones/:path` - Returns zones for a specific path with converted bounds
+  - **Bulk Query Endpoint**: `POST /signalk/v1/zones/bulk` - Query zones for multiple paths in a single request
+  - **Location**: Registered at `/signalk/v1/zones` (public routes, like history API)
+  - **Implementation**: `src/ZonesManager.ts` - New module managing zone conversions and caching
+
+- **Zone Bounds Conversion**: Automatic conversion of zone bounds to user-preferred units
+  - **Feature**: Takes zone definitions from SignalK metadata and converts lower/upper bounds to target units
+  - **Example**: Power zones defined as 25-50W automatically converted to 0.025-0.05kW when user preference is kW
+  - **Metadata Source**: Fetches zones from SignalK's internal metadata using `app.getMetadata()`
+  - **Supported States**: Handles standard states (normal, nominal, alert, warn, alarm, emergency) plus custom states
+  - **Location**: `src/ZonesManager.ts:160-209`
+
+- **Zones Caching**: TTL-based caching for improved performance
+  - **Cache Strategy**: Caches converted zones per path with configurable TTL
+  - **Configuration**: `zonesCacheTTLMinutes` plugin setting (default: 5 minutes)
+  - **Invalidation**: Cache automatically cleared when preferences change
+  - **Location**: `src/ZonesManager.ts:212-249`
+  - **Impact**: Reduces metadata lookups and conversion overhead for frequently accessed paths
+
+- **MetadataManager Enhancement**: Added zone fetching capability
+  - **Method**: `getPathZones(path)` - Retrieves zone definitions from SignalK metadata
+  - **Fallback Logic**: Tries cached metadata first, then fetches from `app.getMetadata()` if needed
+  - **Location**: `src/MetadataManager.ts` (new `getPathZones()` method)
+  - **Integration**: ZonesManager depends on MetadataManager for zone data access
+
+### Changed
+- **Route Registration Pattern**: Zones API follows signalk-parquet history API pattern
+  - **Architecture**: Routes registered directly on app object cast to Router (not via plugin router)
+  - **Authentication**: Public routes at `/signalk/v1/` level bypass plugin authentication
+  - **Bearer Token Support**: Works with Bearer tokens like history API (no auth required)
+  - **Location**: `src/index.ts:76-131`
+  - **Rationale**: Matches SignalK convention for public API endpoints, ensures compatibility with external clients
+
+### Technical
+- **New Modules**:
+  - `src/ZonesManager.ts` - Zone conversion and caching logic
+  - `src/types.ts` - Added zone-related TypeScript interfaces:
+    - `SignalKZone` - Raw zone from SignalK metadata
+    - `ZoneDefinition` - Converted zone with target units
+    - `PathZones` - Single path zones response
+    - `BulkZonesResponse` - Bulk query response
+    - `BulkZonesRequest` - Bulk query request
+    - `ZonesDiscoveryResponse` - Discovery endpoint response
+
+- **Zones API Features**:
+  - Handles unbounded zones (null lower/upper bounds)
+  - Preserves zone messages and custom states
+  - Returns timestamp with each response
+  - Graceful error handling with fallback to empty zones
+  - Debug logging for troubleshooting
+
+- **Plugin Configuration**:
+  - Added `zonesCacheTTLMinutes` schema property (default: 5, minimum: 1)
+  - Cache TTL configurable via plugin settings UI
+  - UnitsManager getter added: `getMetadataManager()` for ZonesManager access
+
+### Documentation
+- **API Endpoints**:
+  - `/signalk/v1/zones` - Discover all paths with zones
+  - `/signalk/v1/zones/:path` - Get zones for specific path
+  - `/signalk/v1/zones/bulk` - Query multiple paths (POST with `{ paths: [...] }`)
+  - All endpoints return zones with bounds converted to user's preferred units
+
 ## [0.7.2-beta.1] - 2025-10-18
 
 ### Fixed
