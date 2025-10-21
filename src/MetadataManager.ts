@@ -533,6 +533,12 @@ export class MetadataManager {
                 $source: obj[key].$source || obj[key].source,
                 timestamp: obj[key].timestamp
               }
+              // Debug: Log if zones are found
+              if (obj[key].meta.zones && Array.isArray(obj[key].meta.zones)) {
+                console.log(
+                  `[MetadataManager] Found ${obj[key].meta.zones.length} zones for ${currentPath}`
+                )
+              }
             }
             extractMeta(obj[key], currentPath)
           }
@@ -543,6 +549,20 @@ export class MetadataManager {
       const selfId = data.self?.replace('vessels.', '')
       if (data.vessels && selfId && data.vessels[selfId]) {
         extractMeta(data.vessels[selfId])
+      }
+
+      // Debug: Check if any zones were found
+      const pathsWithZones = Object.entries(metadataMap).filter(
+        ([, meta]) => (meta as any).zones && Array.isArray((meta as any).zones)
+      )
+      console.log(
+        `[MetadataManager] Auto-initialization complete: ${Object.keys(metadataMap).length} paths, ${pathsWithZones.length} with zones`
+      )
+      if (pathsWithZones.length > 0) {
+        console.log(
+          `[MetadataManager] Paths with zones:`,
+          pathsWithZones.map(([path]) => path)
+        )
       }
 
       // Cache the metadata
@@ -575,8 +595,16 @@ export class MetadataManager {
       const fullData = this.app.getPath('vessels.self')
       const vesselData = fullData || this.app.getSelfPath('')
 
-      console.log('[signalk-units-preference] getPath result:', vesselData ? 'has data' : 'null/undefined')
-      console.log('[signalk-units-preference] Vessel data keys:', vesselData && typeof vesselData === 'object' ? Object.keys(vesselData).slice(0, 10).join(', ') : 'none')
+      console.log(
+        '[signalk-units-preference] getPath result:',
+        vesselData ? 'has data' : 'null/undefined'
+      )
+      console.log(
+        '[signalk-units-preference] Vessel data keys:',
+        vesselData && typeof vesselData === 'object'
+          ? Object.keys(vesselData).slice(0, 10).join(', ')
+          : 'none'
+      )
 
       if (vesselData && typeof vesselData === 'object') {
         console.log('[signalk-units-preference] Using direct app API to collect SignalK paths')
@@ -610,7 +638,9 @@ export class MetadataManager {
         }
 
         extractPathsRecursive(data, '')
-        console.log(`[signalk-units-preference] ✅ Collected ${pathsSet.size} paths from direct app API`)
+        console.log(
+          `[signalk-units-preference] ✅ Collected ${pathsSet.size} paths from direct app API`
+        )
         this.app.debug(`Collected ${pathsSet.size} paths from direct app API`)
         return pathsSet
       }
@@ -758,5 +788,48 @@ export class MetadataManager {
    */
   getMetadataForPath(pathStr: string): UnitMetadata | null {
     return this.metadata[pathStr] || null
+  }
+
+  /**
+   * Get zones for a specific path from SignalK metadata
+   * Returns an empty array if no zones are defined
+   */
+  getPathZones(pathStr: string): Array<{
+    state: string
+    lower?: number | null
+    upper?: number | null
+    message?: string
+  }> {
+    // First try cached SignalK metadata
+    let signalKMeta = this.signalKMetadata[pathStr]
+
+    // If not in cache, try to fetch from SignalK server's internal metadata
+    if (!signalKMeta || !signalKMeta.zones) {
+      try {
+        const serverMeta = this.app.getMetadata(`vessels.self.${pathStr}`) as any
+        if (serverMeta && serverMeta.zones && Array.isArray(serverMeta.zones)) {
+          console.log(
+            `[MetadataManager] Found ${serverMeta.zones.length} zones via app.getMetadata for ${pathStr}`
+          )
+          signalKMeta = serverMeta
+          // Cache it for future use
+          this.signalKMetadata[pathStr] = serverMeta
+        }
+      } catch (error) {
+        this.app.debug(`Could not fetch metadata for ${pathStr}: ${error}`)
+      }
+    }
+
+    if (signalKMeta && signalKMeta.zones && Array.isArray(signalKMeta.zones)) {
+      return signalKMeta.zones.map((zone: any) => ({
+        state: zone.state || 'unknown',
+        lower: zone.lower !== undefined ? zone.lower : null,
+        upper: zone.upper !== undefined ? zone.upper : null,
+        message: zone.message
+      }))
+    }
+
+    // No zones found
+    return []
   }
 }

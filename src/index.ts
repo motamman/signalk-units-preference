@@ -1,6 +1,7 @@
 import { Plugin, ServerAPI } from '@signalk/server-api'
 import { IRouter, Request, Response } from 'express'
 import { UnitsManager } from './UnitsManager'
+import { ZonesManager } from './ZonesManager'
 import { ConversionDeltaValue, DeltaResponse, DeltaValueEntry } from './types'
 import { ValidationError, NotFoundError, formatErrorResponse } from './errors'
 import { registerDeltaStreamHandler } from './DeltaStreamHandler'
@@ -30,11 +31,20 @@ module.exports = (app: ServerAPI): Plugin => {
         description:
           'Include metadata (units, displayFormat, description) in every delta message. Disable for optimization if metadata rarely changes.',
         default: false
+      },
+      zonesCacheTTLMinutes: {
+        type: 'number',
+        title: 'Zones Cache TTL (minutes)',
+        description:
+          'How long to cache converted zones before reloading from SignalK metadata. Increase for better performance, decrease for faster zone updates.',
+        default: 5,
+        minimum: 1
       }
     }
   }
 
   let unitsManager: UnitsManager
+  let zonesManager: ZonesManager
   let openApiSpec: object = PLUGIN_SCHEMA
   let unsubscribeDeltaHandler: (() => void) | undefined
   let conversionStreamServer: ConversionStreamServer | undefined
@@ -46,10 +56,81 @@ module.exports = (app: ServerAPI): Plugin => {
 
     schema: () => PLUGIN_SCHEMA,
 
-    start: async (config: { enableDeltaInjection?: boolean; sendMeta?: boolean } = {}) => {
+    start: async (
+      config: {
+        enableDeltaInjection?: boolean
+        sendMeta?: boolean
+        zonesCacheTTLMinutes?: number
+      } = {}
+    ) => {
       try {
         const dataDir = app.getDataDirPath()
         unitsManager = new UnitsManager(app, dataDir)
+        await unitsManager.initialize()
+
+        // Initialize ZonesManager with configurable cache TTL (after unitsManager is initialized)
+        const zonesCacheTTL = config.zonesCacheTTLMinutes || 5
+        const metadataManager = unitsManager.getMetadataManager()
+        zonesManager = new ZonesManager(app, unitsManager, metadataManager, zonesCacheTTL)
+
+        // Register zones routes at /signalk/v1/ level (like history API in signalk-parquet)
+        // Cast app to Router to register public routes that bypass plugin authentication
+        const router = app as unknown as IRouter
+
+        router.get('/signalk/v1/zones', async (req: Request, res: Response) => {
+          try {
+            app.debug('Zones discovery handler called at /signalk/v1/zones')
+            const discovery = await zonesManager.getAllZonesPaths()
+            app.debug(`Zones discovery returning ${discovery.count} paths`)
+            res.json(discovery)
+          } catch (error) {
+            app.error(`Zones discovery error: ${error}`)
+            const response = formatErrorResponse(error)
+            res.status(response.status).json(response.body)
+          }
+        })
+
+        router.get('/signalk/v1/zones/:path(*)', async (req: Request, res: Response) => {
+          try {
+            const pathStr = req.params.path
+            app.debug(`Zones single path handler called for: ${pathStr}`)
+            const pathZones = await zonesManager.getPathZones(pathStr)
+            app.debug(`Zones for ${pathStr}: ${pathZones.zones.length} zones found`)
+            res.json(pathZones)
+          } catch (error) {
+            app.error(`Zones single path error for ${req.params.path}: ${error}`)
+            const response = formatErrorResponse(error)
+            res.status(response.status).json(response.body)
+          }
+        })
+
+        router.post('/signalk/v1/zones/bulk', async (req: Request, res: Response) => {
+          try {
+            app.debug('Zones bulk handler called')
+            const { paths } = req.body || {}
+
+            if (!Array.isArray(paths)) {
+              throw new ValidationError(
+                'paths array is required',
+                'Missing required field: paths',
+                'Please provide an array of SignalK paths in the request body'
+              )
+            }
+
+            const bulkZones = await zonesManager.getBulkZones(paths)
+            app.debug(`Bulk zones returning ${Object.keys(bulkZones.zones).length} paths`)
+            res.json(bulkZones)
+          } catch (error) {
+            app.error(`Zones bulk error: ${error}`)
+            const response = formatErrorResponse(error)
+            res.status(response.status).json(response.body)
+          }
+        })
+
+        console.log('✅ Zones API registered at /signalk/v1/zones (public, like history API)')
+        app.debug(
+          'Zones API endpoints registered: /signalk/v1/zones (discovery, single path, bulk)'
+        )
 
         // Expose conversion functions on MULTIPLE places to ensure other plugins can find them
         // Different plugins may receive different app object references, so we expose on all available objects
@@ -60,11 +141,15 @@ module.exports = (app: ServerAPI): Plugin => {
         const getAllUnitsConversionsFunc = async () => {
           try {
             if (!isInitialized) {
-              console.log('[signalk-units-preference] Warning: getAllUnitsConversions called before initialization complete')
+              console.log(
+                '[signalk-units-preference] Warning: getAllUnitsConversions called before initialization complete'
+              )
               return {}
             }
             const result = await unitsManager.getPathsMetadata()
-            console.log(`[signalk-units-preference] getAllUnitsConversions returning ${Object.keys(result).length} paths`)
+            console.log(
+              `[signalk-units-preference] getAllUnitsConversions returning ${Object.keys(result).length} paths`
+            )
             return result
           } catch (error) {
             app.error(`[Units Preference] Error in getAllUnitsConversions: ${error}`)
@@ -76,7 +161,9 @@ module.exports = (app: ServerAPI): Plugin => {
         const getUnitsConversionFunc = (path: string) => {
           try {
             if (!isInitialized) {
-              console.log('[signalk-units-preference] Warning: getUnitsConversion called before initialization complete')
+              console.log(
+                '[signalk-units-preference] Warning: getUnitsConversion called before initialization complete'
+              )
               return null
             }
             return unitsManager.getConversion(path)
@@ -107,16 +194,19 @@ module.exports = (app: ServerAPI): Plugin => {
 
         // Log to both console and debug to ensure visibility
         console.log('✅ [signalk-units-preference] Conversion functions exposed on app object')
-        console.log('   - app.getAllUnitsConversions type:', typeof (app as any).getAllUnitsConversions)
+        console.log(
+          '   - app.getAllUnitsConversions type:',
+          typeof (app as any).getAllUnitsConversions
+        )
         console.log('   - app.getUnitsConversion type:', typeof (app as any).getUnitsConversion)
         app.debug('Conversion functions exposed on app object for other plugins')
-
-        await unitsManager.initialize()
 
         // Mark as initialized so functions can return data
         isInitialized = true
         const pathsMetadata = await unitsManager.getPathsMetadata()
-        console.log('✅ [signalk-units-preference] UnitsManager initialized, functions ready to use')
+        console.log(
+          '✅ [signalk-units-preference] UnitsManager initialized, functions ready to use'
+        )
         console.log(`   - Available paths: ${Object.keys(pathsMetadata).length}`)
 
         const openApiPath = path.join(__dirname, 'openapi.json')
@@ -625,13 +715,65 @@ module.exports = (app: ServerAPI): Plugin => {
         }
       })
 
+      // Zones API - Plugin router endpoints (for UI/browser access)
+      // Note: Main /signalk/v1/zones endpoints are registered in start() for Bearer token auth
+      const zonesHandlers = {
+        discovery: async (req: Request, res: Response) => {
+          try {
+            const discovery = await zonesManager.getAllZonesPaths()
+            res.json(discovery)
+          } catch (error) {
+            app.error(`Error discovering zones: ${error}`)
+            const response = formatErrorResponse(error)
+            res.status(response.status).json(response.body)
+          }
+        },
+        singlePath: async (req: Request, res: Response) => {
+          try {
+            const pathStr = req.params.path
+            const pathZones = await zonesManager.getPathZones(pathStr)
+            res.json(pathZones)
+          } catch (error) {
+            app.error(`Error getting zones for path: ${error}`)
+            const response = formatErrorResponse(error)
+            res.status(response.status).json(response.body)
+          }
+        },
+        bulk: async (req: Request, res: Response) => {
+          try {
+            const { paths } = req.body || {}
+
+            if (!Array.isArray(paths)) {
+              throw new ValidationError(
+                'paths array is required',
+                'Missing required field: paths',
+                'Please provide an array of SignalK paths in the request body'
+              )
+            }
+
+            const bulkZones = await zonesManager.getBulkZones(paths)
+            res.json(bulkZones)
+          } catch (error) {
+            app.error(`Error getting bulk zones: ${error}`)
+            const response = formatErrorResponse(error)
+            res.status(response.status).json(response.body)
+          }
+        }
+      }
+
+      // Register under /plugins/signalk-units-preference/zones (for UI/browser access)
+      router.get('/zones', zonesHandlers.discovery)
+      router.get('/zones/:path(*)', zonesHandlers.singlePath)
+      router.post('/zones/bulk', zonesHandlers.bulk)
+
       // GET /plugins/signalk-units-preference/internal/paths
       // Internal-only endpoint for plugin-to-plugin communication (no auth required for localhost)
       // Returns the same data as /paths endpoint
       router.get('/internal/paths', async (req: Request, res: Response) => {
         try {
           // Only allow localhost access for security
-          const clientIp = req.ip || (req.connection as any)?.remoteAddress || req.socket?.remoteAddress
+          const clientIp =
+            req.ip || (req.connection as any)?.remoteAddress || req.socket?.remoteAddress
           const isLocalhost =
             clientIp === '127.0.0.1' ||
             clientIp === '::1' ||
@@ -639,9 +781,7 @@ module.exports = (app: ServerAPI): Plugin => {
             clientIp?.endsWith('127.0.0.1')
 
           if (!isLocalhost) {
-            app.debug(
-              `Internal endpoint access denied from ${clientIp} - only localhost allowed`
-            )
+            app.debug(`Internal endpoint access denied from ${clientIp} - only localhost allowed`)
             return res
               .status(403)
               .json({ error: 'Forbidden - internal use only (localhost access required)' })

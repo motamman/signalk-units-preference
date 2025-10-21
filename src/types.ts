@@ -268,4 +268,86 @@ export interface PluginConfig {
   enableDeltaInjection?: boolean
   /** Include metadata in every delta message (default: true). Set to false for optimization if metadata rarely changes. */
   sendMeta?: boolean
+  /** Zones cache TTL in minutes (default: 5) */
+  zonesCacheTTLMinutes?: number
+}
+
+/**
+ * SignalK zone definition (from metadata)
+ */
+export interface SignalKZone {
+  /** Zone state (e.g., 'normal', 'nominal', 'alert', 'warn', 'alarm', 'emergency', or custom states) */
+  state: string
+  /** Lower bound in base units (null = unbounded below) */
+  lower?: number | null
+  /** Upper bound in base units (null = unbounded above) */
+  upper?: number | null
+  /** Optional message/description for this zone */
+  message?: string
+}
+
+/**
+ * Converted zone definition (API response)
+ */
+export interface ZoneDefinition {
+  /** Zone state (e.g., 'normal', 'nominal', 'alert', 'warn', 'alarm', 'emergency', or custom states) */
+  state: string
+  /** Lower bound in target units (null = unbounded below) */
+  lower: number | null
+  /** Upper bound in target units (null = unbounded above) */
+  upper: number | null
+  /** Optional message/description for this zone */
+  message?: string
+  /** Flag indicating if this is a custom (user-defined) zone */
+  custom?: boolean
+}
+
+/**
+ * Zones API response for a single path
+ */
+export interface PathZones {
+  /** SignalK path */
+  path: string
+  /** Base unit (SI or custom) */
+  baseUnit: string | null
+  /** Target unit for display (from user preferences) */
+  targetUnit: string
+  /** Display format */
+  displayFormat: string
+  /** Converted zone definitions */
+  zones: ZoneDefinition[]
+  /** Timestamp when zones were loaded/converted */
+  timestamp: string
+  /** Optional: Message if no zones are defined */
+  message?: string
+}
+
+/**
+ * Bulk zones query request
+ */
+export interface BulkZonesRequest {
+  /** Array of SignalK paths to query */
+  paths: string[]
+}
+
+/**
+ * Bulk zones API response
+ */
+export interface BulkZonesResponse {
+  /** Map of path to zones */
+  zones: Record<string, Omit<PathZones, 'timestamp'>>
+  /** Timestamp when zones were loaded */
+  timestamp: string
+}
+
+/**
+ * Zones discovery API response
+ */
+export interface ZonesDiscoveryResponse {
+  /** Array of paths that have zones defined */
+  paths: string[]
+  /** Total count of paths with zones */
+  count: number
+  /** Timestamp of discovery */
+  timestamp: string
 }
