@@ -102,7 +102,7 @@ export class ZonesManager {
       try {
         const pathZones = await this.getPathZones(path)
         // Omit timestamp from individual entries (add global timestamp instead)
-        const { timestamp, ...zoneData } = pathZones
+        const { timestamp: _timestamp, ...zoneData } = pathZones
         zonesMap[path] = zoneData
       } catch (error) {
         this.app.error(`Error getting zones for ${path} in bulk query: ${error}`)

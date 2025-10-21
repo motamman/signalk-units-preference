@@ -553,7 +553,7 @@ export class MetadataManager {
 
       // Debug: Check if any zones were found
       const pathsWithZones = Object.entries(metadataMap).filter(
-        ([_, meta]) => (meta as any).zones && Array.isArray((meta as any).zones)
+        ([, meta]) => (meta as any).zones && Array.isArray((meta as any).zones)
       )
       console.log(
         `[MetadataManager] Auto-initialization complete: ${Object.keys(metadataMap).length} paths, ${pathsWithZones.length} with zones`
@@ -595,8 +595,16 @@ export class MetadataManager {
       const fullData = this.app.getPath('vessels.self')
       const vesselData = fullData || this.app.getSelfPath('')
 
-      console.log('[signalk-units-preference] getPath result:', vesselData ? 'has data' : 'null/undefined')
-      console.log('[signalk-units-preference] Vessel data keys:', vesselData && typeof vesselData === 'object' ? Object.keys(vesselData).slice(0, 10).join(', ') : 'none')
+      console.log(
+        '[signalk-units-preference] getPath result:',
+        vesselData ? 'has data' : 'null/undefined'
+      )
+      console.log(
+        '[signalk-units-preference] Vessel data keys:',
+        vesselData && typeof vesselData === 'object'
+          ? Object.keys(vesselData).slice(0, 10).join(', ')
+          : 'none'
+      )
 
       if (vesselData && typeof vesselData === 'object') {
         console.log('[signalk-units-preference] Using direct app API to collect SignalK paths')
@@ -630,7 +638,9 @@ export class MetadataManager {
         }
 
         extractPathsRecursive(data, '')
-        console.log(`[signalk-units-preference] ✅ Collected ${pathsSet.size} paths from direct app API`)
+        console.log(
+          `[signalk-units-preference] ✅ Collected ${pathsSet.size} paths from direct app API`
+        )
         this.app.debug(`Collected ${pathsSet.size} paths from direct app API`)
         return pathsSet
       }
@@ -798,7 +808,9 @@ export class MetadataManager {
       try {
         const serverMeta = this.app.getMetadata(`vessels.self.${pathStr}`) as any
         if (serverMeta && serverMeta.zones && Array.isArray(serverMeta.zones)) {
-          console.log(`[MetadataManager] Found ${serverMeta.zones.length} zones via app.getMetadata for ${pathStr}`)
+          console.log(
+            `[MetadataManager] Found ${serverMeta.zones.length} zones via app.getMetadata for ${pathStr}`
+          )
           signalKMeta = serverMeta
           // Cache it for future use
           this.signalKMetadata[pathStr] = serverMeta

@@ -128,7 +128,9 @@ module.exports = (app: ServerAPI): Plugin => {
         })
 
         console.log('✅ Zones API registered at /signalk/v1/zones (public, like history API)')
-        app.debug('Zones API endpoints registered: /signalk/v1/zones (discovery, single path, bulk)')
+        app.debug(
+          'Zones API endpoints registered: /signalk/v1/zones (discovery, single path, bulk)'
+        )
 
         // Expose conversion functions on MULTIPLE places to ensure other plugins can find them
         // Different plugins may receive different app object references, so we expose on all available objects
@@ -139,11 +141,15 @@ module.exports = (app: ServerAPI): Plugin => {
         const getAllUnitsConversionsFunc = async () => {
           try {
             if (!isInitialized) {
-              console.log('[signalk-units-preference] Warning: getAllUnitsConversions called before initialization complete')
+              console.log(
+                '[signalk-units-preference] Warning: getAllUnitsConversions called before initialization complete'
+              )
               return {}
             }
             const result = await unitsManager.getPathsMetadata()
-            console.log(`[signalk-units-preference] getAllUnitsConversions returning ${Object.keys(result).length} paths`)
+            console.log(
+              `[signalk-units-preference] getAllUnitsConversions returning ${Object.keys(result).length} paths`
+            )
             return result
           } catch (error) {
             app.error(`[Units Preference] Error in getAllUnitsConversions: ${error}`)
@@ -155,7 +161,9 @@ module.exports = (app: ServerAPI): Plugin => {
         const getUnitsConversionFunc = (path: string) => {
           try {
             if (!isInitialized) {
-              console.log('[signalk-units-preference] Warning: getUnitsConversion called before initialization complete')
+              console.log(
+                '[signalk-units-preference] Warning: getUnitsConversion called before initialization complete'
+              )
               return null
             }
             return unitsManager.getConversion(path)
@@ -186,14 +194,19 @@ module.exports = (app: ServerAPI): Plugin => {
 
         // Log to both console and debug to ensure visibility
         console.log('✅ [signalk-units-preference] Conversion functions exposed on app object')
-        console.log('   - app.getAllUnitsConversions type:', typeof (app as any).getAllUnitsConversions)
+        console.log(
+          '   - app.getAllUnitsConversions type:',
+          typeof (app as any).getAllUnitsConversions
+        )
         console.log('   - app.getUnitsConversion type:', typeof (app as any).getUnitsConversion)
         app.debug('Conversion functions exposed on app object for other plugins')
 
         // Mark as initialized so functions can return data
         isInitialized = true
         const pathsMetadata = await unitsManager.getPathsMetadata()
-        console.log('✅ [signalk-units-preference] UnitsManager initialized, functions ready to use')
+        console.log(
+          '✅ [signalk-units-preference] UnitsManager initialized, functions ready to use'
+        )
         console.log(`   - Available paths: ${Object.keys(pathsMetadata).length}`)
 
         const openApiPath = path.join(__dirname, 'openapi.json')
@@ -759,7 +772,8 @@ module.exports = (app: ServerAPI): Plugin => {
       router.get('/internal/paths', async (req: Request, res: Response) => {
         try {
           // Only allow localhost access for security
-          const clientIp = req.ip || (req.connection as any)?.remoteAddress || req.socket?.remoteAddress
+          const clientIp =
+            req.ip || (req.connection as any)?.remoteAddress || req.socket?.remoteAddress
           const isLocalhost =
             clientIp === '127.0.0.1' ||
             clientIp === '::1' ||
@@ -767,9 +781,7 @@ module.exports = (app: ServerAPI): Plugin => {
             clientIp?.endsWith('127.0.0.1')
 
           if (!isLocalhost) {
-            app.debug(
-              `Internal endpoint access denied from ${clientIp} - only localhost allowed`
-            )
+            app.debug(`Internal endpoint access denied from ${clientIp} - only localhost allowed`)
             return res
               .status(403)
               .json({ error: 'Forbidden - internal use only (localhost access required)' })
