@@ -1450,4 +1450,11 @@ export class UnitsManager {
   async deleteConversionFromUnit(baseUnit: string, targetUnit: string): Promise<void> {
     return this.preferencesStore.deleteConversionFromUnit(baseUnit, targetUnit)
   }
+
+  /**
+   * Get the metadata manager instance (for zones API)
+   */
+  getMetadataManager(): MetadataManager {
+    return this.metadataManager
+  }
 }
