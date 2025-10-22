@@ -8,12 +8,26 @@
 
 import { ServerAPI } from '@signalk/server-api'
 import { UnitsManager } from './UnitsManager'
+import { PatternMatcher } from './PatternMatcher'
 import WebSocket from 'ws'
+
+/**
+ * Subscription configuration with SignalK-compliant parameters
+ */
+interface SubscriptionConfig {
+  path: string
+  period?: number // Update period in milliseconds (default: 1000)
+  format?: 'delta' | 'full' // Response format (default: delta)
+  policy?: 'instant' | 'ideal' | 'fixed' // Update policy (default: ideal)
+  minPeriod?: number // Minimum period in milliseconds (rate limiting)
+  lastSent?: number // Timestamp of last sent update (for throttling)
+}
 
 interface StreamClient {
   ws: WebSocket
   context: string
-  subscriptions: Set<string>
+  contextPattern?: string // For wildcard context matching (e.g., "vessels.*")
+  subscriptions: Map<string, SubscriptionConfig> // Path pattern -> config
 }
 
 interface SubscriptionMessage {
@@ -21,8 +35,9 @@ interface SubscriptionMessage {
   subscribe?: Array<{
     path: string
     period?: number
-    format?: string
-    policy?: string
+    format?: 'delta' | 'full'
+    policy?: 'instant' | 'ideal' | 'fixed'
+    minPeriod?: number
   }>
   unsubscribe?: Array<{
     path: string
@@ -41,11 +56,14 @@ export class ConversionStreamServer {
   private httpServer: any = null
   private upgradeHandler: ((request: any, socket: any, head: any) => void) | null = null
   private conversionCache: Map<string, any> = new Map() // Cache for conversion metadata (path → ConversionResponse)
+  private patternMatcher: PatternMatcher
+  private needsAllContexts: boolean = false // Track if we need to receive all vessel contexts
 
   constructor(app: ServerAPI, unitsManager: UnitsManager, sendMeta: boolean = false) {
     this.app = app
     this.unitsManager = unitsManager
     this.sendMeta = sendMeta
+    this.patternMatcher = new PatternMatcher(app)
   }
 
   /**
@@ -63,12 +81,12 @@ export class ConversionStreamServer {
 
     // Handle WebSocket upgrade requests
     this.upgradeHandler = (request: any, socket: any, head: any) => {
-      const pathname = new URL(request.url, `http://${request.headers.host}`).pathname
+      const url = new URL(request.url, `http://${request.headers.host}`)
+      const pathname = url.pathname
 
       if (pathname === '/plugins/signalk-units-preference/stream') {
-        // Log the upgrade attempt
-        this.app.debug(`WebSocket upgrade request received for ${pathname}`)
-        this.app.debug(`  Headers: ${JSON.stringify(request.headers)}`)
+        // Parse query parameters for initial subscription
+        const subscribe = url.searchParams.get('subscribe')
 
         // Check if wss is still available (server might be stopping)
         if (!this.wss) {
@@ -81,8 +99,9 @@ export class ConversionStreamServer {
         // The Authorization header is checked by SignalK's security middleware
         // during the HTTP upgrade process
         this.wss.handleUpgrade(request, socket, head, ws => {
-          this.app.debug('WebSocket upgrade successful, emitting connection event')
           if (this.wss) {
+            // Pass the subscribe parameter through the request object
+            ;(request as any).initialSubscribe = subscribe
             this.wss.emit('connection', ws, request)
           }
         })
@@ -91,16 +110,15 @@ export class ConversionStreamServer {
 
     httpServer.on('upgrade', this.upgradeHandler)
 
-    this.wss.on('connection', (ws: WebSocket) => {
-      this.handleClientConnection(ws)
+    this.wss.on('connection', (ws: WebSocket, request: any) => {
+      this.handleClientConnection(ws, request)
     })
 
     // Register cache clear callback with UnitsManager
     // This ensures cache is invalidated when preferences change
     this.unitsManager.setPreferencesChangeCallback(() => {
-      const oldSize = this.conversionCache.size
       this.conversionCache.clear()
-      this.app.debug(`Conversion cache cleared (was ${oldSize} entries)`)
+      this.app.debug('Conversion cache cleared due to preferences change')
     })
 
     // Connect to SignalK WebSocket internally
@@ -155,20 +173,18 @@ export class ConversionStreamServer {
       const protocol = 'ws:' // Internal connection
       const host = 'localhost'
       const port = (this.app as any).config?.settings?.port || 3000
-      const wsUrl = `${protocol}//${host}:${port}/signalk/v1/stream?subscribe=none`
 
+      // If any client needs wildcard contexts (vessels.*), connect with ?subscribe=all
+      // to receive deltas for all vessels. Otherwise, use ?subscribe=none and send
+      // specific subscription messages
+      const subscribeParam = this.needsAllContexts ? 'all' : 'none'
+      const wsUrl = `${protocol}//${host}:${port}/signalk/v1/stream?subscribe=${subscribeParam}`
+
+      this.app.debug(`Connecting to internal SignalK stream (subscribe=${subscribeParam})`)
       this.signalkWs = new WebSocket(wsUrl)
 
       this.signalkWs.on('open', () => {
-        this.app.debug('Connected to SignalK WebSocket')
-
-        // Log if there were pending subscription updates
-        if (this.pendingSubscriptionUpdate) {
-          this.app.debug(
-            `Processing ${this.clients.size} client(s) with pending subscription updates`
-          )
-        }
-
+        this.app.debug('Internal SignalK connection established')
         // Always process subscriptions when connection opens
         // This handles subscriptions that arrived before the connection was ready
         this.updateSignalKSubscriptions()
@@ -177,6 +193,17 @@ export class ConversionStreamServer {
       this.signalkWs.on('message', (data: WebSocket.Data) => {
         try {
           const delta = JSON.parse(data.toString())
+
+          // Debug: Log first delta received to verify connection is working
+          if (!this.signalkWs || (this.signalkWs as any)._receivedFirstDelta !== true) {
+            this.app.debug(
+              `Internal SignalK: Receiving deltas (context: ${delta.context || 'unknown'})`
+            )
+            if (this.signalkWs) {
+              ;(this.signalkWs as any)._receivedFirstDelta = true
+            }
+          }
+
           this.handleSignalKDelta(delta)
         } catch (error) {
           this.app.error(`Error parsing SignalK delta: ${error}`)
@@ -188,14 +215,9 @@ export class ConversionStreamServer {
       })
 
       this.signalkWs.on('close', () => {
-        this.app.debug('SignalK WebSocket closed, reconnecting in 5s...')
+        this.app.debug('Internal SignalK connection closed, reconnecting in 5s...')
         this.signalkWs = null
-
-        // Mark that subscriptions need to be resent when reconnected
-        if (this.clients.size > 0) {
-          this.pendingSubscriptionUpdate = true
-          this.app.debug(`${this.clients.size} client(s) will be resubscribed after reconnection`)
-        }
+        this.pendingSubscriptionUpdate = true
 
         // Reconnect after 5 seconds
         this.reconnectTimer = setTimeout(() => {
@@ -211,15 +233,26 @@ export class ConversionStreamServer {
   /**
    * Handle new client connection
    */
-  private handleClientConnection(ws: WebSocket): void {
+  private handleClientConnection(ws: WebSocket, request?: any): void {
+    const clientId = `client-${Math.random().toString(36).substr(2, 9)}`
     const client: StreamClient = {
       ws,
       context: 'vessels.self',
-      subscriptions: new Set()
+      subscriptions: new Map()
     }
+    ;(client as any).id = clientId
 
     this.clients.add(client)
-    this.app.debug('New conversion stream client connected')
+
+    // Apply initial subscription from query parameter if provided
+    // SignalK spec: ?subscribe=all, ?subscribe=self, ?subscribe=none
+    const initialSubscribe = request?.initialSubscribe
+    if (initialSubscribe) {
+      this.app.debug(`[${clientId}] Connected with ?subscribe=${initialSubscribe}`)
+      this.applyInitialSubscription(client, initialSubscribe)
+    } else {
+      this.app.debug(`[${clientId}] Connected (no initial subscription)`)
+    }
 
     ws.on('message', (data: WebSocket.Data) => {
       try {
@@ -245,32 +278,62 @@ export class ConversionStreamServer {
    * Handle client subscription message
    */
   private handleClientMessage(client: StreamClient, message: SubscriptionMessage): void {
+    let changed = false
+
     if (message.context) {
-      this.app.debug(`Client changed context to: ${message.context}`)
       client.context = message.context
+
+      // Store context pattern for wildcard matching (e.g., "vessels.*")
+      if (message.context.includes('*')) {
+        client.contextPattern = message.context
+        this.app.debug(`Client context changed to wildcard: ${message.context}`)
+        changed = true
+      } else {
+        client.contextPattern = undefined
+      }
     }
 
     // IMPORTANT: Process unsubscribe BEFORE subscribe
     // This allows clients to clear all subscriptions and then add new ones atomically
     if (message.unsubscribe) {
-      this.app.debug(`Client unsubscribing from ${message.unsubscribe.length} paths`)
       for (const unsub of message.unsubscribe) {
-        client.subscriptions.delete(unsub.path)
+        // Support wildcard unsubscribe (e.g., "*" to clear all)
+        if (unsub.path === '*' || unsub.path === '**') {
+          client.subscriptions.clear()
+          this.app.debug('Client cleared all subscriptions')
+          changed = true
+        } else {
+          client.subscriptions.delete(unsub.path)
+        }
       }
     }
 
     if (message.subscribe) {
-      this.app.debug(`Client subscribing to ${message.subscribe.length} paths`)
       for (const sub of message.subscribe) {
-        client.subscriptions.add(sub.path)
+        const config: SubscriptionConfig = {
+          path: sub.path,
+          period: sub.period ?? 1000, // Default 1 second
+          format: sub.format ?? 'delta', // Default delta format
+          policy: sub.policy ?? 'ideal', // Default ideal policy
+          minPeriod: sub.minPeriod
+        }
+        client.subscriptions.set(sub.path, config)
+
+        // Log important subscriptions (wildcards)
+        if (sub.path.includes('*')) {
+          this.app.debug(`[${(client as any).id}] Subscribed to pattern: ${sub.path}`)
+          changed = true
+        }
       }
     }
 
-    // Update SignalK subscriptions and log final state
+    // Update SignalK subscriptions
     if (message.subscribe || message.unsubscribe) {
-      this.app.debug(
-        `Client now has ${client.subscriptions.size} subscriptions for context ${client.context}`
-      )
+      if (changed) {
+        this.app.debug(
+          `[${(client as any).id}] Subscriptions updated (${client.subscriptions.size} patterns, context: ${client.context})`
+        )
+      }
       this.updateSignalKSubscriptions()
     }
   }
@@ -279,57 +342,82 @@ export class ConversionStreamServer {
    * Update SignalK subscriptions based on all clients
    */
   private updateSignalKSubscriptions(): void {
+    // Collect all unique subscriptions across all clients
+    const allPaths = new Set<string>()
+    const allContexts = new Set<string>()
+    let hasWildcardContext = false
+
+    for (const client of this.clients) {
+      // Check if any client wants wildcard contexts
+      if (client.contextPattern || client.context.includes('*')) {
+        hasWildcardContext = true
+      } else {
+        allContexts.add(client.context)
+      }
+
+      for (const [path, _config] of client.subscriptions) {
+        allPaths.add(path)
+      }
+    }
+
+    // Check if we need to reconnect with different subscribe parameter
+    if (hasWildcardContext !== this.needsAllContexts) {
+      this.needsAllContexts = hasWildcardContext
+      this.app.debug(
+        `Reconnecting to SignalK (wildcard contexts ${hasWildcardContext ? 'enabled' : 'disabled'})`
+      )
+
+      // Reconnect with new subscribe parameter
+      if (this.signalkWs) {
+        this.signalkWs.close()
+      }
+      this.connectToSignalK()
+      return // Will retry when connection opens
+    }
+
     // Check if internal SignalK connection is ready
     if (!this.signalkWs || this.signalkWs.readyState !== WebSocket.OPEN) {
       this.pendingSubscriptionUpdate = true
-      this.app.debug(
-        'SignalK WebSocket not ready - subscriptions will be processed when connection opens'
-      )
       return
     }
 
     // Clear pending flag - we're processing now
     this.pendingSubscriptionUpdate = false
 
-    // Collect all unique subscriptions across all clients
-    const allPaths = new Set<string>()
-    const allContexts = new Set<string>()
-
-    for (const client of this.clients) {
-      allContexts.add(client.context)
-      for (const path of client.subscriptions) {
-        allPaths.add(path)
-      }
-    }
-
     if (allPaths.size === 0) {
-      this.app.debug('No client subscriptions to process')
       return // No subscriptions yet
     }
 
-    this.app.debug(
-      `Processing subscriptions from ${this.clients.size} client(s): ${allPaths.size} unique paths across ${allContexts.size} context(s)`
-    )
+    const subscriptions = Array.from(allPaths).map(path => ({
+      path,
+      period: 1000,
+      format: 'delta',
+      policy: 'instant'
+    }))
 
-    // Subscribe to each context separately
-    for (const context of allContexts) {
-      const subscriptions = Array.from(allPaths).map(path => ({
-        path,
-        period: 1000,
-        format: 'delta',
-        policy: 'instant'
-      }))
-
+    if (hasWildcardContext) {
+      // When connected with ?subscribe=all, we receive all contexts automatically
+      // Just send path subscriptions without context to get all vessels
       this.signalkWs.send(
         JSON.stringify({
-          context,
+          context: 'vessels.self', // Required field, but server sends all contexts anyway
           subscribe: subscriptions
         })
       )
 
-      this.app.debug(
-        `✓ Subscribed to ${subscriptions.length} paths for context ${context} on internal SignalK stream`
-      )
+      this.app.debug(`Subscribed to ${subscriptions.length} paths (all contexts)`)
+    } else {
+      // Subscribe to each specific context separately
+      for (const context of allContexts) {
+        this.signalkWs.send(
+          JSON.stringify({
+            context,
+            subscribe: subscriptions
+          })
+        )
+      }
+
+      this.app.debug(`Subscribed to ${subscriptions.length} paths (${allContexts.size} contexts)`)
     }
   }
 
@@ -342,23 +430,34 @@ export class ConversionStreamServer {
     }
 
     const context = delta.context || 'vessels.self'
+    const selfId = (this.app as any).selfId
+    const isSelf = context === 'vessels.self' || (selfId && context === `vessels.${selfId}`)
+
+    // DEBUG: Only log for non-self vessels (AIS targets)
+    if (!isSelf) {
+      const receivedPaths = delta.updates
+        .flatMap((u: any) => u.values?.map((v: any) => v.path) || [])
+        .slice(0, 3)
+      if (receivedPaths.length > 0) {
+        this.app.debug(
+          `AIS Delta from ${context}: ${receivedPaths.join(', ')}${delta.updates[0].values?.length > 3 ? '...' : ''}`
+        )
+      }
+    }
 
     // CRITICAL: Check if ANY client is interested in this context BEFORE processing
     // This prevents wasting CPU on AIS targets when clients only want vessels.self
-    const hasInterestedClient = Array.from(this.clients).some(client => client.context === context)
-    if (!hasInterestedClient) {
-      // Don't even log - this would spam for every AIS target
+    // Now supports wildcard contexts like "vessels.*"
+    const hasInterestedClient = Array.from(this.clients).some(client =>
+      this.matchesContext(context, client)
+    )
+    if (!hasInterestedClient && !isSelf) {
+      this.app.debug(`No interested clients for AIS context: ${context}`)
       return
     }
-
-    // Log incoming delta info
-    const totalValues = delta.updates.reduce(
-      (sum: number, u: any) => sum + (u.values?.length || 0),
-      0
-    )
-    this.app.debug(
-      `Received delta from context: ${context}, updates: ${delta.updates.length}, total values: ${totalValues}`
-    )
+    if (!hasInterestedClient) {
+      return
+    }
 
     for (const update of delta.updates) {
       if (!update.values || update.values.length === 0) {
@@ -449,9 +548,6 @@ export class ConversionStreamServer {
           updates: [deltaUpdate]
         }
 
-        this.app.debug(
-          `Broadcasting ${convertedValues.length} converted values for context ${context}`
-        )
         this.broadcastToClients(convertedDelta, context)
       }
     }
@@ -482,9 +578,6 @@ export class ConversionStreamServer {
       // Metadata rarely changes (only when preferences update)
       if (!cachedMetadata) {
         this.conversionCache.set(path, result.metadata)
-        this.app.debug(
-          `Cached conversion metadata for: ${path} (cache size: ${this.conversionCache.size})`
-        )
       }
 
       return {
@@ -500,46 +593,238 @@ export class ConversionStreamServer {
   }
 
   /**
+   * Apply initial subscription based on query parameter
+   * SignalK spec: ?subscribe=all, ?subscribe=self, ?subscribe=none
+   */
+  private applyInitialSubscription(client: StreamClient, subscribe: string): void {
+    switch (subscribe.toLowerCase()) {
+      case 'all':
+        // Subscribe to all paths in all contexts
+        client.context = 'vessels.*'
+        client.contextPattern = 'vessels.*'
+        client.subscriptions.set('**', {
+          path: '**',
+          period: 1000,
+          format: 'delta',
+          policy: 'ideal'
+        })
+        this.updateSignalKSubscriptions()
+        break
+
+      case 'self':
+        // Subscribe to all paths for self vessel (default behavior)
+        client.context = 'vessels.self'
+        client.subscriptions.set('**', {
+          path: '**',
+          period: 1000,
+          format: 'delta',
+          policy: 'ideal'
+        })
+        this.updateSignalKSubscriptions()
+        break
+
+      case 'none':
+        // No initial subscription - client will send subscribe messages later
+        break
+
+      default:
+        this.app.debug(`Unknown subscribe parameter: ${subscribe}, defaulting to none`)
+        break
+    }
+  }
+
+  /**
    * Broadcast delta to interested clients
    */
   private broadcastToClients(delta: any, context: string): void {
-    const message = JSON.stringify(delta)
     const paths = delta.updates[0]?.values.map((v: any) => v.path) || []
+    const selfId = (this.app as any).selfId
+    const isSelf = context === 'vessels.self' || (selfId && context === `vessels.${selfId}`)
 
-    this.app.debug(`Broadcasting to clients for context ${context}, paths: ${paths.join(', ')}`)
-    this.app.debug(`Total clients: ${this.clients.size}`)
+    if (!isSelf) {
+      this.app.debug(`Broadcasting AIS data from ${context} to ${this.clients.size} clients`)
+    }
 
-    let matchedClients = 0
     for (const client of this.clients) {
-      this.app.debug(
-        `  Client context: ${client.context}, subscriptions: ${client.subscriptions.size}`
-      )
+      const clientId = (client as any).id || 'unknown'
 
-      // Only send to clients subscribed to this context
-      if (client.context !== context) {
-        this.app.debug(`    Context mismatch: ${client.context} !== ${context}`)
+      // Check if client is interested in this context (with wildcard support)
+      const contextMatches = this.matchesContext(context, client)
+      if (!contextMatches) {
         continue
       }
 
-      // Check if client is interested in any of these paths
-      // Clients subscribe to paths and receive converted values at the SAME paths
-      const hasInterestedPath = paths.some((path: string) => {
-        const isSubscribed = client.subscriptions.has(path)
-        if (isSubscribed) {
-          this.app.debug(`    Client subscribed to ${path}`)
-        }
-        return isSubscribed
-      })
+      // Check if client is interested in any of these paths (with wildcard support)
+      const matchingPaths = this.getMatchingPaths(paths, client, isSelf)
+      if (matchingPaths.length === 0) {
+        continue
+      }
 
-      if (hasInterestedPath && client.ws.readyState === WebSocket.OPEN) {
-        client.ws.send(message)
-        matchedClients++
-        this.app.debug(`    Sent to client!`)
-      } else {
-        this.app.debug(`    No matching path or connection closed`)
+      // Filter delta to only include paths this client wants
+      const filteredDelta = this.filterDeltaForClient(delta, matchingPaths, client)
+
+      if (filteredDelta && client.ws.readyState === WebSocket.OPEN) {
+        client.ws.send(JSON.stringify(filteredDelta))
+        if (!isSelf) {
+          this.app.debug(`[${clientId}] Sent ${matchingPaths.length} AIS paths`)
+        }
+      }
+    }
+  }
+
+  /**
+   * Check if a context matches the client's context subscription (with wildcard support)
+   */
+  private matchesContext(context: string, client: StreamClient): boolean {
+    const clientId = (client as any).id || 'unknown'
+    const selfId = (this.app as any).selfId
+    const isSelf = context === 'vessels.self' || (selfId && context === `vessels.${selfId}`)
+
+    // If client has a wildcard context pattern, use pattern matching
+    if (client.contextPattern) {
+      const matches = this.patternMatcher.matchesPattern(context, client.contextPattern)
+      // Only log for AIS targets
+      if (!isSelf) {
+        this.app.debug(
+          `[${clientId}] AIS context match: ${context} vs ${client.contextPattern} = ${matches}`
+        )
+      }
+      return matches
+    }
+
+    // Otherwise, exact match
+    return client.context === context
+  }
+
+  /**
+   * Get paths that match client's subscriptions (with wildcard support)
+   */
+  private getMatchingPaths(
+    paths: string[],
+    client: StreamClient,
+    isSelf: boolean = false
+  ): string[] {
+    const matchingPaths: string[] = []
+    const clientId = (client as any).id || 'unknown'
+
+    // DEBUG: Only log for AIS targets
+    if (!isSelf) {
+      const patterns = Array.from(client.subscriptions.keys())
+      this.app.debug(
+        `[${clientId}] Patterns: ${patterns.slice(0, 3).join(', ')}${patterns.length > 3 ? `... (${patterns.length} total)` : ''}`
+      )
+      this.app.debug(
+        `[${clientId}] Incoming AIS paths: ${paths.slice(0, 3).join(', ')}${paths.length > 3 ? '...' : ''}`
+      )
+    }
+
+    for (const path of paths) {
+      // Check each subscription pattern
+      for (const [pattern, _config] of client.subscriptions) {
+        const matches = this.patternMatcher.matchesPattern(path, pattern)
+        if (matches) {
+          matchingPaths.push(path)
+          if (!isSelf) {
+            this.app.debug(`[${clientId}] ✓ ${path} matches ${pattern}`)
+          }
+          break // Don't add the same path multiple times
+        }
       }
     }
 
-    this.app.debug(`Sent to ${matchedClients} clients`)
+    if (!isSelf) {
+      this.app.debug(`[${clientId}] Matched ${matchingPaths.length}/${paths.length} AIS paths`)
+    }
+    return matchingPaths
+  }
+
+  /**
+   * Filter delta to only include paths the client is interested in
+   * and apply subscription parameters (period, policy, format, minPeriod)
+   */
+  private filterDeltaForClient(delta: any, matchingPaths: string[], client: StreamClient): any {
+    if (!delta.updates || delta.updates.length === 0) {
+      return null
+    }
+
+    const now = Date.now()
+    const filteredUpdates = []
+
+    for (const update of delta.updates) {
+      if (!update.values || update.values.length === 0) {
+        continue
+      }
+
+      const filteredValues = []
+      const filteredMeta = []
+
+      for (const pathValue of update.values) {
+        const { path, value } = pathValue
+
+        // Only include paths that matched
+        if (!matchingPaths.includes(path)) {
+          continue
+        }
+
+        // Find the subscription config for this path
+        let matchedConfig: SubscriptionConfig | undefined
+        for (const [pattern, config] of client.subscriptions) {
+          if (this.patternMatcher.matchesPattern(path, pattern)) {
+            matchedConfig = config
+            break
+          }
+        }
+
+        if (!matchedConfig) {
+          continue
+        }
+
+        // Apply throttling based on minPeriod and policy
+        if (matchedConfig.minPeriod && matchedConfig.lastSent) {
+          const timeSinceLastSent = now - matchedConfig.lastSent
+          if (timeSinceLastSent < matchedConfig.minPeriod) {
+            // Skip this update due to rate limiting
+            continue
+          }
+        }
+
+        // Update last sent timestamp
+        matchedConfig.lastSent = now
+
+        // Add to filtered values
+        filteredValues.push({ path, value })
+
+        // Add metadata if present
+        if (update.meta) {
+          const metaEntry = update.meta.find((m: any) => m.path === path)
+          if (metaEntry) {
+            filteredMeta.push(metaEntry)
+          }
+        }
+      }
+
+      if (filteredValues.length > 0) {
+        const filteredUpdate: any = {
+          $source: update.$source || 'units-preference',
+          timestamp: update.timestamp || new Date().toISOString(),
+          values: filteredValues
+        }
+
+        if (filteredMeta.length > 0) {
+          filteredUpdate.meta = filteredMeta
+        }
+
+        filteredUpdates.push(filteredUpdate)
+      }
+    }
+
+    if (filteredUpdates.length === 0) {
+      return null
+    }
+
+    return {
+      context: delta.context,
+      updates: filteredUpdates
+    }
   }
 }

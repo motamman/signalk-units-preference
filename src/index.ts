@@ -132,6 +132,221 @@ module.exports = (app: ServerAPI): Plugin => {
           'Zones API endpoints registered: /signalk/v1/zones (discovery, single path, bulk)'
         )
 
+        // Register vessels endpoint at /signalk/v1/ level (public, no auth required)
+        router.get('/signalk/v1/vessels', async (req: Request, res: Response) => {
+          try {
+            app.debug('Vessels endpoint called at /signalk/v1/vessels')
+            const vessels: Record<string, any> = {}
+
+            // Get all vessels from SignalK
+            const vesselsData = (app as any).signalk?.retrieve()?.vessels
+            if (!vesselsData) {
+              return res.json({ vessels: {}, count: 0, timestamp: new Date().toISOString() })
+            }
+
+            // For each vessel (excluding self)
+            for (const [vesselId, vesselData] of Object.entries(vesselsData)) {
+              if (vesselId === 'self') continue
+              if (!vesselData || typeof vesselData !== 'object') continue
+
+              const vessel: any = {}
+
+              // Get name
+              const nameValue = (vesselData as any).name
+              if (nameValue) {
+                vessel.name = nameValue
+              }
+
+              // Get MMSI
+              const mmsiValue = (vesselData as any).mmsi
+              if (mmsiValue) {
+                vessel.mmsi = mmsiValue
+              }
+
+              // Get navigation data with conversions
+              const navData = (vesselData as any).navigation
+              if (navData && typeof navData === 'object') {
+                vessel.navigation = {}
+
+                // Position (no conversion needed - it's lat/lon)
+                if (navData.position?.value) {
+                  vessel.navigation.position = navData.position.value
+                }
+
+                // Speed over ground (convert)
+                if (navData.speedOverGround?.value != null) {
+                  const path = `vessels.${vesselId}.navigation.speedOverGround`
+                  const conversion = unitsManager.convertPathValue(
+                    path,
+                    navData.speedOverGround.value
+                  )
+                  vessel.navigation.speedOverGround = {
+                    converted: conversion.converted,
+                    formatted: conversion.formatted,
+                    original: navData.speedOverGround.value
+                  }
+                }
+
+                // Course over ground (convert)
+                if (navData.courseOverGroundTrue?.value != null) {
+                  const path = `vessels.${vesselId}.navigation.courseOverGroundTrue`
+                  const conversion = unitsManager.convertPathValue(
+                    path,
+                    navData.courseOverGroundTrue.value
+                  )
+                  vessel.navigation.courseOverGroundTrue = {
+                    converted: conversion.converted,
+                    formatted: conversion.formatted,
+                    original: navData.courseOverGroundTrue.value
+                  }
+                }
+
+                // Heading (convert)
+                if (navData.headingTrue?.value != null) {
+                  const path = `vessels.${vesselId}.navigation.headingTrue`
+                  const conversion = unitsManager.convertPathValue(path, navData.headingTrue.value)
+                  vessel.navigation.headingTrue = {
+                    converted: conversion.converted,
+                    formatted: conversion.formatted,
+                    original: navData.headingTrue.value
+                  }
+                }
+              }
+
+              // Only include vessel if it has position data
+              if (vessel.navigation?.position) {
+                vessels[vesselId] = vessel
+              }
+            }
+
+            app.debug(`Vessels endpoint returning ${Object.keys(vessels).length} vessels`)
+            res.json({
+              vessels,
+              timestamp: new Date().toISOString(),
+              count: Object.keys(vessels).length
+            })
+          } catch (error) {
+            app.error(`Vessels endpoint error: ${error}`)
+            const response = formatErrorResponse(error)
+            res.status(response.status).json(response.body)
+          }
+        })
+
+        console.log('✅ Vessels API registered at /signalk/v1/vessels (public, no auth required)')
+        app.debug(
+          'Vessels API endpoint: GET /signalk/v1/vessels (returns all AIS vessels with unit conversions)'
+        )
+
+        // Also register at plugin path for consistency with other plugin endpoints
+        router.get(
+          '/plugins/signalk-units-preference/vessels',
+          async (req: Request, res: Response) => {
+            try {
+              app.debug('Vessels endpoint called at /plugins/signalk-units-preference/vessels')
+              const vessels: Record<string, any> = {}
+
+              // Get all vessels from SignalK
+              const vesselsData = (app as any).signalk?.retrieve()?.vessels
+              if (!vesselsData) {
+                return res.json({ vessels: {}, count: 0, timestamp: new Date().toISOString() })
+              }
+
+              // For each vessel (excluding self)
+              for (const [vesselId, vesselData] of Object.entries(vesselsData)) {
+                if (vesselId === 'self') continue
+                if (!vesselData || typeof vesselData !== 'object') continue
+
+                const vessel: any = {}
+
+                // Get name
+                const nameValue = (vesselData as any).name
+                if (nameValue) {
+                  vessel.name = nameValue
+                }
+
+                // Get MMSI
+                const mmsiValue = (vesselData as any).mmsi
+                if (mmsiValue) {
+                  vessel.mmsi = mmsiValue
+                }
+
+                // Get navigation data with conversions
+                const navData = (vesselData as any).navigation
+                if (navData && typeof navData === 'object') {
+                  vessel.navigation = {}
+
+                  // Position (no conversion needed - it's lat/lon)
+                  if (navData.position?.value) {
+                    vessel.navigation.position = navData.position.value
+                  }
+
+                  // Speed over ground (convert)
+                  if (navData.speedOverGround?.value != null) {
+                    const path = `vessels.${vesselId}.navigation.speedOverGround`
+                    const conversion = unitsManager.convertPathValue(
+                      path,
+                      navData.speedOverGround.value
+                    )
+                    vessel.navigation.speedOverGround = {
+                      converted: conversion.converted,
+                      formatted: conversion.formatted,
+                      original: navData.speedOverGround.value
+                    }
+                  }
+
+                  // Course over ground (convert)
+                  if (navData.courseOverGroundTrue?.value != null) {
+                    const path = `vessels.${vesselId}.navigation.courseOverGroundTrue`
+                    const conversion = unitsManager.convertPathValue(
+                      path,
+                      navData.courseOverGroundTrue.value
+                    )
+                    vessel.navigation.courseOverGroundTrue = {
+                      converted: conversion.converted,
+                      formatted: conversion.formatted,
+                      original: navData.courseOverGroundTrue.value
+                    }
+                  }
+
+                  // Heading (convert)
+                  if (navData.headingTrue?.value != null) {
+                    const path = `vessels.${vesselId}.navigation.headingTrue`
+                    const conversion = unitsManager.convertPathValue(
+                      path,
+                      navData.headingTrue.value
+                    )
+                    vessel.navigation.headingTrue = {
+                      converted: conversion.converted,
+                      formatted: conversion.formatted,
+                      original: navData.headingTrue.value
+                    }
+                  }
+                }
+
+                // Only include vessel if it has position data
+                if (vessel.navigation?.position) {
+                  vessels[vesselId] = vessel
+                }
+              }
+
+              app.debug(`Vessels endpoint returning ${Object.keys(vessels).length} vessels`)
+              res.json({
+                vessels,
+                timestamp: new Date().toISOString(),
+                count: Object.keys(vessels).length
+              })
+            } catch (error) {
+              app.error(`Vessels endpoint error: ${error}`)
+              const response = formatErrorResponse(error)
+              res.status(response.status).json(response.body)
+            }
+          }
+        )
+
+        console.log(
+          '✅ Vessels API also registered at /plugins/signalk-units-preference/vessels (public)'
+        )
+
         // Expose conversion functions on MULTIPLE places to ensure other plugins can find them
         // Different plugins may receive different app object references, so we expose on all available objects
 
@@ -765,6 +980,9 @@ module.exports = (app: ServerAPI): Plugin => {
       router.get('/zones', zonesHandlers.discovery)
       router.get('/zones/:path(*)', zonesHandlers.singlePath)
       router.post('/zones/bulk', zonesHandlers.bulk)
+
+      // NOTE: /vessels endpoint is registered as PUBLIC at the start() function level
+      // See line ~242 where it's registered on the router directly to bypass auth
 
       // GET /plugins/signalk-units-preference/internal/paths
       // Internal-only endpoint for plugin-to-plugin communication (no auth required for localhost)

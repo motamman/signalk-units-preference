@@ -276,12 +276,9 @@ export class UnitsManager {
    */
   private getPreferenceForPath(pathStr: string, category: string): CategoryPreference | null {
     const preferences = this.preferencesStore.getPreferences()
-    this.app.debug(`getPreferenceForPath: path=${pathStr}, category=${category}`)
-    this.app.debug(`Available overrides: ${Object.keys(preferences.pathOverrides).join(', ')}`)
 
     // 1. Check path-specific override first (highest priority)
     if (preferences.pathOverrides[pathStr]) {
-      this.app.debug(`Found path override for ${pathStr}`)
       return preferences.pathOverrides[pathStr]
     }
 
@@ -378,8 +375,6 @@ export class UnitsManager {
    * Get conversion information for a path
    */
   getConversion(pathStr: string): ConversionResponse {
-    this.app.debug(`getConversion called for: ${pathStr}`)
-
     const preferences = this.preferencesStore.getPreferences()
     const unitDefinitions = this.preferencesStore.getUnitDefinitions()
 
@@ -405,15 +400,12 @@ export class UnitsManager {
     )
 
     if (!metadata) {
-      this.app.debug(`No metadata resolved for ${pathStr}, returning pass-through conversion.`)
       return this.getPassThroughConversion(pathStr)
     }
 
     const { preference, targetUnit, conversion } = this.resolveSelectedConversion(pathStr, metadata)
-    this.app.debug(`Preference found: ${preference ? JSON.stringify(preference) : 'no'}`)
 
     if (!preference || !targetUnit || !conversion) {
-      this.app.debug(`No conversion preference resolved for path: ${pathStr}`)
       return this.getPassThroughConversion(pathStr, metadata.baseUnit || undefined)
     }
 
