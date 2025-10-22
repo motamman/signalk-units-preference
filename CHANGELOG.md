@@ -5,6 +5,139 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.2-beta.2] - 2025-10-22
+
+### Added ⭐ WebSocket Wildcard Subscriptions
+- **Wildcard Path Subscriptions**: Support for `*` and `**` patterns in WebSocket subscriptions
+  - **Single Wildcard**: `navigation.*` matches all direct children (e.g., speedOverGround, position, courseOverGroundTrue)
+  - **Double Wildcard**: `**` or `navigation.**` matches all paths at any depth
+  - **Pattern Matching**: Uses existing `PatternMatcher` class for consistent wildcard behavior
+  - **Location**: `src/ConversionStreamServer.ts:141-166`
+  - **Impact**: Subscribe to entire categories with a single pattern instead of listing each path
+
+- **Wildcard Context Subscriptions**: Support for wildcard vessel contexts
+  - **Feature**: Subscribe to `vessels.*` to receive data from all vessels (self + all AIS targets)
+  - **Context Pattern**: Stored per client, matched against incoming deltas
+  - **Auto-Subscription**: Plugin automatically subscribes to SignalK with `?subscribe=all` when wildcard contexts detected
+  - **Location**: `src/ConversionStreamServer.ts:259-272, 334-368`
+  - **Use Case**: Monitor all AIS targets without knowing their IDs in advance
+
+- **Query Parameter Subscriptions**: Automatic subscriptions via URL query parameters
+  - **Feature**: `?subscribe=self`, `?subscribe=all`, `?subscribe=none`
+  - **Behavior**: Clients automatically subscribed on connection without sending subscription message
+  - **Default Subscriptions**: `?subscribe=self` subscribes to all paths for vessels.self
+  - **Location**: `src/ConversionStreamServer.ts:124-138, 421-458`
+  - **Impact**: Simplified client code for common subscription patterns
+
+- **Subscription Parameters**: Full SignalK subscription protocol support
+  - **period**: Update period in milliseconds (default: 1000)
+  - **policy**: Update policy - `instant`, `ideal`, or `fixed` (default: `instant`)
+  - **format**: Response format - `delta` or `full` (default: `delta`)
+  - **minPeriod**: Rate limiting - minimum milliseconds between updates
+  - **Location**: `src/ConversionStreamServer.ts:36-43, 483-506`
+  - **Rate Limiting**: Server-side throttling based on minPeriod prevents flooding
+
+- **Public Vessels Endpoint**: HTTP endpoint for AIS vessel data dump with unit conversions
+  - **Endpoints**:
+    - `GET /signalk/v1/vessels` - Public route (no auth required)
+    - `GET /plugins/signalk-units-preference/vessels` - Public route (no auth required)
+  - **Purpose**: Startup data dump of all AIS vessels with converted SOG, COG, heading
+  - **Location**: `src/index.ts:136-351`
+  - **Use Case**: Flutter/mobile apps can fetch all vessel data on startup with user's preferred units
+
+**Response Format:**
+```json
+{
+  "vessels": {
+    "urn:mrn:imo:mmsi:123456789": {
+      "name": "Vessel Name",
+      "mmsi": "123456789",
+      "navigation": {
+        "position": { "latitude": 37.8, "longitude": -122.4 },
+        "speedOverGround": {
+          "converted": 10.5,
+          "formatted": "10.5 kn",
+          "original": 5.4
+        },
+        "courseOverGroundTrue": {
+          "converted": 346.0,
+          "formatted": "346.0 °",
+          "original": 6.04
+        },
+        "headingTrue": {
+          "converted": 350.0,
+          "formatted": "350.0 °",
+          "original": 6.11
+        }
+      }
+    }
+  },
+  "count": 16,
+  "timestamp": "2025-10-22T..."
+}
+```
+
+### Changed
+- **Debug Logging Reduction**: Removed excessive debug logs from conversion hot paths
+  - **Affected Methods**: `getConversion()`, `getPreferenceForPath()`, `getConversionsForBaseUnit()`
+  - **Location**: `src/UnitsManager.ts:279-280, 284, 378, 405, 410, 413`, `src/MetadataManager.ts:215-219`
+  - **Impact**: Significantly reduced log noise during high-frequency delta processing
+  - **AIS Filtering**: Client tracking logs now only show AIS vessels (non-self) for easier debugging
+
+- **Context Matching**: Fixed wildcard context matching in delta handling
+  - **Root Cause**: Line 410 was using exact string match instead of pattern matching
+  - **Solution**: Changed to use `matchesContext()` method with pattern support
+  - **Location**: `src/ConversionStreamServer.ts:410`
+  - **Impact**: Wildcard context subscriptions (e.g., `vessels.*`) now work correctly
+
+### Fixed
+- **Wildcard Context Subscriptions**: Fixed wildcard context patterns not matching incoming deltas
+  - **Root Cause**: Delta handler used exact context comparison instead of calling pattern matcher
+  - **Solution**: Updated `handleSignalKDelta()` to use `matchesContext()` with wildcard support
+  - **Location**: `src/ConversionStreamServer.ts:410`
+  - **Impact**: Subscriptions like `vessels.*` now receive data from all vessel contexts
+
+- **Internal SignalK Subscription**: Fixed plugin not receiving all context data for wildcard subscriptions
+  - **Root Cause**: Plugin subscribed to specific contexts, missing wildcard vessel data
+  - **Solution**: Detect wildcard contexts and reconnect to SignalK with `?subscribe=all`
+  - **Location**: `src/ConversionStreamServer.ts:259-272`
+  - **Impact**: Plugin now receives all vessel deltas when clients use wildcard contexts
+
+### Technical
+- **Subscription Storage**: Changed from `Set<string>` to `Map<string, SubscriptionConfig>`
+  - Stores full subscription configuration including period, policy, format, minPeriod
+  - Enables per-path rate limiting and subscription parameter support
+
+- **Client Context Patterns**: Added `contextPattern` field to StreamClient
+  - Stores wildcard context patterns for matching against incoming deltas
+  - Supports both exact matches (vessels.self) and wildcards (vessels.*)
+
+- **Pattern Matching Integration**: Reused existing PatternMatcher class
+  - Consistent wildcard behavior between path patterns and WebSocket subscriptions
+  - Supports single `*` (one segment) and double `**` (multiple segments) wildcards
+
+- **Rate Limiting**: Server-side throttling in `filterDeltaForClient()`
+  - Tracks last send time per path per client
+  - Prevents flooding when minPeriod is specified
+  - Location: `src/ConversionStreamServer.ts:483-506`
+
+### Documentation
+- **WebSocket Testing**: Added `test-websocket.js` comprehensive test suite
+  - Test 1: Wildcard path subscriptions (navigation.*)
+  - Test 2: Subscribe to all paths (**)
+  - Test 3: Wildcard context subscriptions (vessels.*)
+  - Test 4: Query parameter subscription (?subscribe=self)
+  - Test 5: Rate limiting (minPeriod)
+  - Usage: `node test-websocket.js [test-name]`
+  - Location: `/test-websocket.js`
+
+- **WebSocket Documentation**: Created WEBSOCKET_USAGE.md (if exists) or README section documenting:
+  - Wildcard path subscription examples
+  - Wildcard context subscription examples
+  - Query parameter usage
+  - Subscription parameter reference
+  - Rate limiting examples
+
 ## [0.7.0-beta.2] - 2025-10-20
 
 ### Added ⭐ Zones API

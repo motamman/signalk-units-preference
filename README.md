@@ -118,6 +118,11 @@ Real-time conversion stream with dedicated WebSocket endpoint - **recommended ap
 - **Clean Architecture**: No pollution of SignalK data tree
 - **Server-Side Conversion**: All conversions handled server-side using unified conversion engine
 - **Multi-Vessel Support**: Subscribe to any vessel context (self, AIS targets, buddy boats)
+- **Wildcard Subscriptions** ⭐ NEW (v0.7.2+):
+  - **Path Wildcards**: `navigation.*` or `**` to subscribe to multiple paths
+  - **Context Wildcards**: `vessels.*` to monitor all AIS targets
+  - **Query Parameters**: `?subscribe=self/all/none` for automatic subscriptions
+  - **Rate Limiting**: `minPeriod` parameter prevents flooding
 - **All Value Types**: Handles numbers, dates, booleans, strings, and objects
 - **No Client Dependencies**: Clients don't need mathjs or date-fns
 - **Per-Client Subscriptions**: Each client subscribes to only the paths they need
@@ -487,6 +492,72 @@ Optional parameters (GET query params or POST body):
 ```bash
 curl "http://localhost:3000/plugins/signalk-units-preference/units/conversions?baseUnit=RFC%203339%20(UTC)&targetUnit=time-am/pm-local&value=2025-10-04T00:17:48.000Z"
 ```
+
+### Vessels Endpoint
+
+The Vessels endpoint provides a snapshot of all AIS vessels with converted navigation data. This is useful for mobile apps that need to fetch all vessel data on startup with user's preferred units.
+
+#### Get All AIS Vessels with Conversions
+```http
+GET /signalk/v1/vessels
+GET /plugins/signalk-units-preference/vessels
+```
+
+Returns all AIS vessel data with navigation values (SOG, COG, heading) converted to user's preferred units.
+
+**Features:**
+- Public endpoint (no authentication required)
+- Automatic unit conversion for SOG, COG, heading
+- Returns formatted values ready for display
+- Includes vessel metadata (name, MMSI, position)
+- Excludes self vessel (only AIS targets)
+
+**Example:**
+```bash
+curl http://localhost:3000/signalk/v1/vessels
+```
+
+**Response:**
+```json
+{
+  "vessels": {
+    "urn:mrn:imo:mmsi:123456789": {
+      "name": "Example Vessel",
+      "mmsi": "123456789",
+      "navigation": {
+        "position": {
+          "latitude": 37.8,
+          "longitude": -122.4
+        },
+        "speedOverGround": {
+          "converted": 10.5,
+          "formatted": "10.5 kn",
+          "original": 5.4
+        },
+        "courseOverGroundTrue": {
+          "converted": 346.0,
+          "formatted": "346.0 °",
+          "original": 6.04
+        },
+        "headingTrue": {
+          "converted": 350.0,
+          "formatted": "350.0 °",
+          "original": 6.11
+        }
+      }
+    }
+  },
+  "count": 16,
+  "timestamp": "2025-10-22T12:34:56.789Z"
+}
+```
+
+**Use Case:**
+Mobile apps (Flutter, React Native) can call this endpoint on startup to get a snapshot of all AIS vessels with values already converted to the user's preferred units, avoiding the need to:
+1. Subscribe to SignalK WebSocket
+2. Wait for deltas to accumulate
+3. Implement client-side unit conversion
+4. Handle metadata resolution
 
 ### Zones API
 
@@ -1043,27 +1114,54 @@ ws.onclose = () => {
 
 **Subscription Protocol:**
 
-The dedicated endpoint uses a simple subscription protocol supporting **explicit path-based subscriptions**:
+The dedicated endpoint uses the SignalK subscription protocol with **wildcard pattern support**:
 
 ```typescript
 // Subscription message format
 {
   context?: string       // Vessel context (default: 'vessels.self')
+                        // Supports wildcards: 'vessels.*' for all vessels
   subscribe?: [{         // Array - subscribe to one or many paths
-    path: string        // SignalK path to subscribe to
+    path: string        // SignalK path or wildcard pattern
+                        // Examples: 'navigation.speedOverGround'
+                        //           'navigation.*' (all navigation paths)
+                        //           '**' (all paths)
     period?: number     // Update period in ms (default: 1000)
     format?: string     // Format type (default: 'delta')
-    policy?: string     // Policy (default: 'instant')
+    policy?: string     // Policy: 'instant', 'ideal', 'fixed' (default: 'instant')
+    minPeriod?: number  // Rate limiting: minimum ms between updates
   }]
   unsubscribe?: [{       // Array - unsubscribe from one or many paths
-    path: string        // Path to unsubscribe from
+    path: string        // Path or pattern to unsubscribe from
   }]
 }
 ```
 
+**Wildcard Support:**
+- ✅ **Single wildcard** (`*`): Matches one path segment
+  - `navigation.*` → matches speedOverGround, position, courseOverGroundTrue
+- ✅ **Double wildcard** (`**`): Matches multiple segments at any depth
+  - `**` → matches all paths
+  - `navigation.**` → matches all navigation paths and sub-paths
+- ✅ **Wildcard contexts**: Subscribe to all vessels with `vessels.*`
+  - Receives data from self vessel + all AIS targets
+
+**Query Parameter Subscriptions:**
+Automatically subscribe on connection without sending a subscription message:
+- `?subscribe=self` - Subscribe to all paths for vessels.self
+- `?subscribe=all` - Subscribe to all paths for all vessels
+- `?subscribe=none` - No automatic subscription (manual subscription required)
+
+```javascript
+// Auto-subscribe to all vessels.self paths on connect
+const ws = new WebSocket('ws://localhost:3000/plugins/signalk-units-preference/stream?subscribe=self')
+// No need to send subscription message, data starts flowing immediately
+```
+
 **Important Notes:**
 - ✅ **Multiple paths**: Send an array with as many paths as needed
-- ❌ **No wildcards**: Each path must be explicitly listed (no `*` or `**` patterns)
+- ✅ **Wildcards supported**: Use `*` or `**` patterns for flexible subscriptions
+- ✅ **Rate limiting**: Use `minPeriod` to prevent flooding
 - 🔄 **Unsubscribe first**: Process order is `unsubscribe` → `subscribe` (allows atomic path switching)
 - 📋 **Get all paths**: Use `/plugins/signalk-units-preference/paths` to fetch available paths
 
@@ -1110,6 +1208,64 @@ ws.send(JSON.stringify({
     { path: 'environment.wind.directionApparent', period: 1000 },
     { path: 'electrical.batteries.0.voltage', period: 2000 }
     // ... add as many paths as needed
+  ]
+}))
+```
+
+**Subscribe with Wildcard Paths:**
+
+```javascript
+// Subscribe to all navigation paths
+ws.send(JSON.stringify({
+  context: 'vessels.self',
+  subscribe: [
+    { path: 'navigation.*', period: 1000 }
+  ]
+}))
+
+// Subscribe to all paths (use with caution - high data volume)
+ws.send(JSON.stringify({
+  context: 'vessels.self',
+  subscribe: [
+    { path: '**', period: 1000, minPeriod: 1000 }  // Rate limit to 1Hz
+  ]
+}))
+
+// Subscribe to all battery voltages
+ws.send(JSON.stringify({
+  context: 'vessels.self',
+  subscribe: [
+    { path: 'electrical.batteries.*.voltage', period: 2000 }
+  ]
+}))
+```
+
+**Subscribe to All Vessels (Wildcard Context):**
+
+```javascript
+// Subscribe to navigation data from all vessels (self + AIS targets)
+ws.send(JSON.stringify({
+  context: 'vessels.*',  // Wildcard context
+  subscribe: [
+    { path: 'navigation.position', period: 5000 },
+    { path: 'navigation.speedOverGround', period: 2000 },
+    { path: 'navigation.courseOverGroundTrue', period: 2000 }
+  ]
+}))
+```
+
+**Rate Limiting Example:**
+
+```javascript
+// Subscribe with rate limiting to prevent flooding
+ws.send(JSON.stringify({
+  context: 'vessels.self',
+  subscribe: [
+    {
+      path: 'navigation.speedOverGround',
+      period: 100,      // Request 10 Hz
+      minPeriod: 1000   // But server limits to max 1 Hz
+    }
   ]
 }))
 ```
@@ -1873,6 +2029,25 @@ npm run test:coverage   # Run tests with coverage report
 - Core formula evaluation and conversion logic tested
 - Error handling and validation covered
 - Security (code injection prevention) validated
+
+**WebSocket Testing:**
+```bash
+node test-websocket.js [test-name]
+```
+
+Test the WebSocket subscription features:
+- `wildcard-paths` - Test wildcard path subscriptions (navigation.*)
+- `subscribe-all` - Test subscribe to all paths (**)
+- `wildcard-context` - Test wildcard context subscriptions (vessels.*)
+- `query-param` - Test query parameter subscription (?subscribe=self)
+- `rate-limiting` - Test minPeriod rate limiting
+- `all` - Run all tests (default)
+
+**Example:**
+```bash
+node test-websocket.js wildcard-paths
+node test-websocket.js all
+```
 
 ### Linting
 ```bash
