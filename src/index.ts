@@ -127,9 +127,119 @@ module.exports = (app: ServerAPI): Plugin => {
           }
         })
 
+        // Register conversions routes at /signalk/v1/ level (public)
+        router.get('/signalk/v1/conversions', async (req: Request, res: Response) => {
+          try {
+            app.debug('Conversions discovery handler called at /signalk/v1/conversions')
+            const pathsMetadata = await unitsManager.getPathsMetadata()
+            app.debug(`Conversions discovery returning ${Object.keys(pathsMetadata).length} paths`)
+            res.json(pathsMetadata)
+          } catch (error) {
+            app.error(`Conversions discovery error: ${error}`)
+            const response = formatErrorResponse(error)
+            res.status(response.status).json(response.body)
+          }
+        })
+
+        router.get('/signalk/v1/conversions/:path(*)', async (req: Request, res: Response) => {
+          try {
+            const pathStr = req.params.path
+            const valueParam = Array.isArray(req.query.value) ? req.query.value[0] : req.query.value
+            const typeParam = Array.isArray(req.query.type) ? req.query.type[0] : req.query.type
+            const timestampParam = Array.isArray(req.query.timestamp)
+              ? req.query.timestamp[0]
+              : req.query.timestamp
+            const contextParam = Array.isArray(req.query.context)
+              ? req.query.context[0]
+              : req.query.context
+
+            app.debug(`Conversions handler called for path: ${pathStr}`)
+
+            // If value query param provided, return conversion result
+            if (valueParam !== undefined) {
+              // Parse value from query string (always comes as string from URL)
+              let parsedValue: unknown = valueParam
+              if (typeof valueParam === 'string' && valueParam !== '') {
+                // Try to parse as number first
+                const numValue = Number(valueParam)
+                if (!isNaN(numValue)) {
+                  parsedValue = numValue
+                } else {
+                  // Try to parse as JSON (for objects, arrays, booleans, etc.)
+                  try {
+                    parsedValue = JSON.parse(valueParam)
+                  } catch (e) {
+                    // Keep as string if parsing fails
+                    parsedValue = valueParam
+                  }
+                }
+              }
+
+              app.debug(
+                `Converting value ${parsedValue} for path: ${pathStr} (context: ${contextParam || 'vessels.self'})`
+              )
+
+              // Get conversion info
+              const conversionInfo = unitsManager.getConversion(pathStr)
+
+              // Convert the value
+              let result
+              try {
+                result = unitsManager.convertPathValue(pathStr, parsedValue)
+              } catch (error) {
+                throw new ValidationError((error as Error).message, 'Conversion failed', String(error))
+              }
+
+              // Build response similar to buildDeltaResponse but simpler for public API
+              const response = {
+                path: pathStr,
+                context: contextParam || 'vessels.self',
+                timestamp: typeof timestampParam === 'string' ? timestampParam : new Date().toISOString(),
+                original: result.original,
+                converted: result.converted,
+                formatted: result.formatted,
+                metadata: result.metadata
+              }
+
+              return res.json(response)
+            }
+
+            // Otherwise return conversion metadata
+            app.debug(`Getting conversion metadata for path: ${pathStr}`)
+            const conversion = unitsManager.getConversion(pathStr)
+            const targetUnit = conversion.targetUnit || conversion.baseUnit || 'none'
+
+            const response = {
+              [pathStr]: {
+                baseUnit: conversion.baseUnit,
+                category: conversion.category,
+                conversions: {
+                  [targetUnit]: {
+                    formula: conversion.formula,
+                    inverseFormula: conversion.inverseFormula,
+                    symbol: conversion.symbol || '',
+                    dateFormat: conversion.dateFormat,
+                    useLocalTime: conversion.useLocalTime
+                  }
+                }
+              }
+            }
+
+            res.json(response)
+          } catch (error) {
+            app.error(`Conversions path error for ${req.params.path}: ${error}`)
+            const response = formatErrorResponse(error)
+            res.status(response.status).json(response.body)
+          }
+        })
+
         console.log('✅ Zones API registered at /signalk/v1/zones (public, like history API)')
+        console.log('✅ Conversions API registered at /signalk/v1/conversions (public)')
         app.debug(
           'Zones API endpoints registered: /signalk/v1/zones (discovery, single path, bulk)'
+        )
+        app.debug(
+          'Conversions API endpoints registered: /signalk/v1/conversions (discovery, single path)'
         )
 
         // Expose conversion functions on MULTIPLE places to ensure other plugins can find them
