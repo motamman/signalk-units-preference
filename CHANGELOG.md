@@ -5,6 +5,60 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.4-beta.1] - 2025-10-25
+
+### Added ⭐ Public Conversions API
+- **Public Conversion Endpoints**: New REST endpoints at `/signalk/v1/` level for unit conversions
+  - **Discovery Endpoint**: `GET /signalk/v1/conversions` - Returns all available path conversions and their metadata
+  - **Single Path Endpoint**: `GET /signalk/v1/conversions/:path` - Get conversion metadata or convert a value
+  - **Query Parameter Support**: Add `?value=X` to convert a value, optionally include `?context=`, `?timestamp=`, `?type=`
+  - **Location**: Registered at `/signalk/v1/conversions` (public routes, like zones and history APIs)
+  - **No Authentication Required**: Works with Bearer tokens, accessible without plugin authentication
+
+- **Conversion Response Format**: Returns comprehensive conversion results
+  - **Metadata Mode** (no value param): Returns base unit, target unit, formula, inverse formula, symbol, category
+  - **Conversion Mode** (with value param): Returns original value, converted value, formatted string, and metadata
+  - **All Value Types Supported**: Handles numbers, dates, booleans, strings, and objects
+  - **Example Response**:
+    ```json
+    {
+      "path": "navigation.speedOverGround",
+      "context": "vessels.self",
+      "timestamp": "2025-10-25T11:39:05.752Z",
+      "original": 5.2,
+      "converted": 10.107968,
+      "formatted": "10.1 kn",
+      "metadata": {
+        "units": "kn",
+        "displayFormat": "0.0",
+        "description": "navigation.speedOverGround (speed)",
+        "originalUnits": "m/s",
+        "displayName": "speedOverGround (kn)"
+      }
+    }
+    ```
+
+### Changed
+- **API Architecture Consistency**: Conversion endpoints now follow same public pattern as Zones API
+  - **Public Routes**: Both `/signalk/v1/zones` and `/signalk/v1/conversions` registered at SignalK server level
+  - **No Plugin Authentication**: Accessible without plugin-specific authentication (Bearer token support)
+  - **Location**: `src/index.ts:130-234`
+  - **Benefits**: Easier integration for external clients, consistent with SignalK conventions
+
+### Technical
+- **Route Registration**: Conversions API uses same pattern as Zones API
+  - Routes registered directly on app object cast to Router
+  - Bypasses plugin router authentication
+  - Works with Bearer tokens like history and zones APIs
+- **Value Parsing**: Automatic type detection and parsing for query parameters
+  - Numbers parsed from string query params
+  - JSON parsing for objects, arrays, booleans
+  - Graceful fallback to string for unparseable values
+- **Unified Conversion Logic**: Uses existing `UnitsManager.convertPathValue()` method
+  - Same conversion engine as plugin router endpoints
+  - Consistent behavior across all API endpoints
+  - Single source of truth for conversions
+
 ## [0.7.3-beta.1] - 2025-10-20
 
 ### Added ⭐ Zones API

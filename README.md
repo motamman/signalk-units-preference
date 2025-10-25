@@ -324,7 +324,20 @@ Enhanced warnings when deleting critical items:
 
 ## REST API Reference
 
-### Conversion Endpoints
+This plugin provides two sets of REST endpoints:
+- **Public Endpoints** (`/signalk/v1/conversions`, `/signalk/v1/zones`) - No authentication required, work with Bearer tokens
+- **Plugin Endpoints** (`/plugins/signalk-units-preference/*`) - Require plugin authentication
+
+### Public Conversion Endpoints
+
+> **Recommended:** These endpoints provide the simplest integration path - no authentication required, clean flat response format, and work with Bearer tokens.
+
+See the [Public Conversions API](#public-conversions-api) section above for details on the public `/signalk/v1/conversions` endpoints.
+
+### Plugin Conversion Endpoints
+
+> **Note:** These plugin endpoints require authentication and return responses in SignalK delta format.
+> For simpler, unauthenticated access with a flat response format, use the [public endpoints](#public-conversions-api) at `/signalk/v1/conversions` instead.
 
 #### Get Conversion Information / Convert a Value
 ```http
@@ -640,6 +653,147 @@ The zones cache TTL can be configured in plugin settings:
 - **Purpose**: Reduces metadata lookups for frequently accessed paths
 
 Cache is automatically invalidated when unit preferences change.
+
+### Public Conversions API
+
+The Conversions API provides public endpoints for unit conversion and metadata at the `/signalk/v1/` level. These endpoints follow the same pattern as the Zones and History APIs, making them accessible without plugin-specific authentication.
+
+**Key Features:**
+- Public endpoints at `/signalk/v1/conversions` (works with Bearer tokens)
+- Discovery endpoint to list all available conversions
+- Single path endpoint for metadata or value conversion
+- Automatic type detection and parsing for query parameters
+- Supports all value types (number, date, boolean, string, object)
+- Uses the same conversion engine as plugin router endpoints
+
+#### Discovery - Get All Available Conversions
+```http
+GET /signalk/v1/conversions
+```
+
+Returns metadata for all SignalK paths with their conversion settings.
+
+**Example:**
+```bash
+curl http://localhost:3000/signalk/v1/conversions
+```
+
+**Response:**
+```json
+{
+  "navigation.speedOverGround": {
+    "baseUnit": "m/s",
+    "category": "speed",
+    "conversions": {
+      "kn": {
+        "formula": "value * 1.94384",
+        "inverseFormula": "value * 0.514444",
+        "symbol": "kn"
+      }
+    }
+  },
+  "environment.outside.temperature": {
+    "baseUnit": "K",
+    "category": "temperature",
+    "conversions": {
+      "°F": {
+        "formula": "(value - 273.15) * 9/5 + 32",
+        "inverseFormula": "(value - 32) * 5/9 + 273.15",
+        "symbol": "°F"
+      }
+    }
+  }
+}
+```
+
+#### Get Conversion Metadata for Single Path
+```http
+GET /signalk/v1/conversions/:path
+```
+
+Returns conversion metadata for a specific path (base unit, target unit, formula, etc.).
+
+**Example:**
+```bash
+curl http://localhost:3000/signalk/v1/conversions/navigation.speedOverGround
+```
+
+**Response:**
+```json
+{
+  "navigation.speedOverGround": {
+    "baseUnit": "m/s",
+    "category": "speed",
+    "conversions": {
+      "kn": {
+        "formula": "value * 1.94384",
+        "inverseFormula": "value * 0.514444",
+        "symbol": "kn"
+      }
+    }
+  }
+}
+```
+
+#### Convert a Value
+```http
+GET /signalk/v1/conversions/:path?value=X
+```
+
+Converts a value from base units to the user's preferred units.
+
+**Example:**
+```bash
+curl "http://localhost:3000/signalk/v1/conversions/navigation.speedOverGround?value=5.2"
+```
+
+**Response:**
+```json
+{
+  "path": "navigation.speedOverGround",
+  "context": "vessels.self",
+  "timestamp": "2025-10-25T11:39:05.752Z",
+  "original": 5.2,
+  "converted": 10.107968,
+  "formatted": "10.1 kn",
+  "metadata": {
+    "units": "kn",
+    "displayFormat": "0.0",
+    "description": "navigation.speedOverGround (speed)",
+    "originalUnits": "m/s",
+    "displayName": "speedOverGround (kn)"
+  }
+}
+```
+
+**Optional Query Parameters:**
+- `value` - The value to convert (required for conversion mode)
+- `context` - Vessel context (default: "vessels.self")
+- `timestamp` - ISO-8601 timestamp (default: current time)
+- `type` - Type hint: "number", "boolean", "string", "date", "object"
+
+**Value Types:**
+The endpoint automatically detects and handles all value types:
+- **Numbers**: Parsed from string and converted using formulas
+- **Dates**: ISO-8601 strings formatted according to date/time preferences
+- **Booleans**: JSON parsed (true/false)
+- **Objects**: JSON parsed and passed through
+- **Strings**: Passed through as-is
+
+**Examples with Different Types:**
+```bash
+# Number conversion
+curl "http://localhost:3000/signalk/v1/conversions/navigation.speedOverGround?value=5.2"
+
+# Temperature conversion
+curl "http://localhost:3000/signalk/v1/conversions/environment.outside.temperature?value=293.15"
+
+# Date/time conversion
+curl "http://localhost:3000/signalk/v1/conversions/navigation.datetime?value=2025-10-25T11:39:05.752Z"
+
+# With custom context
+curl "http://localhost:3000/signalk/v1/conversions/navigation.speedOverGround?value=5.2&context=vessels.urn:mrn:imo:mmsi:123456789"
+```
 
 ### Schema & Metadata
 
