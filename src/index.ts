@@ -233,14 +233,76 @@ module.exports = (app: ServerAPI): Plugin => {
           }
         })
 
+        // Register categories route at /signalk/v1/ level (public)
+        router.get('/signalk/v1/categories', async (req: Request, res: Response) => {
+          try {
+            app.debug('Categories discovery handler called at /signalk/v1/categories')
+            const preferences = unitsManager.getPreferences()
+            const schema = unitsManager.getUnitSchema()
+            const categories = preferences.categories || {}
+
+            // Enhance each category with category name, base unit, and conversion formula
+            const enhancedCategories: Record<string, any> = {}
+            for (const [categoryName, categoryPref] of Object.entries(categories)) {
+              const baseUnit =
+                categoryPref.baseUnit || schema.categoryToBaseUnit[categoryName] || null
+
+              // Get conversion details for the target unit
+              const targetUnit = categoryPref.targetUnit
+              let conversionInfo: any = {}
+
+              if (baseUnit && targetUnit) {
+                // Get both standard and custom unit definitions (custom overrides standard)
+                const standardConversions = unitsManager.getMetadataManager().getConversionsForBaseUnit(baseUnit)
+                const customDefinitions = unitsManager.getUnitDefinitions()
+                const customDef = customDefinitions[baseUnit]
+
+                // Merge conversions (custom takes precedence)
+                const allConversions = {
+                  ...(standardConversions?.conversions || {}),
+                  ...(customDef?.conversions || {})
+                }
+
+                // Find the conversion that matches the targetUnit (could be by key, symbol, or longName)
+                for (const [key, conv] of Object.entries(allConversions)) {
+                  if (key === targetUnit || conv.symbol === targetUnit || conv.longName === targetUnit) {
+                    conversionInfo = {
+                      formula: conv.formula,
+                      inverseFormula: conv.inverseFormula,
+                      symbol: conv.symbol || ''
+                    }
+                    break
+                  }
+                }
+              }
+
+              enhancedCategories[categoryName] = {
+                category: categoryName,
+                baseUnit,
+                ...categoryPref,
+                ...conversionInfo
+              }
+            }
+
+            app.debug(`Categories discovery returning ${Object.keys(enhancedCategories).length} categories`)
+            res.json(enhancedCategories)
+          } catch (error) {
+            app.error(`Categories discovery error: ${error}`)
+            const response = formatErrorResponse(error)
+            res.status(response.status).json(response.body)
+          }
+        })
+
         console.log('✅ Zones API registered at /signalk/v1/zones (public, like history API)')
         console.log('✅ Conversions API registered at /signalk/v1/conversions (public)')
+        console.log('✅ Categories API registered at /signalk/v1/categories (public)')
         app.debug(
           'Zones API endpoints registered: /signalk/v1/zones (discovery, single path, bulk)'
         )
         app.debug(
           'Conversions API endpoints registered: /signalk/v1/conversions (discovery, single path)'
         )
+        app.debug('Categories API endpoint registered: /signalk/v1/categories')
 
         // Expose conversion functions on MULTIPLE places to ensure other plugins can find them
         // Different plugins may receive different app object references, so we expose on all available objects
@@ -1040,15 +1102,46 @@ module.exports = (app: ServerAPI): Plugin => {
           const schema = unitsManager.getUnitSchema()
           const categories = preferences.categories || {}
 
-          // Enhance each category with category name and base unit
+          // Enhance each category with category name, base unit, and conversion formula
           const enhancedCategories: Record<string, any> = {}
           for (const [categoryName, categoryPref] of Object.entries(categories)) {
             const baseUnit =
               categoryPref.baseUnit || schema.categoryToBaseUnit[categoryName] || null
+
+            // Get conversion details for the target unit
+            const targetUnit = categoryPref.targetUnit
+            let conversionInfo: any = {}
+
+            if (baseUnit && targetUnit) {
+              // Get both standard and custom unit definitions (custom overrides standard)
+              const standardConversions = unitsManager.getMetadataManager().getConversionsForBaseUnit(baseUnit)
+              const customDefinitions = unitsManager.getUnitDefinitions()
+              const customDef = customDefinitions[baseUnit]
+
+              // Merge conversions (custom takes precedence)
+              const allConversions = {
+                ...(standardConversions?.conversions || {}),
+                ...(customDef?.conversions || {})
+              }
+
+              // Find the conversion that matches the targetUnit (could be by key, symbol, or longName)
+              for (const [key, conv] of Object.entries(allConversions)) {
+                if (key === targetUnit || conv.symbol === targetUnit || conv.longName === targetUnit) {
+                  conversionInfo = {
+                    formula: conv.formula,
+                    inverseFormula: conv.inverseFormula,
+                    symbol: conv.symbol || ''
+                  }
+                  break
+                }
+              }
+            }
+
             enhancedCategories[categoryName] = {
               category: categoryName,
               baseUnit,
-              ...categoryPref
+              ...categoryPref,
+              ...conversionInfo
             }
           }
 
@@ -1076,10 +1169,40 @@ module.exports = (app: ServerAPI): Plugin => {
           const schema = unitsManager.getUnitSchema()
           const baseUnit = categoryPref.baseUnit || schema.categoryToBaseUnit[category] || null
 
+          // Get conversion details for the target unit
+          const targetUnit = categoryPref.targetUnit
+          let conversionInfo: any = {}
+
+          if (baseUnit && targetUnit) {
+            // Get both standard and custom unit definitions (custom overrides standard)
+            const standardConversions = unitsManager.getMetadataManager().getConversionsForBaseUnit(baseUnit)
+            const customDefinitions = unitsManager.getUnitDefinitions()
+            const customDef = customDefinitions[baseUnit]
+
+            // Merge conversions (custom takes precedence)
+            const allConversions = {
+              ...(standardConversions?.conversions || {}),
+              ...(customDef?.conversions || {})
+            }
+
+            // Find the conversion that matches the targetUnit (could be by key, symbol, or longName)
+            for (const [key, conv] of Object.entries(allConversions)) {
+              if (key === targetUnit || conv.symbol === targetUnit || conv.longName === targetUnit) {
+                conversionInfo = {
+                  formula: conv.formula,
+                  inverseFormula: conv.inverseFormula,
+                  symbol: conv.symbol || ''
+                }
+                break
+              }
+            }
+          }
+
           res.json({
             category,
             baseUnit,
-            ...categoryPref
+            ...categoryPref,
+            ...conversionInfo
           })
         } catch (error) {
           app.error(`Error getting category: ${error}`)
