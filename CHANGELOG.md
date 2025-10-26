@@ -15,10 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Location**: Registered at `/signalk/v1/conversions` (public routes, like zones and history APIs)
   - **No Authentication Required**: Works with Bearer tokens, accessible without plugin authentication
 
-- **Public Categories Endpoint**: New REST endpoint for user unit preferences
+- **Public Categories Endpoint**: New REST endpoint for user unit preferences with conversion formulas
   - **Endpoint**: `GET /signalk/v1/categories` - Returns all user category preferences
-  - **Response Format**: Each category includes name, baseUnit, targetUnit, and displayFormat
-  - **Use Cases**: Discover user preferences, build UI controls that respect settings, determine display units
+  - **Response Format**: Each category includes name, baseUnit, targetUnit, displayFormat, formula, inverseFormula, and symbol
+  - **Formula Support**: Includes conversion formulas for both standard and custom unit definitions
+  - **Use Cases**: Discover user preferences, build UI controls, implement client-side conversions, display proper symbols
   - **Location**: Registered at `/signalk/v1/categories` (public route)
   - **No Authentication Required**: Works with Bearer tokens, same format as plugin endpoint
 

@@ -660,8 +660,9 @@ The Categories API provides public access to user unit preferences organized by 
 
 **Key Features:**
 - Public endpoint at `/signalk/v1/categories` (works with Bearer tokens)
-- Returns all user category preferences
-- Shows target units, display formats, and base units for each category
+- Returns all user category preferences with conversion formulas
+- Shows target units, display formats, base units, and conversion formulas for each category
+- Includes both standard and custom unit definitions
 - Same format as plugin endpoint but without authentication requirement
 
 #### Get All Categories
@@ -683,25 +684,37 @@ curl http://localhost:3000/signalk/v1/categories
     "category": "speed",
     "baseUnit": "m/s",
     "targetUnit": "kn",
-    "displayFormat": "0.0"
+    "displayFormat": "0.0",
+    "formula": "value * 1.94384",
+    "inverseFormula": "value * 0.514444",
+    "symbol": "kn"
   },
   "temperature": {
     "category": "temperature",
     "baseUnit": "K",
     "targetUnit": "F",
-    "displayFormat": "0.0"
+    "displayFormat": "0.0",
+    "formula": "(value - 273.15) * 9/5 + 32",
+    "inverseFormula": "(value - 32) * 5/9 + 273.15",
+    "symbol": "°F"
   },
   "pressure": {
     "category": "pressure",
     "baseUnit": "Pa",
     "targetUnit": "psi",
-    "displayFormat": "0.0"
+    "displayFormat": "0.0",
+    "formula": "value * 0.000145038",
+    "inverseFormula": "value * 6894.76",
+    "symbol": "psi"
   },
-  "distance": {
-    "category": "distance",
-    "baseUnit": "m",
-    "targetUnit": "nm",
-    "displayFormat": "0.0"
+  "memory": {
+    "category": "memory",
+    "baseUnit": "MB",
+    "targetUnit": "GB",
+    "displayFormat": "0.0",
+    "formula": "value / (1024)",
+    "inverseFormula": "value *1024",
+    "symbol": "GB"
   }
 }
 ```
@@ -711,12 +724,17 @@ curl http://localhost:3000/signalk/v1/categories
 - `baseUnit` - Base SI unit for this category
 - `targetUnit` - User's preferred target unit for display
 - `displayFormat` - Numeric precision format (e.g., "0.0", "0.00", "0")
+- `formula` - Conversion formula from base unit to target unit (when available)
+- `inverseFormula` - Inverse conversion formula from target unit to base unit (when available)
+- `symbol` - Display symbol for the target unit (e.g., "kn", "°F", "psi")
 
 **Use Cases:**
 - Discover what unit preferences the user has configured
 - Build UI controls that respect user preferences
 - Determine which units to display in gauges and widgets
 - Check user's temperature preference (Fahrenheit vs Celsius)
+- Implement client-side unit conversions using the provided formulas
+- Display proper unit symbols in the UI (kn, °F, psi, etc.)
 
 ### Public Conversions API
 
