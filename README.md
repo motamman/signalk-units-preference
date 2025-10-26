@@ -325,7 +325,7 @@ Enhanced warnings when deleting critical items:
 ## REST API Reference
 
 This plugin provides two sets of REST endpoints:
-- **Public Endpoints** (`/signalk/v1/conversions`, `/signalk/v1/zones`) - No authentication required, work with Bearer tokens
+- **Public Endpoints** (`/signalk/v1/conversions`, `/signalk/v1/zones`, `/signalk/v1/categories`) - No authentication required, work with Bearer tokens
 - **Plugin Endpoints** (`/plugins/signalk-units-preference/*`) - Require plugin authentication
 
 ### Public Conversion Endpoints
@@ -653,6 +653,70 @@ The zones cache TTL can be configured in plugin settings:
 - **Purpose**: Reduces metadata lookups for frequently accessed paths
 
 Cache is automatically invalidated when unit preferences change.
+
+### Public Categories API
+
+The Categories API provides public access to user unit preferences organized by category at the `/signalk/v1/` level.
+
+**Key Features:**
+- Public endpoint at `/signalk/v1/categories` (works with Bearer tokens)
+- Returns all user category preferences
+- Shows target units, display formats, and base units for each category
+- Same format as plugin endpoint but without authentication requirement
+
+#### Get All Categories
+```http
+GET /signalk/v1/categories
+```
+
+Returns all user category preferences with their unit settings.
+
+**Example:**
+```bash
+curl http://localhost:3000/signalk/v1/categories
+```
+
+**Response:**
+```json
+{
+  "speed": {
+    "category": "speed",
+    "baseUnit": "m/s",
+    "targetUnit": "kn",
+    "displayFormat": "0.0"
+  },
+  "temperature": {
+    "category": "temperature",
+    "baseUnit": "K",
+    "targetUnit": "F",
+    "displayFormat": "0.0"
+  },
+  "pressure": {
+    "category": "pressure",
+    "baseUnit": "Pa",
+    "targetUnit": "psi",
+    "displayFormat": "0.0"
+  },
+  "distance": {
+    "category": "distance",
+    "baseUnit": "m",
+    "targetUnit": "nm",
+    "displayFormat": "0.0"
+  }
+}
+```
+
+**Category Properties:**
+- `category` - Category name (speed, temperature, pressure, etc.)
+- `baseUnit` - Base SI unit for this category
+- `targetUnit` - User's preferred target unit for display
+- `displayFormat` - Numeric precision format (e.g., "0.0", "0.00", "0")
+
+**Use Cases:**
+- Discover what unit preferences the user has configured
+- Build UI controls that respect user preferences
+- Determine which units to display in gauges and widgets
+- Check user's temperature preference (Fahrenheit vs Celsius)
 
 ### Public Conversions API
 

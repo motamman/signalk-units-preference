@@ -5,15 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.7.4-beta.1] - 2025-10-25
+## [0.7.3-beta.3] - 2025-10-26
 
-### Added ⭐ Public Conversions API
+### Added ⭐ Public API Endpoints
 - **Public Conversion Endpoints**: New REST endpoints at `/signalk/v1/` level for unit conversions
   - **Discovery Endpoint**: `GET /signalk/v1/conversions` - Returns all available path conversions and their metadata
   - **Single Path Endpoint**: `GET /signalk/v1/conversions/:path` - Get conversion metadata or convert a value
   - **Query Parameter Support**: Add `?value=X` to convert a value, optionally include `?context=`, `?timestamp=`, `?type=`
   - **Location**: Registered at `/signalk/v1/conversions` (public routes, like zones and history APIs)
   - **No Authentication Required**: Works with Bearer tokens, accessible without plugin authentication
+
+- **Public Categories Endpoint**: New REST endpoint for user unit preferences
+  - **Endpoint**: `GET /signalk/v1/categories` - Returns all user category preferences
+  - **Response Format**: Each category includes name, baseUnit, targetUnit, and displayFormat
+  - **Use Cases**: Discover user preferences, build UI controls that respect settings, determine display units
+  - **Location**: Registered at `/signalk/v1/categories` (public route)
+  - **No Authentication Required**: Works with Bearer tokens, same format as plugin endpoint
 
 - **Conversion Response Format**: Returns comprehensive conversion results
   - **Metadata Mode** (no value param): Returns base unit, target unit, formula, inverse formula, symbol, category
