@@ -145,7 +145,7 @@ module.exports = (app: ServerAPI): Plugin => {
           try {
             const pathStr = req.params.path
             const valueParam = Array.isArray(req.query.value) ? req.query.value[0] : req.query.value
-            const typeParam = Array.isArray(req.query.type) ? req.query.type[0] : req.query.type
+            const _typeParam = Array.isArray(req.query.type) ? req.query.type[0] : req.query.type
             const timestampParam = Array.isArray(req.query.timestamp)
               ? req.query.timestamp[0]
               : req.query.timestamp
@@ -179,22 +179,27 @@ module.exports = (app: ServerAPI): Plugin => {
                 `Converting value ${parsedValue} for path: ${pathStr} (context: ${contextParam || 'vessels.self'})`
               )
 
-              // Get conversion info
-              const conversionInfo = unitsManager.getConversion(pathStr)
+              // Get conversion info (not used but left for potential future use)
+              const _conversionInfo = unitsManager.getConversion(pathStr)
 
               // Convert the value
               let result
               try {
                 result = unitsManager.convertPathValue(pathStr, parsedValue)
               } catch (error) {
-                throw new ValidationError((error as Error).message, 'Conversion failed', String(error))
+                throw new ValidationError(
+                  (error as Error).message,
+                  'Conversion failed',
+                  String(error)
+                )
               }
 
               // Build response similar to buildDeltaResponse but simpler for public API
               const response = {
                 path: pathStr,
                 context: contextParam || 'vessels.self',
-                timestamp: typeof timestampParam === 'string' ? timestampParam : new Date().toISOString(),
+                timestamp:
+                  typeof timestampParam === 'string' ? timestampParam : new Date().toISOString(),
                 original: result.original,
                 converted: result.converted,
                 formatted: result.formatted,
@@ -253,7 +258,9 @@ module.exports = (app: ServerAPI): Plugin => {
 
               if (baseUnit && targetUnit) {
                 // Get both standard and custom unit definitions (custom overrides standard)
-                const standardConversions = unitsManager.getMetadataManager().getConversionsForBaseUnit(baseUnit)
+                const standardConversions = unitsManager
+                  .getMetadataManager()
+                  .getConversionsForBaseUnit(baseUnit)
                 const customDefinitions = unitsManager.getUnitDefinitions()
                 const customDef = customDefinitions[baseUnit]
 
@@ -265,7 +272,11 @@ module.exports = (app: ServerAPI): Plugin => {
 
                 // Find the conversion that matches the targetUnit (could be by key, symbol, or longName)
                 for (const [key, conv] of Object.entries(allConversions)) {
-                  if (key === targetUnit || conv.symbol === targetUnit || conv.longName === targetUnit) {
+                  if (
+                    key === targetUnit ||
+                    conv.symbol === targetUnit ||
+                    conv.longName === targetUnit
+                  ) {
                     conversionInfo = {
                       formula: conv.formula,
                       inverseFormula: conv.inverseFormula,
@@ -284,7 +295,9 @@ module.exports = (app: ServerAPI): Plugin => {
               }
             }
 
-            app.debug(`Categories discovery returning ${Object.keys(enhancedCategories).length} categories`)
+            app.debug(
+              `Categories discovery returning ${Object.keys(enhancedCategories).length} categories`
+            )
             res.json(enhancedCategories)
           } catch (error) {
             app.error(`Categories discovery error: ${error}`)
@@ -1114,7 +1127,9 @@ module.exports = (app: ServerAPI): Plugin => {
 
             if (baseUnit && targetUnit) {
               // Get both standard and custom unit definitions (custom overrides standard)
-              const standardConversions = unitsManager.getMetadataManager().getConversionsForBaseUnit(baseUnit)
+              const standardConversions = unitsManager
+                .getMetadataManager()
+                .getConversionsForBaseUnit(baseUnit)
               const customDefinitions = unitsManager.getUnitDefinitions()
               const customDef = customDefinitions[baseUnit]
 
@@ -1126,7 +1141,11 @@ module.exports = (app: ServerAPI): Plugin => {
 
               // Find the conversion that matches the targetUnit (could be by key, symbol, or longName)
               for (const [key, conv] of Object.entries(allConversions)) {
-                if (key === targetUnit || conv.symbol === targetUnit || conv.longName === targetUnit) {
+                if (
+                  key === targetUnit ||
+                  conv.symbol === targetUnit ||
+                  conv.longName === targetUnit
+                ) {
                   conversionInfo = {
                     formula: conv.formula,
                     inverseFormula: conv.inverseFormula,
@@ -1175,7 +1194,9 @@ module.exports = (app: ServerAPI): Plugin => {
 
           if (baseUnit && targetUnit) {
             // Get both standard and custom unit definitions (custom overrides standard)
-            const standardConversions = unitsManager.getMetadataManager().getConversionsForBaseUnit(baseUnit)
+            const standardConversions = unitsManager
+              .getMetadataManager()
+              .getConversionsForBaseUnit(baseUnit)
             const customDefinitions = unitsManager.getUnitDefinitions()
             const customDef = customDefinitions[baseUnit]
 
@@ -1187,7 +1208,11 @@ module.exports = (app: ServerAPI): Plugin => {
 
             // Find the conversion that matches the targetUnit (could be by key, symbol, or longName)
             for (const [key, conv] of Object.entries(allConversions)) {
-              if (key === targetUnit || conv.symbol === targetUnit || conv.longName === targetUnit) {
+              if (
+                key === targetUnit ||
+                conv.symbol === targetUnit ||
+                conv.longName === targetUnit
+              ) {
                 conversionInfo = {
                   formula: conv.formula,
                   inverseFormula: conv.inverseFormula,
