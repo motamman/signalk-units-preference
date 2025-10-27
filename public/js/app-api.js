@@ -277,6 +277,81 @@ async function apiDeleteConversion(baseUnit, targetUnit) {
 }
 
 // ============================================================================
+// STANDARD UNIT DEFINITIONS API
+// ============================================================================
+
+async function apiLoadStandardUnitDefinitions() {
+  const res = await fetch(`${API_BASE}/standard-unit-definitions`)
+  if (!res.ok) throw new Error('Failed to load standard unit definitions')
+  return await res.json()
+}
+
+async function apiCreateStandardBaseUnit(baseUnitData) {
+  const res = await fetch(`${API_BASE}/standard-unit-definitions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(baseUnitData)
+  })
+  if (!res.ok) throw new Error('Failed to create standard base unit')
+  return await res.json()
+}
+
+async function apiUpdateStandardBaseUnit(baseUnit, baseUnitData) {
+  const res = await fetch(`${API_BASE}/standard-unit-definitions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(baseUnitData)
+  })
+  if (!res.ok) throw new Error('Failed to update standard base unit')
+  return await res.json()
+}
+
+async function apiDeleteStandardBaseUnit(baseUnit) {
+  const res = await fetch(`${API_BASE}/standard-unit-definitions/${encodeURIComponent(baseUnit)}`, {
+    method: 'DELETE'
+  })
+  if (!res.ok) throw new Error('Failed to delete standard base unit')
+  return await res.json()
+}
+
+async function apiCreateStandardConversion(baseUnit, conversionData) {
+  const res = await fetch(
+    `${API_BASE}/standard-unit-definitions/${encodeURIComponent(baseUnit)}/conversions`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(conversionData)
+    }
+  )
+  if (!res.ok) throw new Error('Failed to create standard conversion')
+  return await res.json()
+}
+
+async function apiUpdateStandardConversion(baseUnit, targetUnit, conversionData) {
+  const res = await fetch(
+    `${API_BASE}/standard-unit-definitions/${encodeURIComponent(baseUnit)}/conversions`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(conversionData)
+    }
+  )
+  if (!res.ok) throw new Error('Failed to update standard conversion')
+  return await res.json()
+}
+
+async function apiDeleteStandardConversion(baseUnit, targetUnit) {
+  const res = await fetch(
+    `${API_BASE}/standard-unit-definitions/${encodeURIComponent(baseUnit)}/conversions/${encodeURIComponent(targetUnit)}`,
+    {
+      method: 'DELETE'
+    }
+  )
+  if (!res.ok) throw new Error('Failed to delete standard conversion')
+  return await res.json()
+}
+
+// ============================================================================
 // PRESET API
 // ============================================================================
 

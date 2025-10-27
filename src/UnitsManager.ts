@@ -185,6 +185,10 @@ export class UnitsManager {
     // Auto-initialize SignalK metadata cache
     // This makes conversions work immediately without requiring the web app
     await this.metadataManager.autoInitializeSignalKMetadata()
+
+    // Clear metadata resolution cache after auto-initialization
+    // so next API call will resolve with fresh captured values
+    this.metadataManager.clearMetadataCache()
   }
 
   /**
@@ -429,9 +433,16 @@ export class UnitsManager {
     )
 
     const isDateCategory = metadata.category === 'dateTime' || metadata.category === 'epoch'
-    const displayFormat = isDateCategory
-      ? conversion.dateFormat || preference.displayFormat || 'ISO-8601'
-      : preference.displayFormat || targetUnit || ''
+    const isBooleanCategory = metadata.category === 'boolean' || valueType === 'boolean'
+
+    let displayFormat: string
+    if (isDateCategory) {
+      displayFormat = conversion.dateFormat || preference.displayFormat || 'ISO-8601'
+    } else if (isBooleanCategory) {
+      displayFormat = 'boolean'
+    } else {
+      displayFormat = preference.displayFormat || targetUnit || ''
+    }
 
     const dateFormatValue = isDateCategory
       ? conversion.dateFormat || preference.displayFormat || 'ISO-8601'
@@ -472,12 +483,20 @@ export class UnitsManager {
       }
     }
 
-    const valueType = this.metadataManager.detectValueType(unit, skMeta?.value)
+    // Check the actual value to determine type
+    const value = skMeta?.value ?? this.app.getSelfPath(pathStr)
+    const valueType = this.metadataManager.detectValueType(unit, value)
 
     let displayFormat = '0.0'
     let symbol = ''
 
-    if (valueType === 'boolean') {
+    // Auto-assign bool base unit for boolean values without explicit units
+    if (valueType === 'boolean' && !unit) {
+      unit = 'bool'
+      displayFormat = 'boolean'
+      symbol = ''
+      this.app.debug(`Pass-through: auto-assigned baseUnit "bool" for boolean path ${pathStr}`)
+    } else if (valueType === 'boolean') {
       displayFormat = 'boolean'
       symbol = ''
     } else if (valueType === 'date') {
@@ -832,6 +851,24 @@ export class UnitsManager {
             displayUnit = baseUnit
             targetUnit = undefined
           }
+        } else if (metadataEntry?.baseUnit) {
+          // Use metadata resolved by resolveMetadataForPath (includes value-based boolean detection)
+          baseUnit = metadataEntry.baseUnit
+          category = metadataEntry.category || '-'
+
+          const categoryPref = category !== '-' ? preferences.categories?.[category] : null
+
+          if (categoryPref && categoryPref.targetUnit) {
+            status = 'auto'
+            source = 'Auto-detected'
+            targetUnit = categoryPref.targetUnit
+            displayUnit = targetUnit || baseUnit
+          } else {
+            status = 'inferred'
+            source = 'Inferred'
+            displayUnit = baseUnit
+            targetUnit = baseUnit
+          }
         } else {
           const allCategories = [
             ...this.getCoreCategories(),
@@ -863,7 +900,7 @@ export class UnitsManager {
           }
         }
 
-        const value = this.app.getSelfPath(path)
+        const value = skMetadata?.value ?? this.app.getSelfPath(path)
         const valueType = this.metadataManager.detectValueType(skMetadata?.units, value)
 
         pathsInfo.push({
@@ -928,8 +965,14 @@ export class UnitsManager {
     const unitDefinitions = this.preferencesStore.getUnitDefinitions()
 
     try {
-      // Collect paths directly from SignalK API instead of relying on signalKMetadata
-      // which may be empty if frontend hasn't called POST /signalk-metadata
+      // Refresh SignalK metadata cache with CURRENT values from API
+      // This ensures boolean auto-detection works even if values weren't available at startup
+      await this.metadataManager.autoInitializeSignalKMetadata()
+
+      // Clear metadata resolution cache to force fresh resolution
+      this.metadataManager.clearMetadataCache()
+
+      // Collect paths directly from SignalK API
       const pathsSet = await this.metadataManager.collectSignalKPaths()
 
       // Also include any path overrides that may not be in SignalK
@@ -1246,11 +1289,15 @@ export class UnitsManager {
     }))
 
     // Ensure each base unit is always included in its own target units list
+    // (but only if no conversion already exists with that key)
     for (const baseUnit of baseUnitsArray) {
       if (!targetUnitsByBase[baseUnit]) {
         targetUnitsByBase[baseUnit] = new Set()
       }
-      targetUnitsByBase[baseUnit].add(baseUnit)
+      // Only add identity if it doesn't already exist as a conversion key
+      if (!targetUnitsByBase[baseUnit].has(baseUnit)) {
+        targetUnitsByBase[baseUnit].add(baseUnit)
+      }
     }
 
     const targetUnitsMap: Record<string, string[]> = {}
@@ -1456,5 +1503,12 @@ export class UnitsManager {
    */
   getMetadataManager(): MetadataManager {
     return this.metadataManager
+  }
+
+  /**
+   * Get the preferences store instance (for standard units API)
+   */
+  getPreferencesStore(): PreferencesStore {
+    return this.preferencesStore
   }
 }

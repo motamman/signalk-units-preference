@@ -93,6 +93,31 @@
       "baseUnit": "m3/s",
       "targetUnit": "gal(UK)/h",
       "displayFormat": "0.0"
+    },
+    "energy": {
+      "baseUnit": "J",
+      "targetUnit": "BTU",
+      "displayFormat": "0.00"
+    },
+    "mass": {
+      "baseUnit": "kg",
+      "targetUnit": "lb",
+      "displayFormat": "0.0"
+    },
+    "area": {
+      "baseUnit": "m2",
+      "targetUnit": "sqft",
+      "displayFormat": "0.0"
+    },
+    "angleDegrees": {
+      "baseUnit": "deg",
+      "targetUnit": "deg",
+      "displayFormat": "0.0"
+    },
+    "boolean": {
+      "baseUnit": "bool",
+      "targetUnit": "bool",
+      "displayFormat": "boolean"
     }
   }
 }

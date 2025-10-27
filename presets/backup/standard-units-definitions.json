@@ -134,6 +134,11 @@
         "inverseFormula": "value / 0.004014741294968937",
         "symbol": "inh2o"
       },
+      "pascal": {
+        "formula": "value * 1",
+        "inverseFormula": "value / 1",
+        "symbol": "pascal"
+      },
       "torr": {
         "formula": "value * 0.0075006168507298",
         "inverseFormula": "value / 0.0075006168507298",
@@ -375,6 +380,12 @@
   "m3": {
     "longName": "cubic meter",
     "conversions": {
+      "m³": {
+        "formula": "value * 1",
+        "inverseFormula": "value * 1",
+        "symbol": "m³",
+        "longName": "cubic meter"
+      },
       "L": {
         "formula": "value * 1000",
         "inverseFormula": "value * 0.001",
@@ -462,12 +473,6 @@
         "formula": "value * 202884.1355421759",
         "inverseFormula": "value / 202884.1355421759",
         "symbol": "teaspoon"
-      },
-      "m3": {
-        "formula": "value",
-        "inverseFormula": "value",
-        "symbol": "m3",
-        "longName": "m3"
       }
     }
   },
@@ -479,6 +484,11 @@
         "inverseFormula": "value * 1",
         "symbol": "V",
         "longName": "volt"
+      },
+      "volt": {
+        "formula": "value * 1",
+        "inverseFormula": "value / 1",
+        "symbol": "volt"
       }
     }
   },
@@ -734,6 +744,12 @@
   "m3/s": {
     "longName": "cubic meters per second",
     "conversions": {
+      "m³/s": {
+        "formula": "value * 1",
+        "inverseFormula": "value * 1",
+        "symbol": "m³/s",
+        "longName": "cubic meters per second"
+      },
       "L/h": {
         "formula": "value * 3600000",
         "inverseFormula": "value * 0.000000277778",
@@ -751,11 +767,6 @@
         "inverseFormula": "value * 0.00000105150327",
         "symbol": "gal/h",
         "longName": "gallons per hour"
-      },
-      "m3/s": {
-        "formula": "value",
-        "inverseFormula": "value",
-        "symbol": "m3/s"
       }
     }
   },
@@ -803,14 +814,12 @@
       "calorie": {
         "formula": "value * 0.2390057361376673",
         "inverseFormula": "value / 0.2390057361376673",
-        "symbol": "calorie",
-        "longName": "physics unit"
+        "symbol": "calorie"
       },
       "Calorie": {
         "formula": "value * 0.00023900573613766727",
         "inverseFormula": "value / 0.00023900573613766727",
-        "symbol": "Calorie",
-        "longName": "food energy"
+        "symbol": "Calorie"
       },
       "electronvolt": {
         "formula": "value * 6241509074460763000",
@@ -822,6 +831,11 @@
         "inverseFormula": "value / 10000000",
         "symbol": "erg"
       },
+      "joule": {
+        "formula": "value * 1",
+        "inverseFormula": "value / 1",
+        "symbol": "J"
+      },
       "therm-US": {
         "formula": "value * 9.480434279733487e-9",
         "inverseFormula": "value / 9.480434279733487e-9",
@@ -831,11 +845,6 @@
         "formula": "value * 0.0002777777777777778",
         "inverseFormula": "value / 0.0002777777777777778",
         "symbol": "Wh"
-      },
-      "J": {
-        "formula": "value * 1",
-        "inverseFormula": "value / 1",
-        "symbol": "J"
       }
     }
   },
@@ -926,11 +935,6 @@
         "formula": "value * 1",
         "inverseFormula": "value / 1",
         "symbol": "sqft"
-      },
-      "m2": {
-        "formula": "value",
-        "inverseFormula": "value",
-        "symbol": "m2"
       }
     }
   },
@@ -971,14 +975,7 @@
   },
   "bool": {
     "longName": "Boolean",
-    "conversions": {
-      "bool": {
-        "formula": "value",
-        "inverseFormula": "value",
-        "symbol": "",
-        "longName": "Boolean"
-      }
-    }
+    "conversions": {}
   },
   "ISO-8601 (UTC)": {
     "longName": "Timestamp",

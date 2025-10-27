@@ -93,6 +93,31 @@
       "baseUnit": "m3/s",
       "targetUnit": "L/h",
       "displayFormat": "0.0"
+    },
+    "energy": {
+      "baseUnit": "J",
+      "targetUnit": "J",
+      "displayFormat": "0.0"
+    },
+    "mass": {
+      "baseUnit": "kg",
+      "targetUnit": "kg",
+      "displayFormat": "0.0"
+    },
+    "area": {
+      "baseUnit": "m2",
+      "targetUnit": "m2",
+      "displayFormat": "0.0"
+    },
+    "angleDegrees": {
+      "baseUnit": "deg",
+      "targetUnit": "deg",
+      "displayFormat": "0.0"
+    },
+    "boolean": {
+      "baseUnit": "bool",
+      "targetUnit": "bool",
+      "displayFormat": "boolean"
     }
   }
 }

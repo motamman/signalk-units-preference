@@ -23,7 +23,12 @@ const DEFAULT_CATEGORY_PREFERENCES: Record<string, CategoryPreference & { baseUn
   time: { targetUnit: 's', displayFormat: '0.0' },
   charge: { targetUnit: 'Ah', displayFormat: '0.0' },
   volumeRate: { targetUnit: 'gal/h', displayFormat: '0.0' },
-  unitless: { targetUnit: 'tr', displayFormat: '0.0' }
+  unitless: { targetUnit: 'tr', displayFormat: '0.0' },
+  energy: { targetUnit: 'J', displayFormat: '0.0' },
+  mass: { targetUnit: 'kg', displayFormat: '0.0' },
+  area: { targetUnit: 'm2', displayFormat: '0.0' },
+  angleDegrees: { targetUnit: 'deg', displayFormat: '0.0' },
+  boolean: { targetUnit: 'bool', displayFormat: 'boolean' }
 }
 
 const DEFAULT_PATH_PATTERNS: PathPatternRule[] = [
@@ -534,6 +539,98 @@ export class PreferencesStore {
     if (this.unitDefinitions[baseUnit]?.conversions[targetUnit]) {
       delete this.unitDefinitions[baseUnit].conversions[targetUnit]
       await this.saveUnitDefinitions()
+    }
+  }
+
+  // ===== Standard Unit Definitions CRUD =====
+
+  /**
+   * Get path to standard units definitions file
+   */
+  private getStandardDefinitionsPath(): string {
+    // From dist/PreferencesStore.js, go to project root, then to presets/definitions
+    return path.join(__dirname, '..', 'presets', 'definitions', 'standard-units-definitions.json')
+  }
+
+  /**
+   * Load standard unit definitions from file
+   */
+  loadStandardUnitDefinitions(): Record<string, BaseUnitDefinition> {
+    const standardPath = this.getStandardDefinitionsPath()
+    if (fs.existsSync(standardPath)) {
+      try {
+        const data = fs.readFileSync(standardPath, 'utf8')
+        return JSON.parse(data)
+      } catch (error) {
+        this.app.error(`Failed to load standard unit definitions: ${error}`)
+        return {}
+      }
+    }
+    return {}
+  }
+
+  /**
+   * Save standard unit definitions to file
+   */
+  private async saveStandardUnitDefinitions(definitions: Record<string, BaseUnitDefinition>): Promise<void> {
+    const standardPath = this.getStandardDefinitionsPath()
+    try {
+      await fs.promises.writeFile(standardPath, JSON.stringify(definitions, null, 2), 'utf8')
+      this.app.debug('Saved standard unit definitions')
+    } catch (error) {
+      this.app.error(`Failed to save standard unit definitions: ${error}`)
+      throw error
+    }
+  }
+
+  /**
+   * Add or update a standard unit definition
+   */
+  async addStandardUnitDefinition(baseUnit: string, definition: BaseUnitDefinition): Promise<void> {
+    const definitions = this.loadStandardUnitDefinitions()
+    definitions[baseUnit] = definition
+    await this.saveStandardUnitDefinitions(definitions)
+  }
+
+  /**
+   * Delete a standard unit definition
+   */
+  async deleteStandardUnitDefinition(baseUnit: string): Promise<void> {
+    const definitions = this.loadStandardUnitDefinitions()
+    delete definitions[baseUnit]
+    await this.saveStandardUnitDefinitions(definitions)
+  }
+
+  /**
+   * Add or update a conversion in a standard unit definition
+   */
+  async addConversionToStandardUnit(baseUnit: string, targetUnit: string, conversion: any): Promise<void> {
+    const definitions = this.loadStandardUnitDefinitions()
+
+    // If this base unit doesn't exist, create it
+    if (!definitions[baseUnit]) {
+      definitions[baseUnit] = {
+        baseUnit: baseUnit,
+        conversions: {}
+      }
+    }
+
+    if (!definitions[baseUnit].conversions) {
+      definitions[baseUnit].conversions = {}
+    }
+
+    definitions[baseUnit].conversions[targetUnit] = conversion
+    await this.saveStandardUnitDefinitions(definitions)
+  }
+
+  /**
+   * Delete a conversion from a standard unit definition
+   */
+  async deleteConversionFromStandardUnit(baseUnit: string, targetUnit: string): Promise<void> {
+    const definitions = this.loadStandardUnitDefinitions()
+    if (definitions[baseUnit]?.conversions[targetUnit]) {
+      delete definitions[baseUnit].conversions[targetUnit]
+      await this.saveStandardUnitDefinitions(definitions)
     }
   }
 }

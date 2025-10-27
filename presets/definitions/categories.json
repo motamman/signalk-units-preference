@@ -6,6 +6,7 @@
     "distance": "m",
     "depth": "m",
     "angle": "rad",
+    "angleDegrees": "deg",
     "angularVelocity": "rad/s",
     "volume": "m3",
     "voltage": "V",
@@ -17,9 +18,13 @@
     "charge": "C",
     "volumeRate": "m3/s",
     "length": "m",
+    "energy": "J",
+    "mass": "kg",
+    "area": "m2",
     "dateTime": "RFC 3339 (UTC)",
     "epoch": "Epoch Seconds",
-    "unitless": "tr"
+    "unitless": "tr",
+    "boolean": "bool"
   },
   "coreCategories": [
     "speed",
@@ -28,6 +33,7 @@
     "distance",
     "depth",
     "angle",
+    "angleDegrees",
     "angularVelocity",
     "volume",
     "voltage",
@@ -39,8 +45,12 @@
     "charge",
     "volumeRate",
     "length",
+    "energy",
+    "mass",
+    "area",
     "dateTime",
     "epoch",
-    "unitless"
+    "unitless",
+    "boolean"
   ]
 }

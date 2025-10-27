@@ -142,7 +142,10 @@ Are you sure you want to continue?`
 }
 
 // Edit base unit
-function editBaseUnit(baseUnit) {
+function editBaseUnit(baseUnit, isStandard = false) {
+  // Store whether this is a standard or custom unit
+  window.currentEditingUnitIsStandard = isStandard
+
   // Check if there's an open base unit form with unsaved changes
   if (currentlyEditingBaseUnit && currentlyEditingBaseUnit !== baseUnit) {
     if (isBaseUnitFormDirty()) {
@@ -248,6 +251,7 @@ async function saveEditBaseUnit(baseUnit) {
   const safeBaseUnit = sanitizeIdSegment(baseUnit)
   const descInputId = `edit-unit-desc-${safeBaseUnit}`
   const longName = document.getElementById(descInputId).value.trim()
+  const isStandard = window.currentEditingUnitIsStandard || false
 
   try {
     // Get the existing unit definition and update only the longName
@@ -258,13 +262,19 @@ async function saveEditBaseUnit(baseUnit) {
       conversions: existingDef.conversions || {}
     }
 
-    await apiUpdateBaseUnit(baseUnit, updatedDef)
+    // Call the appropriate API function based on unit type
+    if (isStandard) {
+      await apiUpdateStandardBaseUnit(baseUnit, updatedDef)
+    } else {
+      await apiUpdateBaseUnit(baseUnit, updatedDef)
+    }
 
-    showStatus(`Updated base unit: ${baseUnit}`, 'success')
+    showStatus(`Updated ${isStandard ? 'standard' : 'custom'} base unit: ${baseUnit}`, 'success')
 
     // Clear dirty tracking
     baseUnitFormOriginalState = null
     currentlyEditingBaseUnit = null
+    window.currentEditingUnitIsStandard = false
 
     // Update local unitDefinitions
     if (unitDefinitions[baseUnit]) {
@@ -437,7 +447,10 @@ async function deleteConversion(baseUnit, targetUnit) {
 }
 
 // Edit conversion
-function editConversion(baseUnit, targetUnit) {
+function editConversion(baseUnit, targetUnit, isStandard = false) {
+  // Store whether this is a standard or custom conversion
+  window.currentEditingConversionIsStandard = isStandard
+
   // Check if there's an open base unit form with unsaved changes
   if (currentlyEditingBaseUnit) {
     if (isBaseUnitFormDirty()) {
@@ -591,6 +604,8 @@ async function saveEditConversion(baseUnit, targetUnit) {
     return
   }
 
+  const isStandard = window.currentEditingConversionIsStandard || false
+
   try {
     const conversionData = {
       targetUnit,
@@ -605,14 +620,19 @@ async function saveEditConversion(baseUnit, targetUnit) {
       conversionData.key = key
     }
 
-    // Use POST to overwrite the existing conversion
-    await apiUpdateConversion(baseUnit, targetUnit, conversionData)
+    // Call the appropriate API function based on conversion type
+    if (isStandard) {
+      await apiUpdateStandardConversion(baseUnit, targetUnit, conversionData)
+    } else {
+      await apiUpdateConversion(baseUnit, targetUnit, conversionData)
+    }
 
-    showStatus(`Updated conversion: ${baseUnit} → ${targetUnit}`, 'success')
+    showStatus(`Updated ${isStandard ? 'standard' : 'custom'} conversion: ${baseUnit} → ${targetUnit}`, 'success')
 
     // Clear dirty tracking
     conversionFormOriginalState = null
     currentlyEditingConversion = null
+    window.currentEditingConversionIsStandard = false
 
     // Reload schema and unit definitions
     await loadSchema()
@@ -658,8 +678,39 @@ function cancelEditConversion(baseUnit, targetUnit) {
 // Load unit definitions from backend
 async function loadUnitDefinitions() {
   try {
-    unitDefinitions = await apiLoadUnitDefinitions()
-    console.log('Loaded unitDefinitions:', unitDefinitions)
+    // Load both standard and custom units
+    const customUnits = await apiLoadUnitDefinitions()
+    const standardUnits = await apiLoadStandardUnitDefinitions()
+
+    console.log('Loaded custom units:', customUnits)
+    console.log('Loaded standard units:', standardUnits)
+
+    // Merge: custom units override standard units
+    // Mark each with isStandard flag
+    unitDefinitions = {}
+
+    // Add standard units first
+    for (const [baseUnit, def] of Object.entries(standardUnits)) {
+      unitDefinitions[baseUnit] = {
+        ...def,
+        isCustom: false,
+        isStandard: true
+      }
+    }
+
+    // Add/override with custom units
+    for (const [baseUnit, def] of Object.entries(customUnits)) {
+      // If this unit exists in standard, it's a standard unit with custom additions
+      const isStandardUnit = !!standardUnits[baseUnit]
+
+      unitDefinitions[baseUnit] = {
+        ...def,
+        isCustom: !isStandardUnit,
+        isStandard: isStandardUnit
+      }
+    }
+
+    console.log('Merged unitDefinitions:', unitDefinitions)
   } catch (error) {
     console.error('Error loading unit definitions:', error)
     unitDefinitions = {}
@@ -700,9 +751,10 @@ function renderUnitDefinitions() {
         a[0].toLowerCase().localeCompare(b[0].toLowerCase())
       )
       const isCustom = def.isCustom === true
+      const isStandard = def.isStandard === true
       const badge = isCustom
         ? '<span style="background: #667eea; color: white; padding: 2px 8px; border-radius: 3px; font-size: 11px; margin-left: 8px;">CUSTOM</span>'
-        : '<span style="background: #6c757d; color: white; padding: 2px 8px; border-radius: 3px; font-size: 11px; margin-left: 8px;">CORE</span>'
+        : '<span style="background: #28a745; color: white; padding: 2px 8px; border-radius: 3px; font-size: 11px; margin-left: 8px;">STANDARD</span>'
       const safeBaseUnit = sanitizeIdSegment(baseUnit)
 
       return `
@@ -713,12 +765,8 @@ function renderUnitDefinitions() {
             <span style="color: #95a5a6; font-size: 13px;">${conversions.length} conversion${conversions.length !== 1 ? 's' : ''}</span>
           </div>
           <div style="display: flex; align-items: center; gap: 10px;">
-            ${
-              isCustom
-                ? `<button class="btn-primary btn-edit" onclick="event.stopPropagation(); editBaseUnit('${baseUnit}')">Edit</button>
-            <button class="btn-danger btn-delete" onclick="event.stopPropagation(); deleteBaseUnit('${baseUnit}')">Delete</button>`
-                : ''
-            }
+            <button class="btn-primary btn-edit" onclick="event.stopPropagation(); ${isStandard ? 'editStandardBaseUnit' : 'editBaseUnit'}('${baseUnit}')">Edit</button>
+            <button class="btn-danger btn-delete" onclick="event.stopPropagation(); ${isStandard ? 'deleteStandardBaseUnit' : 'deleteBaseUnit'}('${baseUnit}')">Delete</button>
             <span class="collapse-icon collapsed" id="unit-icon-${safeBaseUnit}">▼</span>
           </div>
         </div>
@@ -742,9 +790,7 @@ function renderUnitDefinitions() {
                   <tbody id="conversions-tbody-${safeBaseUnit}">
                     ${conversions
                       .map(([target, conv]) => {
-                        // Check if this specific conversion is custom (editable)
-                        const isConversionCustom =
-                          isCustom || (def.customConversions || []).includes(target)
+                        // All conversions are now editable
                         return `
                       <tr id="${buildConversionId('conversion-row', baseUnit, target)}" style="border-bottom: 1px solid #f0f0f0;">
                         <td style="padding: 8px; font-family: monospace;">${target}</td>
@@ -752,12 +798,8 @@ function renderUnitDefinitions() {
                         <td style="padding: 8px; font-family: monospace; font-size: 12px;">${conv.inverseFormula}</td>
                         <td style="padding: 8px;">${conv.symbol}</td>
                         <td style="padding: 8px;">
-                          ${
-                            isConversionCustom
-                              ? `<button class="btn-primary btn-edit" onclick="editConversion('${baseUnit}', '${target}')">Edit</button>
-                          <button class="btn-danger btn-delete" onclick="deleteConversion('${baseUnit}', '${target}')">Delete</button>`
-                              : ''
-                          }
+                          <button class="btn-primary btn-edit" onclick="${isStandard ? 'editStandardConversion' : 'editConversion'}('${baseUnit}', '${target}')">Edit</button>
+                          <button class="btn-danger btn-delete" onclick="${isStandard ? 'deleteStandardConversion' : 'deleteConversion'}('${baseUnit}', '${target}')">Delete</button>
                         </td>
                       </tr>`
                       })
@@ -892,6 +934,125 @@ function toggleUnitItem(baseUnit) {
 }
 
 // ============================================================================
+// JS-QUANTITIES INTEGRATION
+// ============================================================================
+
+// Handle base unit change - populate target units from js-quantities
+async function onConversionBaseUnitChange(baseUnit) {
+  const targetSelect = document.getElementById('conversionTargetUnit')
+  const loadingDiv = document.getElementById('conversionTargetLoading')
+
+  if (!baseUnit) {
+    // Reset target unit dropdown
+    targetSelect.disabled = true
+    targetSelect.innerHTML = '<option value="">-- Select base unit first --</option>'
+    clearConversionFormulas()
+    return
+  }
+
+  // Show loading
+  loadingDiv.style.display = 'block'
+  targetSelect.disabled = true
+
+  try {
+    // Fetch available targets from js-quantities
+    const encodedUnit = encodeURIComponent(baseUnit)
+    const response = await fetch(`/plugins/signalk-units-preference/quantities/available-targets/${encodedUnit}`)
+    const data = await response.json()
+
+    // Build dropdown options
+    let options = '<option value="">-- Select or type custom --</option>'
+
+    if (data.targets && data.targets.length > 0) {
+      // Add suggested units from js-quantities
+      options += '<optgroup label="✨ Suggested (from js-quantities)">'
+      for (const target of data.targets) {
+        const factor = target.factor.toFixed(8).replace(/\.?0+$/, '') // Remove trailing zeros
+        options += `<option value="${target.unit}" data-qty-unit="${target.qtyUnit}">${target.unit} (${target.symbol}) - factor: ${factor}</option>`
+      }
+      options += '</optgroup>'
+    }
+
+    // Add custom option
+    options += '<option value="__custom__">➕ Add custom unit (manual formulas)</option>'
+
+    targetSelect.innerHTML = options
+    targetSelect.disabled = false
+
+    // Add change event listener
+    targetSelect.onchange = () => onConversionTargetUnitChange(baseUnit, targetSelect.value)
+  } catch (error) {
+    console.error('Failed to load target units:', error)
+    targetSelect.innerHTML = '<option value="__custom__">⚠️ js-quantities unavailable - Enter manually</option>'
+    targetSelect.disabled = false
+  } finally {
+    loadingDiv.style.display = 'none'
+  }
+}
+
+// Handle target unit change - auto-fill formulas from js-quantities
+async function onConversionTargetUnitChange(baseUnit, targetUnit) {
+  if (!targetUnit || targetUnit === '__custom__') {
+    // Clear formula fields for manual entry
+    clearConversionFormulas()
+    if (targetUnit === '__custom__') {
+      showStatus('Enter custom formulas manually', 'info')
+    }
+    return
+  }
+
+  // Show loading in formula fields
+  document.getElementById('conversionFormula').value = '⏳ Generating...'
+  document.getElementById('conversionInverseFormula').value = '⏳ Generating...'
+  document.getElementById('conversionSymbol').value = '⏳...'
+
+  try {
+    // Generate formula using js-quantities
+    const response = await fetch('/plugins/signalk-units-preference/quantities/generate-formula', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ baseUnit, targetUnit })
+    })
+
+    const result = await response.json()
+
+    if (result.success) {
+      // Auto-fill formula fields (keep them editable!)
+      document.getElementById('conversionFormula').value = result.formula
+      document.getElementById('conversionInverseFormula').value = result.inverseFormula
+      document.getElementById('conversionSymbol').value = result.symbol
+
+      // Trigger key field check
+      toggleConversionKeyField()
+
+      // Show success message
+      let message = `✨ Formula generated from js-quantities`
+      if (result.isOffset) {
+        message += ' (offset-based conversion for temperature)'
+      }
+      showStatus(message, 'success')
+    } else {
+      // js-quantities doesn't support this conversion
+      clearConversionFormulas()
+      showStatus(result.message || 'Conversion not supported - enter manually', 'warning')
+    }
+  } catch (error) {
+    console.error('Failed to generate formula:', error)
+    clearConversionFormulas()
+    showStatus('Failed to generate formula - enter manually', 'error')
+  }
+}
+
+// Clear conversion formula fields
+function clearConversionFormulas() {
+  document.getElementById('conversionFormula').value = ''
+  document.getElementById('conversionInverseFormula').value = ''
+  document.getElementById('conversionSymbol').value = ''
+  document.getElementById('conversionKey').value = ''
+  toggleConversionKeyField()
+}
+
+// ============================================================================
 // INITIALIZATION
 // ============================================================================
 
@@ -904,7 +1065,7 @@ function initializeUnitDefinitionsDropdowns() {
   const baseUnits = unitSchema.baseUnits || []
 
   container.innerHTML = `
-    <select id="conversionBaseUnit">
+    <select id="conversionBaseUnit" onchange="onConversionBaseUnitChange(this.value)">
       <option value="">-- Select Base Unit --</option>
       ${baseUnits
         .map(
@@ -915,4 +1076,67 @@ function initializeUnitDefinitionsDropdowns() {
         .join('')}
     </select>
   `
+}
+
+// ============================================================================
+// STANDARD UNIT DEFINITIONS HANDLERS
+// ============================================================================
+
+// Edit standard base unit
+function editStandardBaseUnit(baseUnit) {
+  // Reuse the same edit function but mark it as standard
+  editBaseUnit(baseUnit, true)
+}
+
+// Delete standard base unit
+async function deleteStandardBaseUnit(baseUnit) {
+  const confirmed = confirm(
+    `Delete standard base unit "${baseUnit}"?\n\nThis will remove the unit and all its conversions from the standard definitions file. Are you sure?`
+  )
+
+  if (!confirmed) return
+
+  try {
+    await apiDeleteStandardBaseUnit(baseUnit)
+    showStatus(`Standard base unit "${baseUnit}" deleted successfully!`, 'success')
+
+    // Reload and re-render
+    await loadSchema()
+    await loadUnitDefinitions()
+    renderUnitDefinitions()
+    initializePatternDropdowns()
+    initializeCustomCategoryDropdowns()
+    initializeUnitDefinitionsDropdowns()
+    initializePathOverridesDropdowns()
+  } catch (error) {
+    showStatus('Failed to delete standard base unit: ' + error.message, 'error')
+  }
+}
+
+// Edit standard conversion
+function editStandardConversion(baseUnit, targetUnit) {
+  // Reuse the same edit function but mark it as standard
+  editConversion(baseUnit, targetUnit, true)
+}
+
+// Delete standard conversion
+async function deleteStandardConversion(baseUnit, targetUnit) {
+  const confirmed = confirm(`Delete standard conversion "${baseUnit} → ${targetUnit}"?`)
+
+  if (!confirmed) return
+
+  try {
+    await apiDeleteStandardConversion(baseUnit, targetUnit)
+    showStatus(`Standard conversion "${baseUnit} → ${targetUnit}" deleted successfully!`, 'success')
+
+    // Reload and re-render
+    await loadUnitDefinitions()
+    renderUnitDefinitions()
+    initializePatternDropdowns()
+    initializeCustomCategoryDropdowns()
+    initializeUnitDefinitionsDropdowns()
+    initializePathOverridesDropdowns()
+  } catch (error) {
+    showStatus('Failed to delete standard conversion: ' + error.message, 'error')
+  }
 }
