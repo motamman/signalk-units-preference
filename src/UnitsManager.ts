@@ -43,6 +43,16 @@ export class UnitsManager {
   private schemaCacheTimestamp: number = 0
   private readonly SCHEMA_CACHE_TTL_MS = 15000 // 15 seconds
 
+  // Cache for getPathsMetadata
+  private pathsMetadataCache: Record<string, UnitMetadata> | null = null
+  private pathsMetadataCacheTime: number = 0
+  private readonly PATHS_METADATA_CACHE_TTL_MS = 30000 // 30 seconds
+
+  // Rate limiting for getPathsMetadata to prevent rapid sequential calls
+  private lastMetadataFetchTime: number = 0
+  private readonly MIN_FETCH_INTERVAL_MS = 1000 // Minimum 1 second between fetches
+  private pendingMetadataFetch: Promise<Record<string, UnitMetadata>> | null = null
+
   constructor(
     private app: ServerAPI,
     private dataDir: string
@@ -196,9 +206,13 @@ export class UnitsManager {
    * This is exposed on UnitsManager to support the DeltaStreamHandler's cache clearing mechanism.
    */
   setPreferencesChangeCallback(callback: () => void): void {
-    // Wrap the callback to also clear our schema cache
+    // Wrap the callback to invalidate caches WITHOUT forcing immediate refresh
+    // The callback (e.g., broadcastUpdate) can choose to use cached data or force refresh
     this.preferencesStore.setOnPreferencesChanged(() => {
       this.clearSchemaCache()
+      this.pathsMetadataCache = null // Invalidate pathsMetadata cache
+      // Note: We DON'T clear metadataManager cache here - let it naturally expire
+      // This prevents cascading cache clears that cause API hammering
       callback()
     })
   }
@@ -256,6 +270,8 @@ export class UnitsManager {
    */
   setSignalKMetadata(metadata: Record<string, SignalKPathMetadata>): void {
     this.metadataManager.setSignalKMetadata(metadata)
+    // Invalidate paths metadata cache when new metadata arrives
+    this.pathsMetadataCache = null
   }
 
   /**
@@ -958,19 +974,70 @@ export class UnitsManager {
 
   /**
    * Build a map of all discovered paths to their metadata definitions.
+   * @param useCache - If true, return cached result if available and not expired (default: true)
+   * @param forceRefresh - If true, bypass all caching and rate limiting (use sparingly)
    */
-  async getPathsMetadata(): Promise<Record<string, UnitMetadata>> {
+  async getPathsMetadata(useCache: boolean = true, forceRefresh: boolean = false): Promise<Record<string, UnitMetadata>> {
+    const now = Date.now()
+
+    // Check cache if requested (and not forcing refresh)
+    if (useCache && !forceRefresh && this.pathsMetadataCache) {
+      const cacheAge = now - this.pathsMetadataCacheTime
+      if (cacheAge < this.PATHS_METADATA_CACHE_TTL_MS) {
+        this.app.debug(`Using cached pathsMetadata (age: ${Math.round(cacheAge / 1000)}s)`)
+        return this.pathsMetadataCache
+      }
+    }
+
+    // Rate limiting: If a fetch is already in progress, return that promise
+    if (!forceRefresh && this.pendingMetadataFetch) {
+      this.app.debug('pathsMetadata fetch already in progress, returning pending promise')
+      return this.pendingMetadataFetch
+    }
+
+    // Rate limiting: Prevent rapid sequential calls
+    const timeSinceLastFetch = now - this.lastMetadataFetchTime
+    if (!forceRefresh && timeSinceLastFetch < this.MIN_FETCH_INTERVAL_MS) {
+      this.app.debug(
+        `Rate limit: returning cached data (last fetch ${Math.round(timeSinceLastFetch)}ms ago, min interval ${this.MIN_FETCH_INTERVAL_MS}ms)`
+      )
+      // Return cached data if available, otherwise wait
+      if (this.pathsMetadataCache) {
+        return this.pathsMetadataCache
+      }
+    }
+
+    // Start the fetch
+    this.lastMetadataFetchTime = now
+    this.pendingMetadataFetch = this.buildPathsMetadata(forceRefresh)
+
+    try {
+      const result = await this.pendingMetadataFetch
+      return result
+    } finally {
+      this.pendingMetadataFetch = null
+    }
+  }
+
+  /**
+   * Internal method to build paths metadata (extracted for better flow control)
+   */
+  private async buildPathsMetadata(forceRefresh: boolean): Promise<Record<string, UnitMetadata>> {
     const result: Record<string, UnitMetadata> = {}
     const preferences = this.preferencesStore.getPreferences()
     const unitDefinitions = this.preferencesStore.getUnitDefinitions()
 
     try {
-      // Refresh SignalK metadata cache with CURRENT values from API
-      // This ensures boolean auto-detection works even if values weren't available at startup
+      // CRITICAL: Always refresh SignalK metadata to ensure boolean detection works
+      // Boolean paths without explicit units need value inspection to be detected
+      // This is REQUIRED for proper type detection, regardless of cache settings
       await this.metadataManager.autoInitializeSignalKMetadata()
 
-      // Clear metadata resolution cache to force fresh resolution
-      this.metadataManager.clearMetadataCache()
+      // Only clear metadata resolution cache on force refresh
+      if (forceRefresh) {
+        this.app.debug('Force refresh: clearing metadata cache')
+        this.metadataManager.clearMetadataCache()
+      }
 
       // Collect paths directly from SignalK API
       const pathsSet = await this.metadataManager.collectSignalKPaths()
@@ -1034,6 +1101,11 @@ export class UnitsManager {
           }
         }
       }
+
+      // Cache the result with timestamp
+      this.pathsMetadataCache = result
+      this.pathsMetadataCacheTime = Date.now()
+      this.app.debug(`Cached pathsMetadata with ${Object.keys(result).length} paths`)
 
       return result
     } catch (error) {

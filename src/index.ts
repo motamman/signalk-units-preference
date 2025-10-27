@@ -134,8 +134,11 @@ module.exports = (app: ServerAPI): Plugin => {
         router.get('/signalk/v1/conversions', async (req: Request, res: Response) => {
           try {
             app.debug('Conversions discovery handler called at /signalk/v1/conversions')
-            const pathsMetadata = await unitsManager.getPathsMetadata()
-            app.debug(`Conversions discovery returning ${Object.keys(pathsMetadata).length} paths`)
+            // Use cache by default (30s TTL) to prevent API hammering
+            // Client can add ?refresh=true query param to force refresh if needed
+            const forceRefresh = req.query.refresh === 'true' || req.query.refresh === '1'
+            const pathsMetadata = await unitsManager.getPathsMetadata(true, forceRefresh)
+            app.debug(`Conversions discovery returning ${Object.keys(pathsMetadata).length} paths${forceRefresh ? ' (forced refresh)' : ' (using cache)'}`)
             res.json(pathsMetadata)
           } catch (error) {
             app.error(`Conversions discovery error: ${error}`)
@@ -334,9 +337,10 @@ module.exports = (app: ServerAPI): Plugin => {
               )
               return {}
             }
-            const result = await unitsManager.getPathsMetadata()
+            // Use cache by default (30s TTL) to prevent API hammering from other plugins
+            const result = await unitsManager.getPathsMetadata(true, false)
             console.log(
-              `[signalk-units-preference] getAllUnitsConversions returning ${Object.keys(result).length} paths`
+              `[signalk-units-preference] getAllUnitsConversions returning ${Object.keys(result).length} paths (cached)`
             )
             return result
           } catch (error) {
@@ -391,7 +395,8 @@ module.exports = (app: ServerAPI): Plugin => {
 
         // Mark as initialized so functions can return data
         isInitialized = true
-        const pathsMetadata = await unitsManager.getPathsMetadata()
+        // Force a refresh on startup to populate the cache with fresh data
+        const pathsMetadata = await unitsManager.getPathsMetadata(false, true)
         console.log(
           '✅ [signalk-units-preference] UnitsManager initialized, functions ready to use'
         )
@@ -431,40 +436,27 @@ module.exports = (app: ServerAPI): Plugin => {
           )
         }
 
-        // Start dedicated conversion stream server
-        conversionStreamServer = new ConversionStreamServer(app, unitsManager, sendMeta)
         const httpServer = (app as any).server
         if (httpServer) {
-          // Start conversions metadata WebSocket stream FIRST
+          // Enable ConversionsWebSocket (metadata stream at /signalk/v1/conversions/stream)
+          // Now uses cache to prevent API hammering - see broadcastUpdate() in ConversionsWebSocket.ts
           conversionsWebSocket = new ConversionsWebSocket(app, unitsManager)
           conversionsWebSocket.initialize(httpServer)
 
-          // Now start conversion stream server (it will register its own callback)
-          conversionStreamServer.start(httpServer)
-
-          // Override the callback to call BOTH handlers
+          // Register preference change callback to broadcast updates to WebSocket clients
           unitsManager.setPreferencesChangeCallback(() => {
-            // Clear conversion stream cache
-            if (conversionStreamServer) {
-              const cache = (conversionStreamServer as any).conversionCache
-              if (cache) {
-                const oldSize = cache.size
-                cache.clear()
-                app.debug(`Conversion cache cleared (was ${oldSize} entries)`)
-              }
-            }
-            // Broadcast metadata updates
             if (conversionsWebSocket) {
               conversionsWebSocket.broadcastUpdate()
             }
           })
 
-          app.debug(
-            'Conversion stream server started - clients can connect to ws://host/plugins/signalk-units-preference/stream'
-          )
-          app.debug(
-            'Conversions metadata WebSocket started - clients can connect to ws://host/signalk/v1/conversions/stream'
-          )
+          app.debug('ConversionsWebSocket enabled at /signalk/v1/conversions/stream (with cache optimization)')
+
+          // ConversionStreamServer (live values stream) remains disabled for now
+          // Uncomment below to enable:
+          // conversionStreamServer = new ConversionStreamServer(app, unitsManager, sendMeta)
+          // conversionStreamServer.start(httpServer)
+          // app.debug('ConversionStreamServer enabled at /plugins/signalk-units-preference/stream')
         } else {
           app.error('Cannot start conversion stream server - app.server is not available')
         }
@@ -927,7 +919,10 @@ module.exports = (app: ServerAPI): Plugin => {
       // Return metadata definitions for all discovered SignalK paths
       router.get('/paths', async (req: Request, res: Response) => {
         try {
-          const pathsMetadata = await unitsManager.getPathsMetadata()
+          // Use cache by default (30s TTL) to prevent API hammering
+          // Client can add ?refresh=true query param to force refresh if needed
+          const forceRefresh = req.query.refresh === 'true' || req.query.refresh === '1'
+          const pathsMetadata = await unitsManager.getPathsMetadata(true, forceRefresh)
           res.json(pathsMetadata)
         } catch (error) {
           app.error(`Error getting paths metadata: ${error}`)
@@ -1008,7 +1003,8 @@ module.exports = (app: ServerAPI): Plugin => {
               .json({ error: 'Forbidden - internal use only (localhost access required)' })
           }
 
-          const pathsMetadata = await unitsManager.getPathsMetadata()
+          // Use cache by default (30s TTL) to prevent API hammering
+          const pathsMetadata = await unitsManager.getPathsMetadata(true, false)
           res.json(pathsMetadata)
         } catch (error) {
           app.error(`Error getting internal paths metadata: ${error}`)

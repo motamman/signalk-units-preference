@@ -16,6 +16,9 @@ export class ConversionsWebSocket {
   private clients: Set<ConversionsClient> = new Set()
   private wss: WebSocket.Server | null = null
   private clientIdCounter = 0
+  private wsPath: string = '/signalk/v1/conversions/stream'
+  private upgradeHandler: ((request: any, socket: any, head: any) => void) | null = null
+  private httpServer: any = null
 
   constructor(
     private app: ServerAPI,
@@ -24,12 +27,14 @@ export class ConversionsWebSocket {
 
   /**
    * Initialize WebSocket server on the given HTTP server
+   * Uses noServer mode to avoid conflicts with SignalK's main WebSocket
    */
   initialize(server: any, path: string = '/signalk/v1/conversions/stream'): void {
-    this.wss = new WebSocket.Server({
-      server,
-      path
-    })
+    this.wsPath = path
+    this.httpServer = server
+
+    // Create WebSocket server in noServer mode to avoid conflicts
+    this.wss = new WebSocket.Server({ noServer: true })
 
     this.wss.on('connection', (ws: WebSocket) => {
       const client: ConversionsClient = {
@@ -54,7 +59,23 @@ export class ConversionsWebSocket {
       })
     })
 
-    this.app.debug(`ConversionsWS: WebSocket server initialized at ${path}`)
+    // Create upgrade handler function
+    this.upgradeHandler = (request: any, socket: any, head: any) => {
+      const pathname = new URL(request.url, `http://${request.headers.host}`).pathname
+
+      // Only handle upgrades for our specific path
+      if (pathname === this.wsPath) {
+        this.wss!.handleUpgrade(request, socket, head, (ws) => {
+          this.wss!.emit('connection', ws, request)
+        })
+      }
+      // Otherwise, let SignalK's WebSocket handler deal with it
+    }
+
+    // Attach upgrade handler to HTTP server
+    server.on('upgrade', this.upgradeHandler)
+
+    this.app.debug(`ConversionsWS: WebSocket server initialized at ${path} (noServer mode)`)
   }
 
   /**
@@ -62,7 +83,8 @@ export class ConversionsWebSocket {
    */
   private async sendFullConversions(client: ConversionsClient): Promise<void> {
     try {
-      const conversions = await this.unitsManager.getPathsMetadata()
+      // Use cache (30s TTL) on client connect for efficiency
+      const conversions = await this.unitsManager.getPathsMetadata(true)
       const message = {
         type: 'full',
         timestamp: new Date().toISOString(),
@@ -80,6 +102,7 @@ export class ConversionsWebSocket {
 
   /**
    * Broadcast full conversions update to all connected clients
+   * Uses cache by default (30s TTL) to prevent API hammering on preference changes
    */
   async broadcastUpdate(): Promise<void> {
     if (this.clients.size === 0) {
@@ -87,7 +110,10 @@ export class ConversionsWebSocket {
     }
 
     try {
-      const conversions = await this.unitsManager.getPathsMetadata()
+      // Use cache by default to prevent API hammering
+      // The cache gets invalidated on preference changes, so data will be fresh
+      // within 30 seconds without requiring immediate SignalK API fetch
+      const conversions = await this.unitsManager.getPathsMetadata(true, false)
       const message = {
         type: 'update',
         timestamp: new Date().toISOString(),
@@ -104,7 +130,7 @@ export class ConversionsWebSocket {
         }
       }
 
-      this.app.debug(`ConversionsWS: Broadcast update to ${sentCount}/${this.clients.size} clients`)
+      this.app.debug(`ConversionsWS: Broadcast update to ${sentCount}/${this.clients.size} clients (using cache)`)
     } catch (error) {
       this.app.error(`ConversionsWS: Error broadcasting update: ${error}`)
     }
@@ -141,6 +167,15 @@ export class ConversionsWebSocket {
    * Close all connections and cleanup
    */
   shutdown(): void {
+    // Remove upgrade event handler from HTTP server
+    if (this.httpServer && this.upgradeHandler) {
+      this.httpServer.removeListener('upgrade', this.upgradeHandler)
+      this.app.debug('ConversionsWS: Removed upgrade handler from HTTP server')
+      this.upgradeHandler = null
+      this.httpServer = null
+    }
+
+    // Close all client connections
     for (const client of this.clients) {
       if (client.ws.readyState === WebSocket.OPEN) {
         client.ws.close()
@@ -148,6 +183,7 @@ export class ConversionsWebSocket {
     }
     this.clients.clear()
 
+    // Close WebSocket server
     if (this.wss) {
       this.wss.close()
       this.wss = null

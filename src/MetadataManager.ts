@@ -25,6 +25,10 @@ export class MetadataManager {
   private standardUnitsData: Record<string, any> = {}
   private categoriesData: any = {}
 
+  // Rate limiting for autoInitializeSignalKMetadata to prevent API hammering
+  private lastSignalKFetchTime: number = 0
+  private readonly MIN_SIGNALK_FETCH_INTERVAL_MS = 5000 // 5 seconds minimum between full API fetches
+
   constructor(
     private app: ServerAPI,
     standardUnitsData: Record<string, any> = {},
@@ -517,7 +521,19 @@ export class MetadataManager {
    * This eliminates the need for the web app to POST metadata
    */
   async autoInitializeSignalKMetadata(): Promise<void> {
+    // Rate limiting: Prevent excessive API calls
+    const now = Date.now()
+    const timeSinceLastFetch = now - this.lastSignalKFetchTime
+
+    if (timeSinceLastFetch < this.MIN_SIGNALK_FETCH_INTERVAL_MS) {
+      this.app.debug(
+        `Skipping SignalK metadata fetch (last fetch ${Math.round(timeSinceLastFetch / 1000)}s ago, min interval ${this.MIN_SIGNALK_FETCH_INTERVAL_MS / 1000}s)`
+      )
+      return
+    }
+
     try {
+      this.lastSignalKFetchTime = now
       this.app.debug('Auto-initializing SignalK metadata cache...')
 
       let hostname = 'localhost'
