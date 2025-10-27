@@ -1594,6 +1594,15 @@
             preview.style.color = '#667eea';
         }
     </script>
+    <!-- External libraries for conversions -->
+    <script src="https://cdn.jsdelivr.net/npm/mathjs@12.4.0/lib/browser/math.min.js"></script>
+    <script type="module">
+      // Import date-fns as ES module and expose to global scope
+      import * as dateFnsModule from 'https://cdn.jsdelivr.net/npm/date-fns@2.30.0/+esm';
+      window.dateFns = dateFnsModule;
+      console.log('date-fns loaded:', Object.keys(window.dateFns).slice(0, 5));
+    </script>
+
     <!-- Modular app scripts (loaded in dependency order) -->
     <script src="js/app-state.js"></script>
     <script src="js/app-utils.js"></script>

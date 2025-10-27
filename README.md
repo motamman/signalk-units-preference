@@ -741,7 +741,8 @@ curl http://localhost:3000/signalk/v1/categories
 The Conversions API provides public endpoints for unit conversion and metadata at the `/signalk/v1/` level. These endpoints follow the same pattern as the Zones and History APIs, making them accessible without plugin-specific authentication.
 
 **Key Features:**
-- Public endpoints at `/signalk/v1/conversions` (works with Bearer tokens)
+- Public endpoints at `
+` (works with Bearer tokens)
 - Discovery endpoint to list all available conversions
 - Single path endpoint for metadata or value conversion
 - Automatic type detection and parsing for query parameters
