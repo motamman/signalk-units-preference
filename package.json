@@ -3,8 +3,22 @@
   "version": "0.7.3-beta.3",
   "description": "SignalK webapp/utility for managing path value/unit conversions and display preferences",
   "main": "dist/index.js",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./client": {
+      "types": "./dist/client/index.d.ts",
+      "import": "./dist/client/index.esm.js",
+      "require": "./dist/client/index.js"
+    }
+  },
   "scripts": {
-    "build": "tsc",
+    "build": "npm run build:server && npm run build:client && npm run copy:client",
+    "build:server": "tsc",
+    "build:client": "rollup -c",
+    "copy:client": "mkdir -p public/lib && cp dist/client/sk-unit-converter.umd.min.js public/lib/ && cp dist/client/sk-unit-converter.umd.min.js.map public/lib/",
     "watch": "tsc --watch",
     "prepublishOnly": "npm run build",
     "prepare": "npm run build",
@@ -77,6 +91,10 @@
     "ws": "^8.18.0"
   },
   "devDependencies": {
+    "@rollup/plugin-commonjs": "^28.0.9",
+    "@rollup/plugin-node-resolve": "^16.0.3",
+    "@rollup/plugin-terser": "^0.4.4",
+    "@rollup/plugin-typescript": "^12.3.0",
     "@signalk/server-api": "^2.8.0",
     "@types/express": "^4.17.21",
     "@types/jest": "^30.0.0",
@@ -89,7 +107,9 @@
     "jest": "^30.2.0",
     "js-quantities": "^1.8.0",
     "prettier": "^3.6.2",
+    "rollup": "^4.52.5",
     "ts-jest": "^29.4.4",
+    "tslib": "^2.8.1",
     "typescript": "^5.3.0"
   },
   "signalk-plugin-enabled-by-default": true

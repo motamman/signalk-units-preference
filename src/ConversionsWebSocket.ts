@@ -50,10 +50,12 @@ export class ConversionsWebSocket {
 
       ws.on('close', () => {
         this.clients.delete(client)
-        this.app.debug(`ConversionsWS: Client ${client.id} disconnected (${this.clients.size} total)`)
+        this.app.debug(
+          `ConversionsWS: Client ${client.id} disconnected (${this.clients.size} total)`
+        )
       })
 
-      ws.on('error', (error) => {
+      ws.on('error', error => {
         this.app.error(`ConversionsWS: Client ${client.id} error: ${error}`)
         this.clients.delete(client)
       })
@@ -65,7 +67,7 @@ export class ConversionsWebSocket {
 
       // Only handle upgrades for our specific path
       if (pathname === this.wsPath) {
-        this.wss!.handleUpgrade(request, socket, head, (ws) => {
+        this.wss!.handleUpgrade(request, socket, head, ws => {
           this.wss!.emit('connection', ws, request)
         })
       }
@@ -93,7 +95,9 @@ export class ConversionsWebSocket {
 
       if (client.ws.readyState === WebSocket.OPEN) {
         client.ws.send(JSON.stringify(message))
-        this.app.debug(`ConversionsWS: Sent full conversions (${Object.keys(conversions).length} paths) to ${client.id}`)
+        this.app.debug(
+          `ConversionsWS: Sent full conversions (${Object.keys(conversions).length} paths) to ${client.id}`
+        )
       }
     } catch (error) {
       this.app.error(`ConversionsWS: Error sending full conversions to ${client.id}: ${error}`)
@@ -130,7 +134,9 @@ export class ConversionsWebSocket {
         }
       }
 
-      this.app.debug(`ConversionsWS: Broadcast update to ${sentCount}/${this.clients.size} clients (using cache)`)
+      this.app.debug(
+        `ConversionsWS: Broadcast update to ${sentCount}/${this.clients.size} clients (using cache)`
+      )
     } catch (error) {
       this.app.error(`ConversionsWS: Error broadcasting update: ${error}`)
     }
@@ -160,7 +166,9 @@ export class ConversionsWebSocket {
       }
     }
 
-    this.app.debug(`ConversionsWS: Broadcast delta for ${paths.length} paths to ${sentCount} clients`)
+    this.app.debug(
+      `ConversionsWS: Broadcast delta for ${paths.length} paths to ${sentCount} clients`
+    )
   }
 
   /**

@@ -573,7 +573,9 @@ export class PreferencesStore {
   /**
    * Save standard unit definitions to file
    */
-  private async saveStandardUnitDefinitions(definitions: Record<string, BaseUnitDefinition>): Promise<void> {
+  private async saveStandardUnitDefinitions(
+    definitions: Record<string, BaseUnitDefinition>
+  ): Promise<void> {
     const standardPath = this.getStandardDefinitionsPath()
     try {
       await fs.promises.writeFile(standardPath, JSON.stringify(definitions, null, 2), 'utf8')
@@ -605,7 +607,11 @@ export class PreferencesStore {
   /**
    * Add or update a conversion in a standard unit definition
    */
-  async addConversionToStandardUnit(baseUnit: string, targetUnit: string, conversion: any): Promise<void> {
+  async addConversionToStandardUnit(
+    baseUnit: string,
+    targetUnit: string,
+    conversion: any
+  ): Promise<void> {
     const definitions = this.loadStandardUnitDefinitions()
 
     // If this base unit doesn't exist, create it

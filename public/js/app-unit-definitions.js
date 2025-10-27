@@ -627,7 +627,10 @@ async function saveEditConversion(baseUnit, targetUnit) {
       await apiUpdateConversion(baseUnit, targetUnit, conversionData)
     }
 
-    showStatus(`Updated ${isStandard ? 'standard' : 'custom'} conversion: ${baseUnit} → ${targetUnit}`, 'success')
+    showStatus(
+      `Updated ${isStandard ? 'standard' : 'custom'} conversion: ${baseUnit} → ${targetUnit}`,
+      'success'
+    )
 
     // Clear dirty tracking
     conversionFormOriginalState = null
@@ -957,7 +960,9 @@ async function onConversionBaseUnitChange(baseUnit) {
   try {
     // Fetch available targets from js-quantities
     const encodedUnit = encodeURIComponent(baseUnit)
-    const response = await fetch(`/plugins/signalk-units-preference/quantities/available-targets/${encodedUnit}`)
+    const response = await fetch(
+      `/plugins/signalk-units-preference/quantities/available-targets/${encodedUnit}`
+    )
     const data = await response.json()
 
     // Build dropdown options
@@ -983,7 +988,8 @@ async function onConversionBaseUnitChange(baseUnit) {
     targetSelect.onchange = () => onConversionTargetUnitChange(baseUnit, targetSelect.value)
   } catch (error) {
     console.error('Failed to load target units:', error)
-    targetSelect.innerHTML = '<option value="__custom__">⚠️ js-quantities unavailable - Enter manually</option>'
+    targetSelect.innerHTML =
+      '<option value="__custom__">⚠️ js-quantities unavailable - Enter manually</option>'
     targetSelect.disabled = false
   } finally {
     loadingDiv.style.display = 'none'

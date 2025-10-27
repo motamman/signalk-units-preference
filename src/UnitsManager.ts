@@ -977,7 +977,10 @@ export class UnitsManager {
    * @param useCache - If true, return cached result if available and not expired (default: true)
    * @param forceRefresh - If true, bypass all caching and rate limiting (use sparingly)
    */
-  async getPathsMetadata(useCache: boolean = true, forceRefresh: boolean = false): Promise<Record<string, UnitMetadata>> {
+  async getPathsMetadata(
+    useCache: boolean = true,
+    forceRefresh: boolean = false
+  ): Promise<Record<string, UnitMetadata>> {
     const now = Date.now()
 
     // Check cache if requested (and not forcing refresh)

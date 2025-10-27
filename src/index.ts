@@ -138,7 +138,9 @@ module.exports = (app: ServerAPI): Plugin => {
             // Client can add ?refresh=true query param to force refresh if needed
             const forceRefresh = req.query.refresh === 'true' || req.query.refresh === '1'
             const pathsMetadata = await unitsManager.getPathsMetadata(true, forceRefresh)
-            app.debug(`Conversions discovery returning ${Object.keys(pathsMetadata).length} paths${forceRefresh ? ' (forced refresh)' : ' (using cache)'}`)
+            app.debug(
+              `Conversions discovery returning ${Object.keys(pathsMetadata).length} paths${forceRefresh ? ' (forced refresh)' : ' (using cache)'}`
+            )
             res.json(pathsMetadata)
           } catch (error) {
             app.error(`Conversions discovery error: ${error}`)
@@ -450,7 +452,9 @@ module.exports = (app: ServerAPI): Plugin => {
             }
           })
 
-          app.debug('ConversionsWebSocket enabled at /signalk/v1/conversions/stream (with cache optimization)')
+          app.debug(
+            'ConversionsWebSocket enabled at /signalk/v1/conversions/stream (with cache optimization)'
+          )
 
           // ConversionStreamServer (live values stream) remains disabled for now
           // Uncomment below to enable:
@@ -1220,55 +1224,49 @@ module.exports = (app: ServerAPI): Plugin => {
 
       // POST /plugins/signalk-units-preference/standard-unit-definitions
       // Create or update a standard base unit
-      router.post(
-        '/standard-unit-definitions',
-        async (req: Request, res: Response) => {
-          try {
-            const { baseUnit, longName, description, conversions } = req.body
+      router.post('/standard-unit-definitions', async (req: Request, res: Response) => {
+        try {
+          const { baseUnit, longName, description, conversions } = req.body
 
-            if (!baseUnit || typeof baseUnit !== 'string') {
-              throw new ValidationError(
-                'baseUnit is required and must be a string',
-                'Missing required field',
-                'Please provide a valid baseUnit'
-              )
-            }
-
-            const definition: BaseUnitDefinition = {
-              baseUnit,
-              ...(longName && { longName }),
-              ...(description && { description }),
-              conversions: conversions || {}
-            }
-
-            await unitsManager.getPreferencesStore().addStandardUnitDefinition(baseUnit, definition)
-
-            res.json({ success: true, baseUnit })
-          } catch (error) {
-            app.error(`Error creating standard unit definition: ${error}`)
-            const response = formatErrorResponse(error)
-            res.status(response.status).json(response.body)
+          if (!baseUnit || typeof baseUnit !== 'string') {
+            throw new ValidationError(
+              'baseUnit is required and must be a string',
+              'Missing required field',
+              'Please provide a valid baseUnit'
+            )
           }
+
+          const definition: BaseUnitDefinition = {
+            baseUnit,
+            ...(longName && { longName }),
+            ...(description && { description }),
+            conversions: conversions || {}
+          }
+
+          await unitsManager.getPreferencesStore().addStandardUnitDefinition(baseUnit, definition)
+
+          res.json({ success: true, baseUnit })
+        } catch (error) {
+          app.error(`Error creating standard unit definition: ${error}`)
+          const response = formatErrorResponse(error)
+          res.status(response.status).json(response.body)
         }
-      )
+      })
 
       // DELETE /plugins/signalk-units-preference/standard-unit-definitions/:baseUnit
       // Delete a standard base unit
-      router.delete(
-        '/standard-unit-definitions/:baseUnit',
-        async (req: Request, res: Response) => {
-          try {
-            const baseUnit = decodeURIComponent(req.params.baseUnit)
-            await unitsManager.getPreferencesStore().deleteStandardUnitDefinition(baseUnit)
+      router.delete('/standard-unit-definitions/:baseUnit', async (req: Request, res: Response) => {
+        try {
+          const baseUnit = decodeURIComponent(req.params.baseUnit)
+          await unitsManager.getPreferencesStore().deleteStandardUnitDefinition(baseUnit)
 
-            res.json({ success: true, baseUnit })
-          } catch (error) {
-            app.error(`Error deleting standard unit definition: ${error}`)
-            const response = formatErrorResponse(error)
-            res.status(response.status).json(response.body)
-          }
+          res.json({ success: true, baseUnit })
+        } catch (error) {
+          app.error(`Error deleting standard unit definition: ${error}`)
+          const response = formatErrorResponse(error)
+          res.status(response.status).json(response.body)
         }
-      )
+      })
 
       // POST /plugins/signalk-units-preference/standard-unit-definitions/:baseUnit/conversions
       // Add or update a conversion for a standard unit
@@ -1295,7 +1293,9 @@ module.exports = (app: ServerAPI): Plugin => {
               ...(key && { key })
             }
 
-            await unitsManager.getPreferencesStore().addConversionToStandardUnit(baseUnit, targetUnit, conversion)
+            await unitsManager
+              .getPreferencesStore()
+              .addConversionToStandardUnit(baseUnit, targetUnit, conversion)
 
             res.json({ success: true, baseUnit, targetUnit })
           } catch (error) {
@@ -1315,7 +1315,9 @@ module.exports = (app: ServerAPI): Plugin => {
             const baseUnit = decodeURIComponent(req.params.baseUnit)
             const targetUnit = decodeURIComponent(req.params.targetUnit)
 
-            await unitsManager.getPreferencesStore().deleteConversionFromStandardUnit(baseUnit, targetUnit)
+            await unitsManager
+              .getPreferencesStore()
+              .deleteConversionFromStandardUnit(baseUnit, targetUnit)
 
             res.json({ success: true, baseUnit, targetUnit })
           } catch (error) {

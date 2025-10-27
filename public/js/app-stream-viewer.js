@@ -209,7 +209,9 @@ function connectToConversionsMetadata() {
         // Handle full and update messages
         if ((message.type === 'full' || message.type === 'update') && message.conversions) {
           conversionsMetadata = message.conversions
-          console.log(`Conversions metadata updated: ${Object.keys(conversionsMetadata).length} paths`)
+          console.log(
+            `Conversions metadata updated: ${Object.keys(conversionsMetadata).length} paths`
+          )
         }
       } catch (error) {
         console.error('Error parsing conversions metadata:', error)
@@ -398,7 +400,12 @@ async function subscribeToConvertedPaths() {
     }
 
     // If we're changing contexts, first unsubscribe from everything on the old context
-    if (currentSubscribedContext && currentSubscribedContext !== selectedContext && streamWebSocket && streamWebSocket.readyState === WebSocket.OPEN) {
+    if (
+      currentSubscribedContext &&
+      currentSubscribedContext !== selectedContext &&
+      streamWebSocket &&
+      streamWebSocket.readyState === WebSocket.OPEN
+    ) {
       console.log(`⚠️  Unsubscribing from old context: ${currentSubscribedContext}`)
 
       // Unsubscribe from ALL using wildcard
@@ -449,7 +456,9 @@ async function subscribeToConvertedPaths() {
       console.log(`📡 Subscribing to context: ${selectedContext}`)
       console.log(`   - ${subscriptions.length} path(s)`)
       if (unsubscriptions.length > 0) {
-        console.log(`   - Also unsubscribing from paths in this context using: ${JSON.stringify(unsubscriptions)}`)
+        console.log(
+          `   - Also unsubscribing from paths in this context using: ${JSON.stringify(unsubscriptions)}`
+        )
       }
 
       streamWebSocket.send(JSON.stringify(message))
@@ -465,8 +474,8 @@ async function subscribeToConvertedPaths() {
 /**
  * Duration formatting functions (from formulaEvaluator.ts)
  */
-const pad2 = (value) => value.toString().padStart(2, '0')
-const pad3 = (value) => value.toString().padStart(3, '0')
+const pad2 = value => value.toString().padStart(2, '0')
+const pad3 = value => value.toString().padStart(3, '0')
 
 function formatDurationDHMS(totalSeconds) {
   const days = Math.floor(totalSeconds / 86400)
@@ -611,7 +620,9 @@ function formatNumber(value, format) {
  */
 function formatDateValue(rawValue, targetUnit, dateFormat, baseUnit) {
   try {
-    const normalizedTarget = targetUnit.endsWith('-local') ? targetUnit.replace(/-local$/, '') : targetUnit
+    const normalizedTarget = targetUnit.endsWith('-local')
+      ? targetUnit.replace(/-local$/, '')
+      : targetUnit
     const formatKey = (dateFormat || normalizedTarget || '').toLowerCase()
     const useLocalTime = targetUnit.endsWith('-local')
 
@@ -781,8 +792,8 @@ function handleDeltaMessage(delta) {
       const path = pathValue.path
       const rawValue = pathValue.value
 
-      // Skip if no raw value
-      if (path === undefined || rawValue === undefined || rawValue === null) continue
+      // Skip if no path
+      if (path === undefined || rawValue === undefined) continue
 
       // If in single path mode, only process the subscribed path
       if (subscriptionMode === 'single' && path !== singlePathSubscription) {
@@ -800,34 +811,12 @@ function handleDeltaMessage(delta) {
       const baseUnit = conversionMeta.baseUnit || ''
       const category = conversionMeta.category || ''
 
-      // Check if value type is compatible with conversion
-      const valueType = typeof rawValue
-      const isNumeric = valueType === 'number'
-      const isObject = valueType === 'object'
-
-      // Skip objects (complex values) - can't convert those yet
-      if (isObject) {
-        console.debug(`Skipping object value for ${path}`)
-        continue
-      }
-
-      // For numeric conversions, value must be a number
-      // For date conversions, value can be string or number
+      // Check if we have conversions available
       if (!conversionMeta.conversions) continue
 
       const targetUnit = Object.keys(conversionMeta.conversions)[0]
-      const conversion = conversionMeta.conversions[targetUnit]
 
-      // Check if conversion is compatible with value type
-      const isDateConversion = conversion && conversion.dateFormat
-      const isBoolConversion = baseUnit === 'bool' || category === 'boolean'
-
-      if (!isDateConversion && !isBoolConversion && !isNumeric) {
-        // Skip non-numeric values for numeric conversions
-        continue
-      }
-
-      // Apply conversion formula
+      // Apply conversion formula (will pass-through if conversion fails)
       const converted = applyConversion(rawValue, conversionMeta)
 
       // If conversion failed, create pass-through
@@ -835,7 +824,7 @@ function handleDeltaMessage(delta) {
         value: rawValue,
         symbol: '',
         targetUnit: targetUnit || baseUnit,
-        formatted: String(rawValue)
+        formatted: typeof rawValue === 'object' ? JSON.stringify(rawValue) : String(rawValue)
       }
 
       // Store or update the data
@@ -1030,7 +1019,11 @@ function formatConvertedValue(convertedData) {
     let valueStr
 
     // Check if this is a date or duration (already formatted string)
-    if (convertedData.isDate || convertedData.isDuration || typeof convertedData.value === 'string') {
+    if (
+      convertedData.isDate ||
+      convertedData.isDuration ||
+      typeof convertedData.value === 'string'
+    ) {
       valueStr = String(convertedData.value)
     } else if (typeof convertedData.value === 'number') {
       // Format numbers to reasonable precision

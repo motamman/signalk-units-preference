@@ -878,6 +878,198 @@ curl "http://localhost:3000/signalk/v1/conversions/navigation.datetime?value=202
 curl "http://localhost:3000/signalk/v1/conversions/navigation.speedOverGround?value=5.2&context=vessels.urn:mrn:imo:mmsi:123456789"
 ```
 
+### JavaScript Client Library
+
+The plugin includes a JavaScript client library that makes it easy to use the Conversions API from web applications. The library handles fetching conversion metadata, performing conversions, and optionally subscribing to live preference updates via WebSocket.
+
+**Key Features:**
+- Fetch conversion metadata from the REST API
+- Convert values using formulas and formatting
+- Optional WebSocket connection for live preference updates
+- Works in browsers (via script tag or bundler) and Node.js
+- TypeScript support with full type definitions
+- Automatic server URL detection when running on SignalK server
+
+#### Installation & Usage
+
+**Option 1: Load from SignalK Server (Script Tag)**
+
+When your webapp is served from the SignalK server, load the library directly:
+
+```html
+<script src="/@signalk/plugins/signalk-units-preference/lib/sk-unit-converter.umd.min.js"></script>
+<script>
+  async function init() {
+    // No need to specify serverUrl - defaults to current origin
+    const converter = await SKUnitConverter.SignalKUnitsConverter.fromServer();
+
+    // Convert a value
+    const speed = converter.convert(5.14, 'm/s', 'kn');
+    console.log(speed.formatted); // "10.0 kn"
+
+    // Convert by path (uses user's preferences)
+    const result = converter.convertPath('navigation.speedOverGround', 5.14);
+    console.log(result.formatted); // Automatically uses preferred units
+  }
+
+  init();
+</script>
+```
+
+**Option 2: Import via npm (With Bundler)**
+
+For React, Vue, or other bundled webapps:
+
+```bash
+npm install signalk-units-preference
+```
+
+```javascript
+import { SignalKUnitsConverter } from 'signalk-units-preference/client'
+
+async function initConverter() {
+  // Defaults to current server origin
+  const converter = await SignalKUnitsConverter.fromServer()
+
+  // Or specify a server explicitly
+  // const converter = await SignalKUnitsConverter.fromServer('http://192.168.1.100:3000')
+
+  const speed = converter.convert(5.14, 'm/s', 'kn')
+  console.log(speed.formatted) // "10.0 kn"
+}
+```
+
+#### API Reference
+
+##### `SignalKUnitsConverter.fromServer(serverUrl?, options?)`
+
+Load converter from SignalK server.
+
+```javascript
+// Use current server (auto-detected in browser)
+const converter = await SignalKUnitsConverter.fromServer()
+
+// Specify server URL (useful for development or remote servers)
+const converter = await SignalKUnitsConverter.fromServer('http://localhost:3000')
+
+// With live WebSocket updates
+const converter = await SignalKUnitsConverter.fromServer(undefined, {
+  autoConnect: true  // Enable WebSocket for live preference updates
+})
+```
+
+**Parameters:**
+- `serverUrl` (string, optional) - SignalK server URL. Defaults to `window.location.origin` in browser
+- `options` (object, optional)
+  - `autoConnect` (boolean) - Auto-connect to WebSocket for live updates
+  - `apiPath` (string) - Custom REST API path (default: `/signalk/v1/conversions`)
+  - `wsPath` (string) - Custom WebSocket path (default: `/signalk/v1/conversions/stream`)
+
+**Returns:** `Promise<SignalKUnitsConverter>`
+
+##### `converter.convert(value, baseUnit, targetUnit)`
+
+Convert a value from base unit to target unit.
+
+```javascript
+// Simple conversion
+const result = converter.convert(5.14, 'm/s', 'kn')
+
+console.log(result.value)      // 9.99...
+console.log(result.formatted)  // "10.0 kn"
+console.log(result.symbol)     // "kn"
+console.log(result.formula)    // "value * 1.94384"
+```
+
+**Note:** Target unit names use the conversion key (e.g., "C" not "°C", "F" not "°F"). The symbol is for display.
+
+##### `converter.convertPath(path, value)`
+
+Convert using SignalK path (automatically uses user's preferred unit).
+
+```javascript
+const result = converter.convertPath('navigation.speedOverGround', 5.14)
+console.log(result.formatted) // Uses user's preference (e.g., "10.0 kn" or "18.5 km/h")
+```
+
+##### `converter.getConversions(baseUnit)`
+
+Get all available conversions for a base unit.
+
+```javascript
+const conversions = converter.getConversions('K')
+// Returns: { "C": { formula: "...", symbol: "°C" }, "F": { formula: "...", symbol: "°F" } }
+```
+
+##### `converter.onPreferenceChange(callback)`
+
+Subscribe to preference change events (requires WebSocket connection).
+
+```javascript
+// Connect with WebSocket enabled
+const converter = await SignalKUnitsConverter.fromServer(undefined, {
+  autoConnect: true
+})
+
+// Listen for changes
+converter.onPreferenceChange(() => {
+  console.log('User changed their unit preferences!')
+  // Re-render your UI with updated conversions
+})
+```
+
+#### Complete Example: React Component
+
+```jsx
+import { useEffect, useState } from 'react'
+import { SignalKUnitsConverter } from 'signalk-units-preference/client'
+
+function SpeedGauge({ path, value }) {
+  const [converter, setConverter] = useState(null)
+  const [displayValue, setDisplayValue] = useState('--')
+
+  useEffect(() => {
+    async function init() {
+      // Load converter with live updates
+      const conv = await SignalKUnitsConverter.fromServer(undefined, {
+        autoConnect: true
+      })
+
+      setConverter(conv)
+
+      // Update when preferences change
+      conv.onPreferenceChange(() => {
+        const result = conv.convertPath(path, value)
+        setDisplayValue(result?.formatted || '--')
+      })
+    }
+
+    init()
+  }, [])
+
+  useEffect(() => {
+    if (converter && value != null) {
+      const result = converter.convertPath(path, value)
+      setDisplayValue(result?.formatted || '--')
+    }
+  }, [converter, path, value])
+
+  return <div className="speed-gauge">{displayValue}</div>
+}
+
+export default SpeedGauge
+```
+
+#### Supported Value Types
+
+The converter handles all SignalK value types:
+
+- **Numbers**: Numeric conversions with formulas
+- **Dates**: ISO-8601 strings formatted with date-fns
+- **Booleans**: String representations
+- **Durations**: Seconds to HH:MM:SS or human-readable formats
+- **Objects/Strings**: Pass-through with metadata
+
 ### Schema & Metadata
 
 #### Get Unit Schema
