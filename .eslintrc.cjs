@@ -16,7 +16,8 @@ module.exports = {
     'node_modules/**',
     'data/**',
     'presets/custom/**',
-    'public/pathTree.js'
+    'public/pathTree.js',
+    'public/lib/**'
   ],
   rules: {
     '@typescript-eslint/no-explicit-any': 'off',
@@ -53,6 +54,9 @@ module.exports = {
         'no-redeclare': 'off'
       },
       globals: {
+        // External libraries
+        math: 'readonly',
+        dateFns: 'readonly',
         // From app-state.js
         API_BASE: 'readonly',
         preferences: 'writable',
@@ -96,12 +100,17 @@ module.exports = {
         apiSendSignalKMetadata: 'readonly',
         apiLoadSignalKMetadata: 'readonly',
         apiLoadUnitDefinitions: 'readonly',
+        apiLoadStandardUnitDefinitions: 'readonly',
         apiCreateBaseUnit: 'readonly',
         apiUpdateBaseUnit: 'readonly',
+        apiUpdateStandardBaseUnit: 'readonly',
         apiDeleteBaseUnit: 'readonly',
+        apiDeleteStandardBaseUnit: 'readonly',
         apiCreateConversion: 'readonly',
         apiUpdateConversion: 'readonly',
+        apiUpdateStandardConversion: 'readonly',
         apiDeleteConversion: 'readonly',
+        apiDeleteStandardConversion: 'readonly',
         apiLoadCustomPresets: 'readonly',
         apiSaveCustomPreset: 'readonly',
         apiDeleteCustomPreset: 'readonly',

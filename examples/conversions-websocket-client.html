@@ -1,0 +1,153 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <title>SignalK Conversions WebSocket Client</title>
+  <style>
+    body { font-family: monospace; padding: 20px; }
+    #status { padding: 10px; margin: 10px 0; border-radius: 4px; }
+    #status.connected { background: #d4edda; color: #155724; }
+    #status.disconnected { background: #f8d7da; color: #721c24; }
+    #log { border: 1px solid #ccc; padding: 10px; height: 400px; overflow-y: auto; background: #f5f5f5; }
+    .message { margin: 5px 0; padding: 5px; background: white; border-left: 3px solid #007bff; }
+    .message.full { border-left-color: #28a745; }
+    .message.update { border-left-color: #ffc107; }
+    .message.delta { border-left-color: #dc3545; }
+    button { padding: 10px 20px; margin: 5px; }
+  </style>
+</head>
+<body>
+  <h1>SignalK Conversions WebSocket Client</h1>
+
+  <div id="status" class="disconnected">Disconnected</div>
+
+  <div>
+    <button onclick="connect()">Connect</button>
+    <button onclick="disconnect()">Disconnect</button>
+    <button onclick="clearLog()">Clear Log</button>
+  </div>
+
+  <h2>Message Log</h2>
+  <div id="log"></div>
+
+  <h2>Current Conversions</h2>
+  <div>
+    <label>Filter by category: <input type="text" id="categoryFilter" placeholder="e.g., boolean, speed, temperature"></label>
+    <button onclick="filterConversions()">Filter</button>
+    <button onclick="clearFilter()">Show All</button>
+  </div>
+  <pre id="conversions"></pre>
+
+  <script>
+    let ws = null;
+    let conversions = {};
+
+    function connect() {
+      if (ws) {
+        log('Already connected');
+        return;
+      }
+
+      const url = 'ws://localhost:3000/signalk/v1/conversions/stream';
+      log(`Connecting to ${url}...`);
+
+      ws = new WebSocket(url);
+
+      ws.onopen = () => {
+        log('Connected!', 'full');
+        document.getElementById('status').className = 'connected';
+        document.getElementById('status').textContent = 'Connected';
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const message = JSON.parse(event.data);
+          handleMessage(message);
+        } catch (error) {
+          log('Error parsing message: ' + error, 'error');
+        }
+      };
+
+      ws.onclose = () => {
+        log('Disconnected', 'error');
+        document.getElementById('status').className = 'disconnected';
+        document.getElementById('status').textContent = 'Disconnected';
+        ws = null;
+      };
+
+      ws.onerror = (error) => {
+        log('WebSocket error: ' + error, 'error');
+      };
+    }
+
+    function disconnect() {
+      if (ws) {
+        ws.close();
+        ws = null;
+      }
+    }
+
+    function handleMessage(message) {
+      const { type, timestamp, conversions: newConversions, paths } = message;
+
+      if (type === 'full') {
+        log(`Received full conversions: ${Object.keys(newConversions).length} paths`, 'full');
+        conversions = newConversions;
+        displayConversions();
+      } else if (type === 'update') {
+        log(`Received conversions update: ${Object.keys(newConversions).length} paths`, 'update');
+        conversions = newConversions;
+        displayConversions();
+      } else if (type === 'delta') {
+        log(`Received delta for ${paths.length} paths: ${paths.join(', ')}`, 'delta');
+      }
+    }
+
+    function displayConversions(filter = null) {
+      const filtered = filter
+        ? Object.entries(conversions).filter(([path, meta]) => meta.category === filter)
+        : Object.entries(conversions);
+
+      const display = {};
+      filtered.forEach(([path, meta]) => {
+        display[path] = meta;
+      });
+
+      document.getElementById('conversions').textContent =
+        JSON.stringify(display, null, 2);
+    }
+
+    function filterConversions() {
+      const filter = document.getElementById('categoryFilter').value.trim();
+      if (filter) {
+        displayConversions(filter);
+      } else {
+        displayConversions();
+      }
+    }
+
+    function clearFilter() {
+      document.getElementById('categoryFilter').value = '';
+      displayConversions();
+    }
+
+    function log(message, type = '') {
+      const logDiv = document.getElementById('log');
+      const entry = document.createElement('div');
+      entry.className = 'message ' + type;
+      entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+      logDiv.appendChild(entry);
+      logDiv.scrollTop = logDiv.scrollHeight;
+    }
+
+    function clearLog() {
+      document.getElementById('log').innerHTML = '';
+    }
+
+    // Auto-connect on load
+    window.addEventListener('load', () => {
+      log('Page loaded. Click Connect to start.');
+    });
+  </script>
+</body>
+</html>

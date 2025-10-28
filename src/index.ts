@@ -2,10 +2,12 @@ import { Plugin, ServerAPI } from '@signalk/server-api'
 import { IRouter, Request, Response } from 'express'
 import { UnitsManager } from './UnitsManager'
 import { ZonesManager } from './ZonesManager'
-import { ConversionDeltaValue, DeltaResponse, DeltaValueEntry } from './types'
+import { ConversionDeltaValue, DeltaResponse, DeltaValueEntry, BaseUnitDefinition } from './types'
 import { ValidationError, NotFoundError, formatErrorResponse } from './errors'
 import { registerDeltaStreamHandler } from './DeltaStreamHandler'
 import { ConversionStreamServer } from './ConversionStreamServer'
+import { ConversionsWebSocket } from './ConversionsWebSocket'
+import { getAvailableTargetUnits, generateFormula, getSupportedKinds } from './QuantitiesHelper'
 import * as path from 'path'
 import * as fs from 'fs'
 import archiver from 'archiver'
@@ -48,6 +50,7 @@ module.exports = (app: ServerAPI): Plugin => {
   let openApiSpec: object = PLUGIN_SCHEMA
   let unsubscribeDeltaHandler: (() => void) | undefined
   let conversionStreamServer: ConversionStreamServer | undefined
+  let conversionsWebSocket: ConversionsWebSocket | undefined
 
   const plugin: Plugin = {
     id: PLUGIN_ID,
@@ -131,8 +134,13 @@ module.exports = (app: ServerAPI): Plugin => {
         router.get('/signalk/v1/conversions', async (req: Request, res: Response) => {
           try {
             app.debug('Conversions discovery handler called at /signalk/v1/conversions')
-            const pathsMetadata = await unitsManager.getPathsMetadata()
-            app.debug(`Conversions discovery returning ${Object.keys(pathsMetadata).length} paths`)
+            // Use cache by default (30s TTL) to prevent API hammering
+            // Client can add ?refresh=true query param to force refresh if needed
+            const forceRefresh = req.query.refresh === 'true' || req.query.refresh === '1'
+            const pathsMetadata = await unitsManager.getPathsMetadata(true, forceRefresh)
+            app.debug(
+              `Conversions discovery returning ${Object.keys(pathsMetadata).length} paths${forceRefresh ? ' (forced refresh)' : ' (using cache)'}`
+            )
             res.json(pathsMetadata)
           } catch (error) {
             app.error(`Conversions discovery error: ${error}`)
@@ -331,9 +339,10 @@ module.exports = (app: ServerAPI): Plugin => {
               )
               return {}
             }
-            const result = await unitsManager.getPathsMetadata()
+            // Use cache by default (30s TTL) to prevent API hammering from other plugins
+            const result = await unitsManager.getPathsMetadata(true, false)
             console.log(
-              `[signalk-units-preference] getAllUnitsConversions returning ${Object.keys(result).length} paths`
+              `[signalk-units-preference] getAllUnitsConversions returning ${Object.keys(result).length} paths (cached)`
             )
             return result
           } catch (error) {
@@ -388,7 +397,8 @@ module.exports = (app: ServerAPI): Plugin => {
 
         // Mark as initialized so functions can return data
         isInitialized = true
-        const pathsMetadata = await unitsManager.getPathsMetadata()
+        // Force a refresh on startup to populate the cache with fresh data
+        const pathsMetadata = await unitsManager.getPathsMetadata(false, true)
         console.log(
           '✅ [signalk-units-preference] UnitsManager initialized, functions ready to use'
         )
@@ -428,14 +438,29 @@ module.exports = (app: ServerAPI): Plugin => {
           )
         }
 
-        // Start dedicated conversion stream server
-        conversionStreamServer = new ConversionStreamServer(app, unitsManager, sendMeta)
         const httpServer = (app as any).server
         if (httpServer) {
-          conversionStreamServer.start(httpServer)
+          // Enable ConversionsWebSocket (metadata stream at /signalk/v1/conversions/stream)
+          // Now uses cache to prevent API hammering - see broadcastUpdate() in ConversionsWebSocket.ts
+          conversionsWebSocket = new ConversionsWebSocket(app, unitsManager)
+          conversionsWebSocket.initialize(httpServer)
+
+          // Register preference change callback to broadcast updates to WebSocket clients
+          unitsManager.setPreferencesChangeCallback(() => {
+            if (conversionsWebSocket) {
+              conversionsWebSocket.broadcastUpdate()
+            }
+          })
+
           app.debug(
-            'Conversion stream server started - clients can connect to ws://host/plugins/signalk-units-preference/stream'
+            'ConversionsWebSocket enabled at /signalk/v1/conversions/stream (with cache optimization)'
           )
+
+          // ConversionStreamServer (live values stream) remains disabled for now
+          // Uncomment below to enable:
+          // conversionStreamServer = new ConversionStreamServer(app, unitsManager, sendMeta)
+          // conversionStreamServer.start(httpServer)
+          // app.debug('ConversionStreamServer enabled at /plugins/signalk-units-preference/stream')
         } else {
           app.error('Cannot start conversion stream server - app.server is not available')
         }
@@ -450,6 +475,13 @@ module.exports = (app: ServerAPI): Plugin => {
     },
 
     stop: async () => {
+      // Stop conversions metadata WebSocket
+      if (conversionsWebSocket) {
+        conversionsWebSocket.shutdown()
+        conversionsWebSocket = undefined
+        app.debug('Conversions metadata WebSocket stopped')
+      }
+
       // Stop conversion stream server
       if (conversionStreamServer) {
         conversionStreamServer.stop()
@@ -891,7 +923,10 @@ module.exports = (app: ServerAPI): Plugin => {
       // Return metadata definitions for all discovered SignalK paths
       router.get('/paths', async (req: Request, res: Response) => {
         try {
-          const pathsMetadata = await unitsManager.getPathsMetadata()
+          // Use cache by default (30s TTL) to prevent API hammering
+          // Client can add ?refresh=true query param to force refresh if needed
+          const forceRefresh = req.query.refresh === 'true' || req.query.refresh === '1'
+          const pathsMetadata = await unitsManager.getPathsMetadata(true, forceRefresh)
           res.json(pathsMetadata)
         } catch (error) {
           app.error(`Error getting paths metadata: ${error}`)
@@ -972,7 +1007,8 @@ module.exports = (app: ServerAPI): Plugin => {
               .json({ error: 'Forbidden - internal use only (localhost access required)' })
           }
 
-          const pathsMetadata = await unitsManager.getPathsMetadata()
+          // Use cache by default (30s TTL) to prevent API hammering
+          const pathsMetadata = await unitsManager.getPathsMetadata(true, false)
           res.json(pathsMetadata)
         } catch (error) {
           app.error(`Error getting internal paths metadata: ${error}`)
@@ -998,7 +1034,8 @@ module.exports = (app: ServerAPI): Plugin => {
       // Get all unit definitions
       router.get('/unit-definitions', (req: Request, res: Response) => {
         try {
-          const definitions = unitsManager.getUnitDefinitions()
+          // Return ONLY custom units (not merged with standard)
+          const definitions = unitsManager.getPreferencesStore().getUnitDefinitions()
           res.json(definitions)
         } catch (error) {
           app.error(`Error getting unit definitions: ${error}`)
@@ -1024,6 +1061,10 @@ module.exports = (app: ServerAPI): Plugin => {
             longName: longName || description || undefined,
             conversions: conversions || {}
           })
+
+          // Reload units manager to apply changes
+          await unitsManager.initialize()
+
           res.json({ success: true, baseUnit })
         } catch (error) {
           app.error(`Error adding unit definition: ${error}`)
@@ -1038,6 +1079,10 @@ module.exports = (app: ServerAPI): Plugin => {
         try {
           const baseUnit = req.params.baseUnit
           await unitsManager.deleteUnitDefinition(baseUnit)
+
+          // Reload units manager to apply changes
+          await unitsManager.initialize()
+
           res.json({ success: true, baseUnit })
         } catch (error) {
           app.error(`Error deleting unit definition: ${error}`)
@@ -1068,6 +1113,10 @@ module.exports = (app: ServerAPI): Plugin => {
               longName: longName || undefined,
               key: key || undefined
             })
+
+            // Reload units manager to apply changes
+            await unitsManager.initialize()
+
             res.json({ success: true, baseUnit, targetUnit })
           } catch (error) {
             app.error(`Error adding conversion: ${error}`)
@@ -1085,6 +1134,10 @@ module.exports = (app: ServerAPI): Plugin => {
           try {
             const { baseUnit, targetUnit } = req.params
             await unitsManager.deleteConversionFromUnit(baseUnit, targetUnit)
+
+            // Reload units manager to apply changes
+            await unitsManager.initialize()
+
             res.json({ success: true, baseUnit, targetUnit })
           } catch (error) {
             app.error(`Error deleting conversion: ${error}`)
@@ -1093,6 +1146,217 @@ module.exports = (app: ServerAPI): Plugin => {
           }
         }
       )
+
+      // ========== JS-QUANTITIES HELPER ENDPOINTS ==========
+
+      // GET /plugins/signalk-units-preference/quantities/available-targets/:baseUnit
+      // Get available target units for a base unit (from js-quantities)
+      router.get('/quantities/available-targets/:baseUnit', (req: Request, res: Response) => {
+        try {
+          const baseUnit = decodeURIComponent(req.params.baseUnit)
+          const availableTargets = getAvailableTargetUnits(baseUnit)
+
+          res.json({
+            baseUnit,
+            targets: availableTargets,
+            count: availableTargets.length
+          })
+        } catch (error) {
+          app.error(`Error getting available targets for ${req.params.baseUnit}: ${error}`)
+          const response = formatErrorResponse(error)
+          res.status(response.status).json(response.body)
+        }
+      })
+
+      // POST /plugins/signalk-units-preference/quantities/generate-formula
+      // Generate formula for base → target conversion (from js-quantities)
+      router.post('/quantities/generate-formula', (req: Request, res: Response) => {
+        try {
+          const { baseUnit, targetUnit } = req.body
+
+          if (!baseUnit || !targetUnit) {
+            throw new ValidationError(
+              'baseUnit and targetUnit are required',
+              'Missing required fields',
+              'Please provide both baseUnit and targetUnit'
+            )
+          }
+
+          const generated = generateFormula(baseUnit, targetUnit)
+
+          if (!generated) {
+            res.json({
+              success: false,
+              message: `js-quantities does not support conversion from ${baseUnit} to ${targetUnit}`,
+              baseUnit,
+              targetUnit
+            })
+            return
+          }
+
+          res.json({
+            success: true,
+            baseUnit,
+            targetUnit,
+            ...generated
+          })
+        } catch (error) {
+          app.error(`Error generating formula: ${error}`)
+          const response = formatErrorResponse(error)
+          res.status(response.status).json(response.body)
+        }
+      })
+
+      // GET /plugins/signalk-units-preference/quantities/kinds
+      // Get all supported quantity kinds from js-quantities
+      router.get('/quantities/kinds', (req: Request, res: Response) => {
+        try {
+          const kinds = getSupportedKinds()
+          res.json({
+            kinds,
+            count: kinds.length
+          })
+        } catch (error) {
+          app.error(`Error getting quantity kinds: ${error}`)
+          const response = formatErrorResponse(error)
+          res.status(response.status).json(response.body)
+        }
+      })
+
+      // ========== STANDARD UNIT DEFINITIONS ==========
+
+      // GET /plugins/signalk-units-preference/standard-unit-definitions
+      // Get all standard unit definitions
+      router.get('/standard-unit-definitions', (req: Request, res: Response) => {
+        try {
+          const definitions = unitsManager.getPreferencesStore().loadStandardUnitDefinitions()
+          res.json(definitions)
+        } catch (error) {
+          app.error(`Error loading standard unit definitions: ${error}`)
+          const response = formatErrorResponse(error)
+          res.status(response.status).json(response.body)
+        }
+      })
+
+      // POST /plugins/signalk-units-preference/standard-unit-definitions
+      // Create or update a standard base unit
+      router.post('/standard-unit-definitions', async (req: Request, res: Response) => {
+        try {
+          const { baseUnit, longName, description, conversions } = req.body
+
+          if (!baseUnit || typeof baseUnit !== 'string') {
+            throw new ValidationError(
+              'baseUnit is required and must be a string',
+              'Missing required field',
+              'Please provide a valid baseUnit'
+            )
+          }
+
+          const definition: BaseUnitDefinition = {
+            baseUnit,
+            ...(longName && { longName }),
+            ...(description && { description }),
+            conversions: conversions || {}
+          }
+
+          await unitsManager.getPreferencesStore().addStandardUnitDefinition(baseUnit, definition)
+
+          // Reload units manager to apply changes
+          await unitsManager.initialize()
+
+          res.json({ success: true, baseUnit })
+        } catch (error) {
+          app.error(`Error creating standard unit definition: ${error}`)
+          const response = formatErrorResponse(error)
+          res.status(response.status).json(response.body)
+        }
+      })
+
+      // DELETE /plugins/signalk-units-preference/standard-unit-definitions/:baseUnit
+      // Delete a standard base unit
+      router.delete('/standard-unit-definitions/:baseUnit', async (req: Request, res: Response) => {
+        try {
+          const baseUnit = decodeURIComponent(req.params.baseUnit)
+          await unitsManager.getPreferencesStore().deleteStandardUnitDefinition(baseUnit)
+
+          // Reload units manager to apply changes
+          await unitsManager.initialize()
+
+          res.json({ success: true, baseUnit })
+        } catch (error) {
+          app.error(`Error deleting standard unit definition: ${error}`)
+          const response = formatErrorResponse(error)
+          res.status(response.status).json(response.body)
+        }
+      })
+
+      // POST /plugins/signalk-units-preference/standard-unit-definitions/:baseUnit/conversions
+      // Add or update a conversion for a standard unit
+      router.post(
+        '/standard-unit-definitions/:baseUnit/conversions',
+        async (req: Request, res: Response) => {
+          try {
+            const baseUnit = decodeURIComponent(req.params.baseUnit)
+            const { targetUnit, formula, inverseFormula, symbol, longName, key } = req.body
+
+            if (!targetUnit || !formula || !inverseFormula || !symbol) {
+              throw new ValidationError(
+                'targetUnit, formula, inverseFormula, and symbol are required',
+                'Missing required fields',
+                'Please provide all required conversion details'
+              )
+            }
+
+            const conversion = {
+              formula,
+              inverseFormula,
+              symbol,
+              ...(longName && { longName }),
+              ...(key && { key })
+            }
+
+            await unitsManager
+              .getPreferencesStore()
+              .addConversionToStandardUnit(baseUnit, targetUnit, conversion)
+
+            // Reload units manager to apply changes
+            await unitsManager.initialize()
+
+            res.json({ success: true, baseUnit, targetUnit })
+          } catch (error) {
+            app.error(`Error adding conversion to standard unit: ${error}`)
+            const response = formatErrorResponse(error)
+            res.status(response.status).json(response.body)
+          }
+        }
+      )
+
+      // DELETE /plugins/signalk-units-preference/standard-unit-definitions/:baseUnit/conversions/:targetUnit
+      // Delete a conversion from a standard unit
+      router.delete(
+        '/standard-unit-definitions/:baseUnit/conversions/:targetUnit',
+        async (req: Request, res: Response) => {
+          try {
+            const baseUnit = decodeURIComponent(req.params.baseUnit)
+            const targetUnit = decodeURIComponent(req.params.targetUnit)
+
+            await unitsManager
+              .getPreferencesStore()
+              .deleteConversionFromStandardUnit(baseUnit, targetUnit)
+
+            // Reload units manager to apply changes
+            await unitsManager.initialize()
+
+            res.json({ success: true, baseUnit, targetUnit })
+          } catch (error) {
+            app.error(`Error deleting conversion from standard unit: ${error}`)
+            const response = formatErrorResponse(error)
+            res.status(response.status).json(response.body)
+          }
+        }
+      )
+
+      // ========== PRESETS ==========
 
       // GET /plugins/signalk-units-preference/presets/current
       // Get current preset information

@@ -6,7 +6,7 @@
   "categories": {
     "distance": {
       "baseUnit": "m",
-      "targetUnit": "km",
+      "targetUnit": "kilometer",
       "displayFormat": "0.0"
     },
     "speed": {
@@ -31,12 +31,12 @@
     },
     "volume": {
       "baseUnit": "m3",
-      "targetUnit": "L",
+      "targetUnit": "liter",
       "displayFormat": "0.0"
     },
     "angle": {
       "baseUnit": "rad",
-      "targetUnit": "deg",
+      "targetUnit": "degree",
       "displayFormat": "0.0"
     },
     "length": {
@@ -76,7 +76,7 @@
     },
     "time": {
       "baseUnit": "s",
-      "targetUnit": "h",
+      "targetUnit": "hour",
       "displayFormat": "0.0"
     },
     "dateTime": {
@@ -93,6 +93,31 @@
       "baseUnit": "m3/s",
       "targetUnit": "L/h",
       "displayFormat": "0.0"
+    },
+    "energy": {
+      "baseUnit": "J",
+      "targetUnit": "J",
+      "displayFormat": "0.0"
+    },
+    "mass": {
+      "baseUnit": "kg",
+      "targetUnit": "kg",
+      "displayFormat": "0.0"
+    },
+    "area": {
+      "baseUnit": "m2",
+      "targetUnit": "m2",
+      "displayFormat": "0.0"
+    },
+    "angleDegrees": {
+      "baseUnit": "deg",
+      "targetUnit": "deg",
+      "displayFormat": "0.0"
+    },
+    "boolean": {
+      "baseUnit": "bool",
+      "targetUnit": "bool",
+      "displayFormat": "boolean"
     }
   }
 }

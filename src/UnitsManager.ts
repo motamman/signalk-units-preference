@@ -43,6 +43,16 @@ export class UnitsManager {
   private schemaCacheTimestamp: number = 0
   private readonly SCHEMA_CACHE_TTL_MS = 15000 // 15 seconds
 
+  // Cache for getPathsMetadata
+  private pathsMetadataCache: Record<string, UnitMetadata> | null = null
+  private pathsMetadataCacheTime: number = 0
+  private readonly PATHS_METADATA_CACHE_TTL_MS = 30000 // 30 seconds
+
+  // Rate limiting for getPathsMetadata to prevent rapid sequential calls
+  private lastMetadataFetchTime: number = 0
+  private readonly MIN_FETCH_INTERVAL_MS = 1000 // Minimum 1 second between fetches
+  private pendingMetadataFetch: Promise<Record<string, UnitMetadata>> | null = null
+
   constructor(
     private app: ServerAPI,
     private dataDir: string
@@ -185,6 +195,10 @@ export class UnitsManager {
     // Auto-initialize SignalK metadata cache
     // This makes conversions work immediately without requiring the web app
     await this.metadataManager.autoInitializeSignalKMetadata()
+
+    // Clear metadata resolution cache after auto-initialization
+    // so next API call will resolve with fresh captured values
+    this.metadataManager.clearMetadataCache()
   }
 
   /**
@@ -192,9 +206,13 @@ export class UnitsManager {
    * This is exposed on UnitsManager to support the DeltaStreamHandler's cache clearing mechanism.
    */
   setPreferencesChangeCallback(callback: () => void): void {
-    // Wrap the callback to also clear our schema cache
+    // Wrap the callback to invalidate caches WITHOUT forcing immediate refresh
+    // The callback (e.g., broadcastUpdate) can choose to use cached data or force refresh
     this.preferencesStore.setOnPreferencesChanged(() => {
       this.clearSchemaCache()
+      this.pathsMetadataCache = null // Invalidate pathsMetadata cache
+      // Note: We DON'T clear metadataManager cache here - let it naturally expire
+      // This prevents cascading cache clears that cause API hammering
       callback()
     })
   }
@@ -252,6 +270,8 @@ export class UnitsManager {
    */
   setSignalKMetadata(metadata: Record<string, SignalKPathMetadata>): void {
     this.metadataManager.setSignalKMetadata(metadata)
+    // Invalidate paths metadata cache when new metadata arrives
+    this.pathsMetadataCache = null
   }
 
   /**
@@ -429,9 +449,16 @@ export class UnitsManager {
     )
 
     const isDateCategory = metadata.category === 'dateTime' || metadata.category === 'epoch'
-    const displayFormat = isDateCategory
-      ? conversion.dateFormat || preference.displayFormat || 'ISO-8601'
-      : preference.displayFormat || targetUnit || ''
+    const isBooleanCategory = metadata.category === 'boolean' || valueType === 'boolean'
+
+    let displayFormat: string
+    if (isDateCategory) {
+      displayFormat = conversion.dateFormat || preference.displayFormat || 'ISO-8601'
+    } else if (isBooleanCategory) {
+      displayFormat = 'boolean'
+    } else {
+      displayFormat = preference.displayFormat || targetUnit || ''
+    }
 
     const dateFormatValue = isDateCategory
       ? conversion.dateFormat || preference.displayFormat || 'ISO-8601'
@@ -472,12 +499,20 @@ export class UnitsManager {
       }
     }
 
-    const valueType = this.metadataManager.detectValueType(unit, skMeta?.value)
+    // Check the actual value to determine type
+    const value = skMeta?.value ?? this.app.getSelfPath(pathStr)
+    const valueType = this.metadataManager.detectValueType(unit, value)
 
     let displayFormat = '0.0'
     let symbol = ''
 
-    if (valueType === 'boolean') {
+    // Auto-assign bool base unit for boolean values without explicit units
+    if (valueType === 'boolean' && !unit) {
+      unit = 'bool'
+      displayFormat = 'boolean'
+      symbol = ''
+      this.app.debug(`Pass-through: auto-assigned baseUnit "bool" for boolean path ${pathStr}`)
+    } else if (valueType === 'boolean') {
       displayFormat = 'boolean'
       symbol = ''
     } else if (valueType === 'date') {
@@ -832,6 +867,24 @@ export class UnitsManager {
             displayUnit = baseUnit
             targetUnit = undefined
           }
+        } else if (metadataEntry?.baseUnit) {
+          // Use metadata resolved by resolveMetadataForPath (includes value-based boolean detection)
+          baseUnit = metadataEntry.baseUnit
+          category = metadataEntry.category || '-'
+
+          const categoryPref = category !== '-' ? preferences.categories?.[category] : null
+
+          if (categoryPref && categoryPref.targetUnit) {
+            status = 'auto'
+            source = 'Auto-detected'
+            targetUnit = categoryPref.targetUnit
+            displayUnit = targetUnit || baseUnit
+          } else {
+            status = 'inferred'
+            source = 'Inferred'
+            displayUnit = baseUnit
+            targetUnit = baseUnit
+          }
         } else {
           const allCategories = [
             ...this.getCoreCategories(),
@@ -863,7 +916,7 @@ export class UnitsManager {
           }
         }
 
-        const value = this.app.getSelfPath(path)
+        const value = skMetadata?.value ?? this.app.getSelfPath(path)
         const valueType = this.metadataManager.detectValueType(skMetadata?.units, value)
 
         pathsInfo.push({
@@ -921,15 +974,75 @@ export class UnitsManager {
 
   /**
    * Build a map of all discovered paths to their metadata definitions.
+   * @param useCache - If true, return cached result if available and not expired (default: true)
+   * @param forceRefresh - If true, bypass all caching and rate limiting (use sparingly)
    */
-  async getPathsMetadata(): Promise<Record<string, UnitMetadata>> {
+  async getPathsMetadata(
+    useCache: boolean = true,
+    forceRefresh: boolean = false
+  ): Promise<Record<string, UnitMetadata>> {
+    const now = Date.now()
+
+    // Check cache if requested (and not forcing refresh)
+    if (useCache && !forceRefresh && this.pathsMetadataCache) {
+      const cacheAge = now - this.pathsMetadataCacheTime
+      if (cacheAge < this.PATHS_METADATA_CACHE_TTL_MS) {
+        this.app.debug(`Using cached pathsMetadata (age: ${Math.round(cacheAge / 1000)}s)`)
+        return this.pathsMetadataCache
+      }
+    }
+
+    // Rate limiting: If a fetch is already in progress, return that promise
+    if (!forceRefresh && this.pendingMetadataFetch) {
+      this.app.debug('pathsMetadata fetch already in progress, returning pending promise')
+      return this.pendingMetadataFetch
+    }
+
+    // Rate limiting: Prevent rapid sequential calls
+    const timeSinceLastFetch = now - this.lastMetadataFetchTime
+    if (!forceRefresh && timeSinceLastFetch < this.MIN_FETCH_INTERVAL_MS) {
+      this.app.debug(
+        `Rate limit: returning cached data (last fetch ${Math.round(timeSinceLastFetch)}ms ago, min interval ${this.MIN_FETCH_INTERVAL_MS}ms)`
+      )
+      // Return cached data if available, otherwise wait
+      if (this.pathsMetadataCache) {
+        return this.pathsMetadataCache
+      }
+    }
+
+    // Start the fetch
+    this.lastMetadataFetchTime = now
+    this.pendingMetadataFetch = this.buildPathsMetadata(forceRefresh)
+
+    try {
+      const result = await this.pendingMetadataFetch
+      return result
+    } finally {
+      this.pendingMetadataFetch = null
+    }
+  }
+
+  /**
+   * Internal method to build paths metadata (extracted for better flow control)
+   */
+  private async buildPathsMetadata(forceRefresh: boolean): Promise<Record<string, UnitMetadata>> {
     const result: Record<string, UnitMetadata> = {}
     const preferences = this.preferencesStore.getPreferences()
     const unitDefinitions = this.preferencesStore.getUnitDefinitions()
 
     try {
-      // Collect paths directly from SignalK API instead of relying on signalKMetadata
-      // which may be empty if frontend hasn't called POST /signalk-metadata
+      // CRITICAL: Always refresh SignalK metadata to ensure boolean detection works
+      // Boolean paths without explicit units need value inspection to be detected
+      // This is REQUIRED for proper type detection, regardless of cache settings
+      await this.metadataManager.autoInitializeSignalKMetadata()
+
+      // Only clear metadata resolution cache on force refresh
+      if (forceRefresh) {
+        this.app.debug('Force refresh: clearing metadata cache')
+        this.metadataManager.clearMetadataCache()
+      }
+
+      // Collect paths directly from SignalK API
       const pathsSet = await this.metadataManager.collectSignalKPaths()
 
       // Also include any path overrides that may not be in SignalK
@@ -991,6 +1104,11 @@ export class UnitsManager {
           }
         }
       }
+
+      // Cache the result with timestamp
+      this.pathsMetadataCache = result
+      this.pathsMetadataCacheTime = Date.now()
+      this.app.debug(`Cached pathsMetadata with ${Object.keys(result).length} paths`)
 
       return result
     } catch (error) {
@@ -1231,6 +1349,11 @@ export class UnitsManager {
       }
       dateFormatNames.forEach(format => targetUnitsByBase['RFC 3339 (UTC)'].add(format))
 
+      if (!targetUnitsByBase['ISO-8601 (UTC)']) {
+        targetUnitsByBase['ISO-8601 (UTC)'] = new Set()
+      }
+      dateFormatNames.forEach(format => targetUnitsByBase['ISO-8601 (UTC)'].add(format))
+
       if (!targetUnitsByBase['Epoch Seconds']) {
         targetUnitsByBase['Epoch Seconds'] = new Set()
       }
@@ -1245,12 +1368,18 @@ export class UnitsManager {
       label: this.getBaseUnitLabel(unit)
     }))
 
-    // Ensure each base unit is always included in its own target units list
+    // Add identity conversions ONLY if they exist in the definitions
+    // (don't automatically create them - respect user deletions)
     for (const baseUnit of baseUnitsArray) {
       if (!targetUnitsByBase[baseUnit]) {
         targetUnitsByBase[baseUnit] = new Set()
       }
-      targetUnitsByBase[baseUnit].add(baseUnit)
+      // Check if the identity conversion actually exists in the standard units data
+      const unitDef = this.standardUnitsData[baseUnit]
+      if (unitDef?.conversions?.[baseUnit]) {
+        // Only add if it exists in the definitions
+        targetUnitsByBase[baseUnit].add(baseUnit)
+      }
     }
 
     const targetUnitsMap: Record<string, string[]> = {}
@@ -1456,5 +1585,12 @@ export class UnitsManager {
    */
   getMetadataManager(): MetadataManager {
     return this.metadataManager
+  }
+
+  /**
+   * Get the preferences store instance (for standard units API)
+   */
+  getPreferencesStore(): PreferencesStore {
+    return this.preferencesStore
   }
 }

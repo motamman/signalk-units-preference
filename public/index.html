@@ -974,6 +974,22 @@
                                 <div id="conversionBaseUnitContainer"></div>
                             </div>
                             <div class="input-group">
+                                <label>
+                                    Target Unit
+                                    <span class="tooltip-icon" data-tooltip="Select from suggested units or type a custom one">?</span>
+                                </label>
+                                <div id="conversionTargetUnitContainer">
+                                    <select id="conversionTargetUnit" disabled>
+                                        <option value="">-- Select base unit first --</option>
+                                    </select>
+                                </div>
+                                <div id="conversionTargetLoading" style="display: none; color: #667eea; font-size: 0.85rem; margin-top: 5px;">
+                                    ⏳ Loading suggestions from js-quantities...
+                                </div>
+                            </div>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr; gap: 15px; margin-bottom: 15px;">
+                            <div class="input-group">
                                 <label>Description (optional)</label>
                                 <input type="text" id="conversionLongName" placeholder="e.g., gallons per hour, fahrenheit">
                             </div>
@@ -1578,6 +1594,15 @@
             preview.style.color = '#667eea';
         }
     </script>
+    <!-- External libraries for conversions -->
+    <script src="https://cdn.jsdelivr.net/npm/mathjs@12.4.0/lib/browser/math.min.js"></script>
+    <script type="module">
+      // Import date-fns as ES module and expose to global scope
+      import * as dateFnsModule from 'https://cdn.jsdelivr.net/npm/date-fns@2.30.0/+esm';
+      window.dateFns = dateFnsModule;
+      console.log('date-fns loaded:', Object.keys(window.dateFns).slice(0, 5));
+    </script>
+
     <!-- Modular app scripts (loaded in dependency order) -->
     <script src="js/app-state.js"></script>
     <script src="js/app-utils.js"></script>

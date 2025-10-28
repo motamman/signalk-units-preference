@@ -25,6 +25,10 @@ export class MetadataManager {
   private standardUnitsData: Record<string, any> = {}
   private categoriesData: any = {}
 
+  // Rate limiting for autoInitializeSignalKMetadata to prevent API hammering
+  private lastSignalKFetchTime: number = 0
+  private readonly MIN_SIGNALK_FETCH_INTERVAL_MS = 5000 // 5 seconds minimum between full API fetches
+
   constructor(
     private app: ServerAPI,
     standardUnitsData: Record<string, any> = {},
@@ -54,6 +58,10 @@ export class MetadataManager {
     this.app.debug(
       `Metadata cache updated: ${existingCount} existing + ${newCount} new = ${totalCount} total paths`
     )
+
+    // Clear metadata resolution cache so paths re-resolve with new values
+    // This is critical for boolean auto-detection to work
+    this.clearMetadataCache()
   }
 
   /**
@@ -221,7 +229,9 @@ export class MetadataManager {
 
       // For date/time base units, dynamically add date format conversions
       if (
-        (baseUnit === 'RFC 3339 (UTC)' || baseUnit === 'Epoch Seconds') &&
+        (baseUnit === 'RFC 3339 (UTC)' ||
+          baseUnit === 'ISO-8601 (UTC)' ||
+          baseUnit === 'Epoch Seconds') &&
         dateFormatsData?.formats
       ) {
         for (const [formatKey, formatMeta] of Object.entries(dateFormatsData.formats)) {
@@ -420,6 +430,56 @@ export class MetadataManager {
       }
     }
 
+    // VALUE-BASED FALLBACK: Detect boolean values and auto-assign bool base unit
+    if (!metadata) {
+      // Try to get the actual value from SignalK
+      let skMetadata = this.signalKMetadata[pathStr]
+      if (!skMetadata) {
+        // Try live query
+        const liveMetadata = this.app.getMetadata(pathStr)
+        if (liveMetadata) {
+          skMetadata = {
+            units: liveMetadata.units,
+            description: liveMetadata.description,
+            value: undefined,
+            $source: undefined,
+            timestamp: undefined
+          }
+        }
+      }
+
+      // Check if we have a value to inspect
+      const value = skMetadata?.value ?? this.app.getSelfPath(pathStr)
+
+      if (value !== undefined && value !== null) {
+        const detectedType = this.detectValueType(undefined, value)
+
+        // Auto-assign bool base unit for boolean values
+        if (detectedType === 'boolean') {
+          this.app.debug(
+            `✓ Value-based inference: ${pathStr} has boolean value (${value}) → assigning base unit "bool"`
+          )
+          const builtInDef = this.getConversionsForBaseUnit('bool', dateFormatsData)
+          const customDef = unitDefinitions['bool']
+
+          const conversions = {
+            ...(builtInDef?.conversions || {}),
+            ...(customDef?.conversions || {})
+          }
+
+          metadata = {
+            baseUnit: 'bool',
+            category: 'boolean',
+            conversions
+          }
+        }
+      } else {
+        this.app.debug(
+          `⚠ Value-based inference skipped for ${pathStr}: no value found (cached=${skMetadata?.value}, live=${this.app.getSelfPath(pathStr)})`
+        )
+      }
+    }
+
     if (!metadata) {
       return null
     }
@@ -463,7 +523,19 @@ export class MetadataManager {
    * This eliminates the need for the web app to POST metadata
    */
   async autoInitializeSignalKMetadata(): Promise<void> {
+    // Rate limiting: Prevent excessive API calls
+    const now = Date.now()
+    const timeSinceLastFetch = now - this.lastSignalKFetchTime
+
+    if (timeSinceLastFetch < this.MIN_SIGNALK_FETCH_INTERVAL_MS) {
+      this.app.debug(
+        `Skipping SignalK metadata fetch (last fetch ${Math.round(timeSinceLastFetch / 1000)}s ago, min interval ${this.MIN_SIGNALK_FETCH_INTERVAL_MS / 1000}s)`
+      )
+      return
+    }
+
     try {
+      this.lastSignalKFetchTime = now
       this.app.debug('Auto-initializing SignalK metadata cache...')
 
       let hostname = 'localhost'
@@ -525,19 +597,37 @@ export class MetadataManager {
           const currentPath = prefix ? `${prefix}.${key}` : key
 
           if (obj[key] && typeof obj[key] === 'object') {
-            // If this object has meta, capture it
-            if (obj[key].meta) {
-              metadataMap[currentPath] = {
-                ...obj[key].meta,
-                value: obj[key].value,
-                $source: obj[key].$source || obj[key].source,
-                timestamp: obj[key].timestamp
-              }
-              // Debug: Log if zones are found
-              if (obj[key].meta.zones && Array.isArray(obj[key].meta.zones)) {
-                console.log(
-                  `[MetadataManager] Found ${obj[key].meta.zones.length} zones for ${currentPath}`
+            // Capture paths that have a value, even if they don't have meta
+            if ('value' in obj[key]) {
+              // Check if meta has actual units field (not just empty object)
+              const hasUsefulMeta = obj[key].meta && obj[key].meta.units
+
+              if (hasUsefulMeta) {
+                metadataMap[currentPath] = {
+                  ...obj[key].meta,
+                  value: obj[key].value,
+                  $source: obj[key].$source || obj[key].source,
+                  timestamp: obj[key].timestamp
+                }
+                // Debug: Log if zones are found
+                if (obj[key].meta.zones && Array.isArray(obj[key].meta.zones)) {
+                  console.log(
+                    `[MetadataManager] Found ${obj[key].meta.zones.length} zones for ${currentPath}`
+                  )
+                }
+              } else {
+                // No meta or empty meta - capture value for value-based detection
+                const valueType = typeof obj[key].value
+                this.app.debug(
+                  `Capturing path without units: ${currentPath} (type: ${valueType}, value: ${obj[key].value})`
                 )
+                metadataMap[currentPath] = {
+                  value: obj[key].value,
+                  $source: obj[key].$source || obj[key].source,
+                  timestamp: obj[key].timestamp,
+                  units: undefined,
+                  description: obj[key].meta?.description
+                }
               }
             }
             extractMeta(obj[key], currentPath)
@@ -788,6 +878,15 @@ export class MetadataManager {
    */
   getMetadataForPath(pathStr: string): UnitMetadata | null {
     return this.metadata[pathStr] || null
+  }
+
+  /**
+   * Clear the metadata cache
+   * Used to force fresh resolution of metadata with current values
+   */
+  clearMetadataCache(): void {
+    this.metadata = {}
+    this.app.debug('Metadata cache cleared - will re-resolve all paths with current values')
   }
 
   /**
