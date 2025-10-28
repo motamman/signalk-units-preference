@@ -229,7 +229,9 @@ export class MetadataManager {
 
       // For date/time base units, dynamically add date format conversions
       if (
-        (baseUnit === 'RFC 3339 (UTC)' || baseUnit === 'ISO-8601 (UTC)' || baseUnit === 'Epoch Seconds') &&
+        (baseUnit === 'RFC 3339 (UTC)' ||
+          baseUnit === 'ISO-8601 (UTC)' ||
+          baseUnit === 'Epoch Seconds') &&
         dateFormatsData?.formats
       ) {
         for (const [formatKey, formatMeta] of Object.entries(dateFormatsData.formats)) {
