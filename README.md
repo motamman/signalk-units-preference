@@ -1201,7 +1201,21 @@ async function getConversion(path) {
   return conversionCache[path]
 }
 
-// When receiving SignalK delta
+// Connect to SignalK WebSocket stream
+const ws = new WebSocket('ws://localhost:3000/signalk/v1/stream?subscribe=none')
+
+ws.onopen = () => {
+  // Subscribe to specific paths
+  ws.send(JSON.stringify({
+    context: 'vessels.self',
+    subscribe: [
+      { path: 'navigation.speedOverGround', period: 1000 },
+      { path: 'environment.wind.speedApparent', period: 1000 }
+    ]
+  }))
+}
+
+// Handle incoming SignalK delta messages
 ws.onmessage = async (event) => {
   const delta = JSON.parse(event.data)
 
@@ -1210,7 +1224,7 @@ ws.onmessage = async (event) => {
       const path = value.path
       const rawValue = value.value
 
-      // Get conversion for this path
+      // Get conversion metadata for this path
       const conversion = await getConversion(path)
 
       // Convert the value client-side using the formula
@@ -1526,15 +1540,10 @@ class SignalKConverter {
         let displayValue
 
         if (conversion.valueType === 'number' && typeof rawValue === 'number') {
-          // Option 1: Use the formula locally (faster, no network call)
+          // Use the formula locally (fast, no network call)
           displayValue = this.evaluateFormula(conversion.formula, rawValue)
           const formatted = this.formatNumber(displayValue, conversion.displayFormat)
           this.onValueUpdate(path, `${formatted} ${conversion.symbol}`)
-
-          // Option 2: Use REST API (simpler, slower)
-          // const response = await fetch(`/plugins/signalk-units-preference/conversions/${path}?value=${encodeURIComponent(rawValue)}`)
-          // const result = await response.json()
-          // this.onValueUpdate(path, result.formatted)
         }
         else if (conversion.valueType === 'boolean') {
           displayValue = rawValue ? 'true' : 'false'
