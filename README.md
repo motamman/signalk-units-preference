@@ -1,6 +1,6 @@
 # Units Display Preference
 
-A SignalK server tool for managing unit conversions and display preferences across all data paths. Convert any SignalK data point to your preferred units with flexible pattern matching, custom formulas, and a REST API and websocket streamer.
+A SignalK server tool for managing unit conversions and display preferences across all data paths. Convert any SignalK data point to your preferred units with flexible pattern matching, custom formulas, and a REST API.
 
 >**Important:** This only changes how conversions are managed inside this tool. It won't modify any existing the display SignalK apps, though it could be used as conversion manager for other apps. For now, it is just for testing.
 
@@ -14,7 +14,7 @@ This plugin provides a complete unit conversion system for SignalK, allowing you
 - Use wildcard patterns to apply conversions to multiple paths
 - Override specific paths with custom units
 - View comprehensive metadata for all paths
-- Access conversions via REST API websocket streamer for integration with other apps
+- Access conversion metadata and formulas via REST API for integration with other apps
 
 ## Key Features
 
@@ -111,46 +111,6 @@ Convert seconds to human-readable durations (e.g., for timers, ETA, runtime).
 - **Safe Formatting**: Uses date-fns `intervalToDuration` and `formatDuration` for verbose output
 - **Examples**: Perfect for `navigation.course.calcValues.timeToGo`, `propulsion.*.runtime`, etc.
 
-### 11. **Dedicated WebSocket Stream** ⭐ NEW (v0.7.0+)
-Real-time conversion stream with dedicated WebSocket endpoint - **recommended approach** for app integration.
-
-- **Dedicated Endpoint**: `ws://host/plugins/signalk-units-preference/stream`
-- **Clean Architecture**: No pollution of SignalK data tree
-- **Server-Side Conversion**: All conversions handled server-side using unified conversion engine
-- **Multi-Vessel Support**: Subscribe to any vessel context (self, AIS targets, buddy boats)
-- **All Value Types**: Handles numbers, dates, booleans, strings, and objects
-- **No Client Dependencies**: Clients don't need mathjs or date-fns
-- **Per-Client Subscriptions**: Each client subscribes to only the paths they need
-- **Auto-Reconnect**: Built-in reconnection with exponential backoff
-
-**Quick Start:**
-```javascript
-// Connect to dedicated conversion stream
-const ws = new WebSocket('ws://localhost:3000/plugins/signalk-units-preference/stream')
-
-ws.onopen = () => {
-  // Subscribe to specific paths with context
-  ws.send(JSON.stringify({
-    context: 'vessels.self',
-    subscribe: [
-      { path: 'navigation.speedOverGround', period: 1000 },
-      { path: 'environment.wind.speedApparent', period: 1000 }
-    ]
-  }))
-}
-
-ws.onmessage = (event) => {
-  const delta = JSON.parse(event.data)
-  // delta.updates[0].values contains converted values
-  for (const pathValue of delta.updates[0].values) {
-    console.log(`${pathValue.path}: ${pathValue.value.formatted}`)
-    // Output: "navigation.speedOverGround: 10.0 kn"
-  }
-}
-```
-
-**Legacy Mode (Deprecated):**
-The plugin can still inject `.unitsConverted` paths into SignalK's delta stream (disabled by default). Use the dedicated endpoint instead for cleaner architecture.
 
 ## How It Works
 
@@ -330,176 +290,27 @@ This plugin provides two sets of REST endpoints:
 
 ### Public Conversion Endpoints
 
-> **Recommended:** These endpoints provide the simplest integration path - no authentication required, clean flat response format, and work with Bearer tokens.
+> **Recommended:** These endpoints provide the simplest integration path - no authentication required, clean flat response format, and work with Bearer tokens. Endpoints provide conversion metadata and formulas for client-side evaluation.
 
 See the [Public Conversions API](#public-conversions-api) section above for details on the public `/signalk/v1/conversions` endpoints.
 
 ### Plugin Conversion Endpoints
 
-> **Note:** These plugin endpoints require authentication and return responses in SignalK delta format.
+> **Note:** These plugin endpoints require authentication and return conversion metadata for client-side evaluation.
 > For simpler, unauthenticated access with a flat response format, use the [public endpoints](#public-conversions-api) at `/signalk/v1/conversions` instead.
 
-#### Get Conversion Information / Convert a Value
+#### Get Conversion Information
 ```http
 GET /plugins/signalk-units-preference/conversions/:path
-GET /plugins/signalk-units-preference/conversions/:path?value=X
 ```
 
-Returns conversion metadata for a path. If the `value` query parameter is provided, returns the conversion result instead.
+Returns conversion metadata for a path.
 
-**Example (metadata only):**
+**Example:**
 ```http
 GET /plugins/signalk-units-preference/conversions/navigation.speedOverGround
 ```
 
-**Example (convert value):**
-```http
-GET /plugins/signalk-units-preference/conversions/navigation.speedOverGround?value=5.14
-```
-
-**Response (with value):**
-```json
-{
-  "context": "vessels.self",
-  "updates": [
-    {
-      "$source": "navigation",
-      "timestamp": "2025-10-03T13:56:37.000Z",
-      "values": [
-        {
-          "path": "navigation.speedOverGround",
-          "value": {
-            "value": 10,
-            "formatted": "10.0 kn",
-            "symbol": "kn",
-            "displayFormat": "0.0",
-            "original": 5.14
-          }
-        }
-      ]
-    }
-  ]
-}
-```
-
-Optional query parameters:
-- `value` – the value to convert
-- `type` – type hint: `number`, `boolean`, `string`, `date`, `object`
-
-#### Convert a Value (POST - All Types)
-```http
-POST /plugins/signalk-units-preference/conversions
-```
-
-Converts any value type (number, boolean, string, date). Accepts both JSON and form data.
-
-**Request Body (JSON):**
-```json
-{
-  "path": "commands.captureAnchor",
-  "value": true
-}
-```
-
-**Example Response:**
-```json
-{
-  "context": "vessels.self",
-  "updates": [
-    {
-      "$source": "derived-data",
-      
-      "timestamp": "2025-10-03T16:08:07.985Z",
-      "values": [
-        {
-          "path": "environment.inside.temperature",
-          "value": {
-            "value": 19.2,
-            "formatted": "19.2 °C",
-            "symbol": "°C",
-            "displayFormat": "0.0",
-            "original": 292.35
-          }
-        }
-      ]
-    }
-  ]
-}
-```
-
-#### Convert by Base Unit
-```http
-GET /plugins/signalk-units-preference/units/conversions?baseUnit=X&targetUnit=Y&value=Z
-POST /plugins/signalk-units-preference/units/conversions
-```
-
-Convert a single value directly from a base unit to a target unit without referencing a SignalK path.
-
-**GET Request:**
-```http
-GET /plugins/signalk-units-preference/units/conversions?baseUnit=m/s&targetUnit=knots&value=5.14
-```
-
-**POST Request Body:**
-```json
-{
-  "baseUnit": "m/s",
-  "targetUnit": "knots",
-  "value": 5.14
-}
-```
-
-**Example Response:**
-```json
-{
-  "baseUnit": "m/s",
-  "targetUnit": "knots",
-  "original": 5.14,
-  "result": {
-    "convertedValue": 9.999,
-    "formatted": "10.0 kn",
-    "symbol": "kn",
-    "displayFormat": "0.0",
-    "valueType": "number"
-  }
-}
-```
-
-Date/time conversions use ISO-8601 strings and support the same formats as the `dateTime` category:
-```json
-{
-  "baseUnit": "RFC 3339 (UTC)",
-  "targetUnit": "time-am/pm-local",
-  "value": "2025-10-04T00:17:48.000Z"
-}
-```
-
-```json
-{
-  "baseUnit": "RFC 3339 (UTC)",
-  "targetUnit": "time-am/pm-local",
-  "original": "2025-10-04T00:17:48.000Z",
-  "result": {
-    "convertedValue": "07:17:48 PM",
-    "formatted": "07:17:48 PM",
-    "symbol": "",
-    "displayFormat": "time-am/pm",
-    "valueType": "date",
-    "dateFormat": "time-am/pm",
-    "useLocalTime": true
-  }
-}
-```
-
-If the base unit, target unit, or value is invalid, the API responds with a `400` error describing the mismatch.
-
-Optional parameters (GET query params or POST body):
-- `displayFormat` – override numeric formatting (e.g., `0.00`)
-- `useLocalTime` – optional override for date/time conversions (defaults to the target unit suffix, e.g. `*-local`)
-
-```bash
-curl "http://localhost:3000/plugins/signalk-units-preference/units/conversions?baseUnit=RFC%203339%20(UTC)&targetUnit=time-am/pm-local&value=2025-10-04T00:17:48.000Z"
-```
 
 ### Zones API
 
@@ -738,16 +549,14 @@ curl http://localhost:3000/signalk/v1/categories
 
 ### Public Conversions API
 
-The Conversions API provides public endpoints for unit conversion and metadata at the `/signalk/v1/` level. These endpoints follow the same pattern as the Zones and History APIs, making them accessible without plugin-specific authentication.
+The Conversions API provides public endpoints for unit conversion metadata at the `/signalk/v1/` level. These endpoints follow the same pattern as the Zones and History APIs, making them accessible without plugin-specific authentication.
 
 **Key Features:**
-- Public endpoints at `
-` (works with Bearer tokens)
+- Public endpoints at `/signalk/v1/conversions` (works with Bearer tokens)
 - Discovery endpoint to list all available conversions
-- Single path endpoint for metadata or value conversion
-- Automatic type detection and parsing for query parameters
-- Supports all value types (number, date, boolean, string, object)
-- Uses the same conversion engine as plugin router endpoints
+- Single path endpoint for conversion metadata
+- Provides formulas for client-side evaluation
+- No authentication required
 
 #### Discovery - Get All Available Conversions
 ```http
@@ -818,73 +627,13 @@ curl http://localhost:3000/signalk/v1/conversions/navigation.speedOverGround
 }
 ```
 
-#### Convert a Value
-```http
-GET /signalk/v1/conversions/:path?value=X
-```
-
-Converts a value from base units to the user's preferred units.
-
-**Example:**
-```bash
-curl "http://localhost:3000/signalk/v1/conversions/navigation.speedOverGround?value=5.2"
-```
-
-**Response:**
-```json
-{
-  "path": "navigation.speedOverGround",
-  "context": "vessels.self",
-  "timestamp": "2025-10-25T11:39:05.752Z",
-  "original": 5.2,
-  "converted": 10.107968,
-  "formatted": "10.1 kn",
-  "metadata": {
-    "units": "kn",
-    "displayFormat": "0.0",
-    "description": "navigation.speedOverGround (speed)",
-    "originalUnits": "m/s",
-    "displayName": "speedOverGround (kn)"
-  }
-}
-```
-
-**Optional Query Parameters:**
-- `value` - The value to convert (required for conversion mode)
-- `context` - Vessel context (default: "vessels.self")
-- `timestamp` - ISO-8601 timestamp (default: current time)
-- `type` - Type hint: "number", "boolean", "string", "date", "object"
-
-**Value Types:**
-The endpoint automatically detects and handles all value types:
-- **Numbers**: Parsed from string and converted using formulas
-- **Dates**: ISO-8601 strings formatted according to date/time preferences
-- **Booleans**: JSON parsed (true/false)
-- **Objects**: JSON parsed and passed through
-- **Strings**: Passed through as-is
-
-**Examples with Different Types:**
-```bash
-# Number conversion
-curl "http://localhost:3000/signalk/v1/conversions/navigation.speedOverGround?value=5.2"
-
-# Temperature conversion
-curl "http://localhost:3000/signalk/v1/conversions/environment.outside.temperature?value=293.15"
-
-# Date/time conversion
-curl "http://localhost:3000/signalk/v1/conversions/navigation.datetime?value=2025-10-25T11:39:05.752Z"
-
-# With custom context
-curl "http://localhost:3000/signalk/v1/conversions/navigation.speedOverGround?value=5.2&context=vessels.urn:mrn:imo:mmsi:123456789"
-```
-
 ### JavaScript Client Library
 
-The plugin includes a JavaScript client library that makes it easy to use the Conversions API from web applications. The library handles fetching conversion metadata, performing conversions, and optionally subscribing to live preference updates via WebSocket.
+The plugin includes a JavaScript client library that makes it easy to use the Conversions API from web applications. The library handles fetching conversion metadata and performing client-side conversions.
 
 **Key Features:**
 - Fetch conversion metadata from the REST API
-- Convert values using formulas and formatting
+- Perform client-side conversions using formulas and formatting
 - Optional WebSocket connection for live preference updates
 - Works in browsers (via script tag or bundler) and Node.js
 - TypeScript support with full type definitions
@@ -1392,227 +1141,22 @@ DELETE /plugins/signalk-units-preference/unit-definitions/:baseUnit/conversions/
 
 ## Integration Guide for App Developers
 
-This plugin provides a **centralized unit conversion service** for SignalK applications. Instead of each app implementing its own conversion logic, apps can use the plugin's dedicated WebSocket endpoint or REST API.
+This plugin provides a **centralized unit conversion service** for SignalK applications. Instead of each app implementing its own conversion logic, apps can use the plugin's REST API to fetch conversion metadata and formulas.
 
 ### Why Use This Plugin?
 
 **Benefits for App Developers:**
 - **User Preference Respect**: Automatically honor units configured by the user
-- **Zero Client Dependencies**: No mathjs, date-fns, or formula evaluation needed
-- **Server-Side Conversion**: All conversions handled server-side with unified logic
-- **Multi-Vessel Support**: Subscribe to any vessel context (self, AIS targets, buddy boats)
-- **All Value Types**: Handles numbers, dates, booleans, strings, and objects
-- **Type Detection**: Get value type information for proper input validation
 - **Centralized Configuration**: Users configure once, all apps benefit
 - **Flexible Patterns**: Automatically handles new paths via wildcard patterns
+- **Type Detection**: Get value type information for proper input validation
+- **Conversion Formulas**: Get conversion formulas for client-side evaluation
 
-### Integration Approaches
+### Integration Approach
 
-#### 1. Dedicated WebSocket Endpoint (Recommended) ⭐ NEW (v0.7.0+)
+#### REST API Integration
 
-**Use Case**: Real-time conversion stream with dedicated WebSocket - **best for apps requiring live data updates**.
-
-The plugin provides a dedicated WebSocket endpoint at `ws://host/plugins/signalk-units-preference/stream` that streams pre-converted values to clients. This is the **recommended approach** as it:
-- ✅ Keeps SignalK data tree clean (no `.unitsConverted` pollution)
-- ✅ Eliminates client-side conversion logic
-- ✅ Works with all value types (number, date, boolean, string, object)
-- ✅ Supports multi-vessel contexts
-- ✅ Per-client subscriptions (only subscribe to paths you need)
-
-**Basic Example:**
-```javascript
-// Connect to plugin's dedicated conversion stream
-const ws = new WebSocket('ws://localhost:3000/plugins/signalk-units-preference/stream')
-
-ws.onopen = () => {
-  console.log('Connected to conversion stream')
-
-  // Subscribe to specific paths with desired context
-  ws.send(JSON.stringify({
-    context: 'vessels.self',  // or any vessel context
-    subscribe: [
-      { path: 'navigation.speedOverGround', period: 1000 },
-      { path: 'environment.wind.speedApparent', period: 1000 },
-      { path: 'navigation.datetime', period: 1000 }
-    ]
-  }))
-}
-
-ws.onmessage = (event) => {
-  const delta = JSON.parse(event.data)
-
-  // Process converted values
-  for (const update of delta.updates) {
-    for (const pathValue of update.values) {
-      const { path, value } = pathValue
-
-      // value contains the converted data
-      console.log(`${path}: ${value.formatted}`)
-      // Output: "navigation.speedOverGround: 10.0 kn"
-
-      // Access individual fields:
-      // value.converted - converted numeric/typed value
-      // value.formatted - ready-to-display string
-      // value.original - original SI value
-
-      displayValue(path, value.formatted)
-    }
-  }
-}
-
-ws.onerror = (error) => {
-  console.error('WebSocket error:', error)
-}
-
-ws.onclose = () => {
-  console.log('Disconnected, reconnecting in 5s...')
-  setTimeout(() => connectToStream(), 5000)
-}
-```
-
-**Subscription Protocol:**
-
-The dedicated endpoint uses a simple subscription protocol supporting **explicit path-based subscriptions**:
-
-```typescript
-// Subscription message format
-{
-  context?: string       // Vessel context (default: 'vessels.self')
-  subscribe?: [{         // Array - subscribe to one or many paths
-    path: string        // SignalK path to subscribe to
-    period?: number     // Update period in ms (default: 1000)
-    format?: string     // Format type (default: 'delta')
-    policy?: string     // Policy (default: 'instant')
-  }]
-  unsubscribe?: [{       // Array - unsubscribe from one or many paths
-    path: string        // Path to unsubscribe from
-  }]
-}
-```
-
-**Important Notes:**
-- ✅ **Multiple paths**: Send an array with as many paths as needed
-- ❌ **No wildcards**: Each path must be explicitly listed (no `*` or `**` patterns)
-- 🔄 **Unsubscribe first**: Process order is `unsubscribe` → `subscribe` (allows atomic path switching)
-- 📋 **Get all paths**: Use `/plugins/signalk-units-preference/paths` to fetch available paths
-
-**Response Format:**
-
-```typescript
-// Delta response format
-{
-  context: string       // Vessel context (e.g., 'vessels.self')
-  updates: [{
-    $source: string    // Data source
-    timestamp: string  // ISO-8601 timestamp
-    values: [{
-      path: string     // Original path (NOT .unitsConverted)
-      value: {
-        converted: any           // Converted value (typed)
-        formatted: string        // Display-ready string
-        original: any            // Original SI value
-      }
-    }],
-    meta?: [{          // Optional metadata (if sendMeta enabled)
-      path: string
-      value: {
-        units: string            // Target unit
-        displayFormat: string    // Format pattern
-        description: string      // Description
-        originalUnits: string    // Base unit
-      }
-    }]
-  }]
-}
-```
-
-**Subscribe to Multiple Paths:**
-
-```javascript
-// Subscribe to specific paths (1 to N paths)
-ws.send(JSON.stringify({
-  context: 'vessels.self',
-  subscribe: [
-    { path: 'navigation.speedOverGround', period: 1000 },
-    { path: 'navigation.courseOverGroundTrue', period: 1000 },
-    { path: 'environment.wind.speedApparent', period: 1000 },
-    { path: 'environment.wind.directionApparent', period: 1000 },
-    { path: 'electrical.batteries.0.voltage', period: 2000 }
-    // ... add as many paths as needed
-  ]
-}))
-```
-
-**Subscribe to All Available Paths:**
-
-```javascript
-// Fetch list of all available paths
-const response = await fetch('/plugins/signalk-units-preference/paths')
-const pathsData = await response.json()
-const allPaths = Object.keys(pathsData)
-
-// Subscribe to all of them
-ws.send(JSON.stringify({
-  context: 'vessels.self',
-  subscribe: allPaths.map(path => ({
-    path: path,
-    period: 1000,
-    format: 'delta',
-    policy: 'instant'
-  }))
-}))
-```
-
-**Switch to Single Path Subscription:**
-
-```javascript
-// Unsubscribe from all, then subscribe to one specific path
-ws.send(JSON.stringify({
-  context: 'vessels.self',
-  unsubscribe: allPaths.map(path => ({ path })),  // Unsubscribe from all
-  subscribe: [
-    { path: 'navigation.speedOverGround', period: 1000 }  // Subscribe to one
-  ]
-}))
-```
-
-**Multi-Vessel Example:**
-
-```javascript
-// Subscribe to data from another vessel (AIS target, buddy boat)
-ws.send(JSON.stringify({
-  context: 'vessels.urn:mrn:imo:mmsi:123456789',  // AIS target
-  subscribe: [
-    { path: 'navigation.position', period: 5000 },
-    { path: 'navigation.speedOverGround', period: 2000 }
-  ]
-}))
-
-// Switch contexts dynamically
-function changeVessel(newContext) {
-  // Unsubscribe from all paths, then subscribe to new context
-  ws.send(JSON.stringify({
-    context: newContext,
-    unsubscribe: allPaths.map(path => ({ path })),
-    subscribe: desiredPaths.map(path => ({ path, period: 1000 }))
-  }))
-}
-```
-
-**Complete Integration Example:**
-
-See the plugin's web UI (`public/js/app-stream-viewer.js`) for a complete working example that demonstrates:
-- Connection management with auto-reconnect
-- Multi-vessel context selection
-- Dynamic subscription management
-- Single-path vs all-paths subscription modes
-- Display of converted values with metadata
-
----
-
-#### 2. REST API Integration (For Non-Real-Time Apps)
-
-**Use Case**: Display a single SignalK value in user's preferred units
+**Use Case**: Fetch conversion metadata and perform client-side conversions
 
 ```javascript
 // Get conversion info for a path
@@ -1633,14 +1177,17 @@ const conversion = await response.json()
 //   "supportsPut": false
 // }
 
-// Display to user
-console.log(`Speed: ${conversion.formatted}`)
+// Perform conversion client-side using the formula
+const rawValue = 5.14  // m/s from SignalK
+const converted = eval(conversion.formula.replace('value', rawValue))
+const formatted = converted.toFixed(1)  // Use displayFormat "0.0"
+console.log(`Speed: ${formatted} ${conversion.symbol}`)
 // Output: "Speed: 10.0 kn"
 ```
 
-#### 2. Real-Time Value Conversion
+#### Real-Time Value Conversion
 
-**Use Case**: Subscribe to SignalK delta stream and convert values on-the-fly
+**Use Case**: Subscribe to SignalK delta stream and convert values on-the-fly using client-side evaluation
 
 ```javascript
 // Cache conversion info for paths you're monitoring
@@ -1666,27 +1213,21 @@ ws.onmessage = async (event) => {
       // Get conversion for this path
       const conversion = await getConversion(path)
 
-      // Convert the value using POST endpoint (supports all types)
-      const response = await fetch('/plugins/signalk-units-preference/conversions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path, value: rawValue })
-      })
-      const result = await response.json()
-      displayValue(path, result.formatted)
-
-      // Alternative: Use GET endpoint for numbers only
-      // if (conversion.valueType === 'number' && typeof rawValue === 'number') {
-      //   const response = await fetch(`/plugins/signalk-units-preference/conversions/${path}?value=${encodeURIComponent(rawValue)}`)
-      //   const result = await response.json()
-      //   displayValue(path, result.formatted)
-      // }
+      // Convert the value client-side using the formula
+      if (conversion.valueType === 'number' && typeof rawValue === 'number') {
+        const converted = eval(conversion.formula.replace('value', rawValue))
+        const formatted = converted.toFixed(1)  // Use displayFormat
+        displayValue(path, `${formatted} ${conversion.symbol}`)
+      } else {
+        // Pass through non-numeric values
+        displayValue(path, String(rawValue))
+      }
     }
   }
 }
 ```
 
-#### 3. Bulk Path Analysis
+#### Bulk Path Analysis
 
 **Use Case**: Analyze multiple paths at startup to determine types and units
 
@@ -1744,7 +1285,7 @@ for (const path of paths) {
 // - conversions[path].displayFormat → for formatting
 ```
 
-#### 4. User Input Conversion (Reverse Conversion)
+#### User Input Conversion (Reverse Conversion)
 
 **Use Case**: User enters a value in their preferred units, convert back to SI for PUT
 
@@ -1770,7 +1311,7 @@ await fetch(`/signalk/v1/api/vessels/self/${path.replace(/\./g, '/')}`, {
 })
 ```
 
-#### 5. Dynamic Form Generation
+#### Dynamic Form Generation
 
 **Use Case**: Build a settings form that adapts to value types
 
@@ -1812,7 +1353,7 @@ async function createInputForPath(path) {
 
 ### API Response Types
 
-#### Conversion Response
+#### Conversion Metadata Response
 ```typescript
 {
   path: string              // SignalK path
@@ -1825,17 +1366,6 @@ async function createInputForPath(path) {
   category: string          // Category name (e.g., "speed", "temperature")
   valueType: string         // "number" | "boolean" | "string" | "date" | "object" | "unknown"
   supportsPut?: boolean     // Whether path supports PUT operations
-}
-```
-
-#### Convert Value Response
-```typescript
-{
-  originalValue: number     // Input value in base units
-  convertedValue: number    // Output value in target units
-  symbol: string            // Display symbol
-  formatted: string         // Ready-to-display string (e.g., "10.0 kn")
-  displayFormat: string     // Format used
 }
 ```
 
@@ -1893,18 +1423,19 @@ class SignalKValueWidget {
     }
   }
 
-  async updateValue(rawValue) {
+  updateValue(rawValue) {
     this.value = rawValue
 
-    // Use POST endpoint for all types
+    // Perform client-side conversion
     try {
-      const response = await fetch('/plugins/signalk-units-preference/conversions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: this.path, value: rawValue })
-      })
-      const result = await response.json()
-      this.render(result.formatted)
+      if (this.conversion.valueType === 'number' && typeof rawValue === 'number') {
+        const converted = eval(this.conversion.formula.replace('value', rawValue))
+        const decimals = this.conversion.displayFormat === '0' ? 0 : 1
+        const formatted = `${converted.toFixed(decimals)} ${this.conversion.symbol}`
+        this.render(formatted)
+      } else {
+        this.render(String(rawValue))
+      }
     } catch (e) {
       console.error('Conversion failed:', e)
       this.render(String(rawValue))
@@ -2072,11 +1603,10 @@ converter.onValueUpdate = (path, formattedValue) => {
 }
 ```
 
-### WebSocket + Conversion: Performance Considerations
+### Performance Considerations
 
-**Two approaches for real-time conversion:**
+For real-time conversion with SignalK delta streams, use local formula evaluation:
 
-#### Approach 1: Local Formula Evaluation (Recommended)
 ```javascript
 // Fast - no network call per value
 const convertedValue = eval(conversion.formula.replace('value', rawValue))
@@ -2084,45 +1614,11 @@ const formatted = formatNumber(convertedValue, conversion.displayFormat)
 const display = `${formatted} ${conversion.symbol}`
 ```
 
-**Pros:**
+**Benefits:**
 - Fast (no REST call per update)
 - Works offline
 - Lower server load
-
-**Cons:**
-- Need to implement formula evaluator
-- Need to implement number formatter
-
-#### Approach 2: REST API per Value
-```javascript
-// Slower - REST call per value
-
-// For numbers (GET endpoint with query param):
-const response = await fetch(`/plugins/signalk-units-preference/conversions/${path}?value=${encodeURIComponent(rawValue)}`)
-const result = await response.json()
-const display = result.formatted
-
-// For all types (POST endpoint):
-const response = await fetch('/plugins/signalk-units-preference/conversions', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ path, value: rawValue })
-})
-const result = await response.json()
-const display = result.formatted
-```
-
-**Pros:**
-- Simple implementation
-- Server handles all formatting
-- POST endpoint supports all types (number, boolean, date, string)
-
-**Cons:**
-- Network latency (100-200ms per call)
-- Higher server load
-- Doesn't work offline
-
-**Recommendation:** Use Approach 1 for high-frequency paths (10+ updates/sec), Approach 2 for low-frequency or initial loads.
+- Suitable for high-frequency updates (10+ updates/sec)
 
 ### Common Patterns
 
