@@ -91,6 +91,12 @@ async function addBaseUnit() {
     // Reload schema and unit definitions
     await loadSchema()
     await loadUnitDefinitions()
+
+    // Reload preferences data (categories, patterns, overrides)
+    if (typeof loadData === 'function') {
+      await loadData()
+    }
+
     renderUnitDefinitions()
 
     // Reinitialize all dropdowns to include new base unit
@@ -129,6 +135,12 @@ Are you sure you want to continue?`
     // Reload schema and unit definitions
     await loadSchema()
     await loadUnitDefinitions()
+
+    // Reload preferences data (categories, patterns, overrides)
+    if (typeof loadData === 'function') {
+      await loadData()
+    }
+
     renderUnitDefinitions()
 
     // Reinitialize all dropdowns to remove deleted base unit
@@ -283,6 +295,12 @@ async function saveEditBaseUnit(baseUnit) {
 
     // Reload and re-render
     await loadUnitDefinitions()
+
+    // Reload preferences data (categories, patterns, overrides)
+    if (typeof loadData === 'function') {
+      await loadData()
+    }
+
     renderUnitDefinitions()
 
     // Cancel edit mode to show updated view
@@ -410,6 +428,12 @@ async function addConversion() {
     // Reload schema and unit definitions
     await loadSchema()
     await loadUnitDefinitions()
+
+    // Reload preferences data (categories, patterns, overrides)
+    if (typeof loadData === 'function') {
+      await loadData()
+    }
+
     renderUnitDefinitions()
 
     // Reinitialize all dropdowns to include new conversion
@@ -434,6 +458,12 @@ async function deleteConversion(baseUnit, targetUnit) {
     // Reload schema and unit definitions
     await loadSchema()
     await loadUnitDefinitions()
+
+    // Reload preferences data (categories, patterns, overrides)
+    if (typeof loadData === 'function') {
+      await loadData()
+    }
+
     renderUnitDefinitions()
 
     // Reinitialize all dropdowns to remove deleted conversion
@@ -640,6 +670,12 @@ async function saveEditConversion(baseUnit, targetUnit) {
     // Reload schema and unit definitions
     await loadSchema()
     await loadUnitDefinitions()
+
+    // Reload preferences data (categories, patterns, overrides)
+    if (typeof loadData === 'function') {
+      await loadData()
+    }
+
     renderUnitDefinitions()
 
     initializePatternDropdowns()
@@ -706,10 +742,49 @@ async function loadUnitDefinitions() {
       // If this unit exists in standard, it's a standard unit with custom additions
       const isStandardUnit = !!standardUnits[baseUnit]
 
-      unitDefinitions[baseUnit] = {
-        ...def,
-        isCustom: !isStandardUnit,
-        isStandard: isStandardUnit
+      if (isStandardUnit) {
+        // Merge: keep all standard conversions, add/override with custom conversions
+        const mergedConversions = {}
+
+        // Add all standard conversions first
+        for (const [key, conv] of Object.entries(standardUnits[baseUnit].conversions || {})) {
+          mergedConversions[key] = {
+            ...conv,
+            isCustomConversion: false
+          }
+        }
+
+        // Add/override with custom conversions, marking them as custom
+        for (const [key, conv] of Object.entries(def.conversions || {})) {
+          mergedConversions[key] = {
+            ...conv,
+            isCustomConversion: true
+          }
+        }
+
+        unitDefinitions[baseUnit] = {
+          ...unitDefinitions[baseUnit],
+          ...def,
+          conversions: mergedConversions,
+          isCustom: false,
+          isStandard: true
+        }
+      } else {
+        // Pure custom unit - mark all conversions as custom
+        const customConversions = {}
+        for (const [key, conv] of Object.entries(def.conversions || {})) {
+          customConversions[key] = {
+            ...conv,
+            isCustomConversion: true
+          }
+        }
+
+        unitDefinitions[baseUnit] = {
+          ...def,
+          conversions: customConversions,
+          isCustom: true,
+          isStandard: false
+        }
       }
     }
 
@@ -794,15 +869,18 @@ function renderUnitDefinitions() {
                     ${conversions
                       .map(([target, conv]) => {
                         // All conversions are now editable
+                        const customBadge = conv.isCustomConversion
+                          ? '<span style="background: #ff9800; color: white; padding: 2px 6px; border-radius: 3px; font-size: 10px; margin-left: 6px;">CUSTOM</span>'
+                          : ''
                         return `
                       <tr id="${buildConversionId('conversion-row', baseUnit, target)}" style="border-bottom: 1px solid #f0f0f0;">
-                        <td style="padding: 8px; font-family: monospace;">${target}</td>
+                        <td style="padding: 8px; font-family: monospace;">${target}${customBadge}</td>
                         <td style="padding: 8px; font-family: monospace; font-size: 12px;">${conv.formula}</td>
                         <td style="padding: 8px; font-family: monospace; font-size: 12px;">${conv.inverseFormula}</td>
                         <td style="padding: 8px;">${conv.symbol}</td>
                         <td style="padding: 8px;">
-                          <button class="btn-primary btn-edit" onclick="${isStandard ? 'editStandardConversion' : 'editConversion'}('${baseUnit}', '${target}')">Edit</button>
-                          <button class="btn-danger btn-delete" onclick="${isStandard ? 'deleteStandardConversion' : 'deleteConversion'}('${baseUnit}', '${target}')">Delete</button>
+                          <button class="btn-primary btn-edit" onclick="${conv.isCustomConversion ? 'editConversion' : 'editStandardConversion'}('${baseUnit}', '${target}')">Edit</button>
+                          <button class="btn-danger btn-delete" onclick="${conv.isCustomConversion ? 'deleteConversion' : 'deleteStandardConversion'}('${baseUnit}', '${target}')">Delete</button>
                         </td>
                       </tr>`
                       })
@@ -1109,6 +1187,12 @@ async function deleteStandardBaseUnit(baseUnit) {
     // Reload and re-render
     await loadSchema()
     await loadUnitDefinitions()
+
+    // Reload preferences data (categories, patterns, overrides)
+    if (typeof loadData === 'function') {
+      await loadData()
+    }
+
     renderUnitDefinitions()
     initializePatternDropdowns()
     initializeCustomCategoryDropdowns()
@@ -1137,6 +1221,12 @@ async function deleteStandardConversion(baseUnit, targetUnit) {
 
     // Reload and re-render
     await loadUnitDefinitions()
+
+    // Reload preferences data (categories, patterns, overrides)
+    if (typeof loadData === 'function') {
+      await loadData()
+    }
+
     renderUnitDefinitions()
     initializePatternDropdowns()
     initializeCustomCategoryDropdowns()

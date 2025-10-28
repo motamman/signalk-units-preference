@@ -12,7 +12,9 @@
 // ============================================================================
 
 async function apiLoadSchema() {
-  const res = await fetch(`${API_BASE}/schema`)
+  const res = await fetch(`${API_BASE}/schema`, {
+    cache: 'no-cache'
+  })
   if (!res.ok) throw new Error('Failed to load schema')
   return await res.json()
 }
@@ -206,7 +208,9 @@ async function apiLoadSignalKMetadata() {
 // ============================================================================
 
 async function apiLoadUnitDefinitions() {
-  const res = await fetch(`${API_BASE}/unit-definitions`)
+  const res = await fetch(`${API_BASE}/unit-definitions`, {
+    cache: 'no-cache'
+  })
   if (!res.ok) throw new Error('Failed to load unit definitions')
   return await res.json()
 }
@@ -281,7 +285,9 @@ async function apiDeleteConversion(baseUnit, targetUnit) {
 // ============================================================================
 
 async function apiLoadStandardUnitDefinitions() {
-  const res = await fetch(`${API_BASE}/standard-unit-definitions`)
+  const res = await fetch(`${API_BASE}/standard-unit-definitions`, {
+    cache: 'no-cache'
+  })
   if (!res.ok) throw new Error('Failed to load standard unit definitions')
   return await res.json()
 }

@@ -1349,6 +1349,11 @@ export class UnitsManager {
       }
       dateFormatNames.forEach(format => targetUnitsByBase['RFC 3339 (UTC)'].add(format))
 
+      if (!targetUnitsByBase['ISO-8601 (UTC)']) {
+        targetUnitsByBase['ISO-8601 (UTC)'] = new Set()
+      }
+      dateFormatNames.forEach(format => targetUnitsByBase['ISO-8601 (UTC)'].add(format))
+
       if (!targetUnitsByBase['Epoch Seconds']) {
         targetUnitsByBase['Epoch Seconds'] = new Set()
       }
@@ -1363,14 +1368,16 @@ export class UnitsManager {
       label: this.getBaseUnitLabel(unit)
     }))
 
-    // Ensure each base unit is always included in its own target units list
-    // (but only if no conversion already exists with that key)
+    // Add identity conversions ONLY if they exist in the definitions
+    // (don't automatically create them - respect user deletions)
     for (const baseUnit of baseUnitsArray) {
       if (!targetUnitsByBase[baseUnit]) {
         targetUnitsByBase[baseUnit] = new Set()
       }
-      // Only add identity if it doesn't already exist as a conversion key
-      if (!targetUnitsByBase[baseUnit].has(baseUnit)) {
+      // Check if the identity conversion actually exists in the standard units data
+      const unitDef = this.standardUnitsData[baseUnit]
+      if (unitDef?.conversions?.[baseUnit]) {
+        // Only add if it exists in the definitions
         targetUnitsByBase[baseUnit].add(baseUnit)
       }
     }

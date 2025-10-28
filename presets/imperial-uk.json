@@ -6,7 +6,7 @@
   "categories": {
     "distance": {
       "baseUnit": "m",
-      "targetUnit": "nm",
+      "targetUnit": "naut-mile",
       "displayFormat": "0.0"
     },
     "speed": {
@@ -26,22 +26,22 @@
     },
     "depth": {
       "baseUnit": "m",
-      "targetUnit": "ft",
+      "targetUnit": "foot",
       "displayFormat": "0.0"
     },
     "volume": {
       "baseUnit": "m3",
-      "targetUnit": "gal(UK)",
+      "targetUnit": "gallon-imp",
       "displayFormat": "0.0"
     },
     "angle": {
       "baseUnit": "rad",
-      "targetUnit": "deg",
+      "targetUnit": "degree",
       "displayFormat": "0.0"
     },
     "length": {
       "baseUnit": "m",
-      "targetUnit": "ft",
+      "targetUnit": "foot",
       "displayFormat": "0.0"
     },
     "angularVelocity": {
@@ -61,7 +61,7 @@
     },
     "power": {
       "baseUnit": "W",
-      "targetUnit": "hp",
+      "targetUnit": "horsepower",
       "displayFormat": "0.00"
     },
     "percentage": {
@@ -76,7 +76,7 @@
     },
     "time": {
       "baseUnit": "s",
-      "targetUnit": "h",
+      "targetUnit": "hour",
       "displayFormat": "0.0"
     },
     "dateTime": {
@@ -91,17 +91,17 @@
     },
     "volumeRate": {
       "baseUnit": "m3/s",
-      "targetUnit": "gal(UK)/h",
+      "targetUnit": "gal-imp/h",
       "displayFormat": "0.0"
     },
     "energy": {
       "baseUnit": "J",
-      "targetUnit": "BTU",
+      "targetUnit": "btu",
       "displayFormat": "0.00"
     },
     "mass": {
       "baseUnit": "kg",
-      "targetUnit": "lb",
+      "targetUnit": "pound",
       "displayFormat": "0.0"
     },
     "area": {

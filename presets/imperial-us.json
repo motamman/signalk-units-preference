@@ -6,7 +6,7 @@
   "categories": {
     "distance": {
       "baseUnit": "m",
-      "targetUnit": "nm",
+      "targetUnit": "naut-mile",
       "displayFormat": "0.0"
     },
     "speed": {
@@ -26,22 +26,22 @@
     },
     "depth": {
       "baseUnit": "m",
-      "targetUnit": "ft",
+      "targetUnit": "foot",
       "displayFormat": "0.0"
     },
     "volume": {
       "baseUnit": "m3",
-      "targetUnit": "gal",
+      "targetUnit": "gallon",
       "displayFormat": "0.0"
     },
     "angle": {
       "baseUnit": "rad",
-      "targetUnit": "deg",
+      "targetUnit": "degree",
       "displayFormat": "0.0"
     },
     "length": {
       "baseUnit": "m",
-      "targetUnit": "ft",
+      "targetUnit": "foot",
       "displayFormat": "0.0"
     },
     "angularVelocity": {
@@ -76,7 +76,7 @@
     },
     "time": {
       "baseUnit": "s",
-      "targetUnit": "s",
+      "targetUnit": "second",
       "displayFormat": "0.0"
     },
     "dateTime": {
@@ -96,12 +96,12 @@
     },
     "energy": {
       "baseUnit": "J",
-      "targetUnit": "BTU",
+      "targetUnit": "btu",
       "displayFormat": "0.00"
     },
     "mass": {
       "baseUnit": "kg",
-      "targetUnit": "lb",
+      "targetUnit": "pound",
       "displayFormat": "0.0"
     },
     "area": {

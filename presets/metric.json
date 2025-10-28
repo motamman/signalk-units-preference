@@ -6,7 +6,7 @@
   "categories": {
     "distance": {
       "baseUnit": "m",
-      "targetUnit": "km",
+      "targetUnit": "kilometer",
       "displayFormat": "0.0"
     },
     "speed": {
@@ -31,12 +31,12 @@
     },
     "volume": {
       "baseUnit": "m3",
-      "targetUnit": "L",
+      "targetUnit": "liter",
       "displayFormat": "0.0"
     },
     "angle": {
       "baseUnit": "rad",
-      "targetUnit": "deg",
+      "targetUnit": "degree",
       "displayFormat": "0.0"
     },
     "length": {
@@ -76,7 +76,7 @@
     },
     "time": {
       "baseUnit": "s",
-      "targetUnit": "h",
+      "targetUnit": "hour",
       "displayFormat": "0.0"
     },
     "dateTime": {

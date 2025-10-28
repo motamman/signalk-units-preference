@@ -1061,6 +1061,10 @@ module.exports = (app: ServerAPI): Plugin => {
             longName: longName || description || undefined,
             conversions: conversions || {}
           })
+
+          // Reload units manager to apply changes
+          await unitsManager.initialize()
+
           res.json({ success: true, baseUnit })
         } catch (error) {
           app.error(`Error adding unit definition: ${error}`)
@@ -1075,6 +1079,10 @@ module.exports = (app: ServerAPI): Plugin => {
         try {
           const baseUnit = req.params.baseUnit
           await unitsManager.deleteUnitDefinition(baseUnit)
+
+          // Reload units manager to apply changes
+          await unitsManager.initialize()
+
           res.json({ success: true, baseUnit })
         } catch (error) {
           app.error(`Error deleting unit definition: ${error}`)
@@ -1105,6 +1113,10 @@ module.exports = (app: ServerAPI): Plugin => {
               longName: longName || undefined,
               key: key || undefined
             })
+
+            // Reload units manager to apply changes
+            await unitsManager.initialize()
+
             res.json({ success: true, baseUnit, targetUnit })
           } catch (error) {
             app.error(`Error adding conversion: ${error}`)
@@ -1122,6 +1134,10 @@ module.exports = (app: ServerAPI): Plugin => {
           try {
             const { baseUnit, targetUnit } = req.params
             await unitsManager.deleteConversionFromUnit(baseUnit, targetUnit)
+
+            // Reload units manager to apply changes
+            await unitsManager.initialize()
+
             res.json({ success: true, baseUnit, targetUnit })
           } catch (error) {
             app.error(`Error deleting conversion: ${error}`)
@@ -1245,6 +1261,9 @@ module.exports = (app: ServerAPI): Plugin => {
 
           await unitsManager.getPreferencesStore().addStandardUnitDefinition(baseUnit, definition)
 
+          // Reload units manager to apply changes
+          await unitsManager.initialize()
+
           res.json({ success: true, baseUnit })
         } catch (error) {
           app.error(`Error creating standard unit definition: ${error}`)
@@ -1259,6 +1278,9 @@ module.exports = (app: ServerAPI): Plugin => {
         try {
           const baseUnit = decodeURIComponent(req.params.baseUnit)
           await unitsManager.getPreferencesStore().deleteStandardUnitDefinition(baseUnit)
+
+          // Reload units manager to apply changes
+          await unitsManager.initialize()
 
           res.json({ success: true, baseUnit })
         } catch (error) {
@@ -1297,6 +1319,9 @@ module.exports = (app: ServerAPI): Plugin => {
               .getPreferencesStore()
               .addConversionToStandardUnit(baseUnit, targetUnit, conversion)
 
+            // Reload units manager to apply changes
+            await unitsManager.initialize()
+
             res.json({ success: true, baseUnit, targetUnit })
           } catch (error) {
             app.error(`Error adding conversion to standard unit: ${error}`)
@@ -1318,6 +1343,9 @@ module.exports = (app: ServerAPI): Plugin => {
             await unitsManager
               .getPreferencesStore()
               .deleteConversionFromStandardUnit(baseUnit, targetUnit)
+
+            // Reload units manager to apply changes
+            await unitsManager.initialize()
 
             res.json({ success: true, baseUnit, targetUnit })
           } catch (error) {
