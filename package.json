@@ -1,6 +1,6 @@
 {
   "name": "signalk-units-preference",
-  "version": "0.7.3-beta.3",
+  "version": "0.7.5-beta.1",
   "description": "SignalK webapp/utility for managing path value/unit conversions and display preferences",
   "main": "dist/index.js",
   "exports": {

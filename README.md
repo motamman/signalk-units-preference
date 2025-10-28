@@ -1,6 +1,6 @@
 # Units Display Preference
 
-A SignalK server tool for managing unit conversions and display preferences across all data paths. Convert any SignalK data point to your preferred units with flexible pattern matching, custom formulas, and a REST API.
+A SignalK server tool for managing unit conversions and display preferences across all data paths. Convert any SignalK data point to your preferred units with flexible pattern matching, custom formulas.
 
 >**Important:** This only changes how conversions are managed inside this tool. It won't modify any existing the display SignalK apps, though it could be used as conversion manager for other apps. For now, it is just for testing.
 
@@ -14,7 +14,8 @@ This plugin provides a complete unit conversion system for SignalK, allowing you
 - Use wildcard patterns to apply conversions to multiple paths
 - Override specific paths with custom units
 - View comprehensive metadata for all paths
-- Access conversion metadata and formulas via REST API for integration with other apps
+- Access conversion metadata and formulas via REST API and websocket for integration with other apps
+- A javascript library for simple integration
 
 ## Key Features
 
@@ -94,7 +95,7 @@ Paths without conversions automatically return their original values with Signal
 - **Formula**: `value` (no conversion)
 
 ### 9. **Date/Time Formatting**
-Render ISO-8601 SignalK timestamps in human-friendly formats using date-fns.
+Render ISO-8601 and RFC 3339 SignalK timestamps in human-friendly formats using date-fns.
 
 - **Multiple Presets**: Short & long dates, regional formats, time-of-day, epoch seconds
 - **Local vs UTC**: Target units with `-local` suffix render in the vessel's local timezone
@@ -272,8 +273,8 @@ Custom items (categories, units, patterns) can be edited:
 - Auto-expands collapsed items when editing
 
 #### **Core vs Custom Labels**
-- **CORE**: Built-in items from SignalK (editable, not deletable)
-- **CUSTOM**: User-created items (fully editable and deletable)
+- **CORE**: Built-in items from SignalK
+- **CUSTOM**: User-created items
 - Editing a core unit creates a custom override
 
 #### **Delete Warnings**
@@ -292,7 +293,7 @@ This plugin provides two sets of REST endpoints:
 
 > **Recommended:** These endpoints provide the simplest integration path - no authentication required, clean flat response format, and work with Bearer tokens. Endpoints provide conversion metadata and formulas for client-side evaluation.
 
-See the [Public Conversions API](#public-conversions-api) section above for details on the public `/signalk/v1/conversions` endpoints.
+See the [Public Conversions API](#public-conversions-api) section below for details on the public `/signalk/v1/conversions` endpoints.
 
 ### Plugin Conversion Endpoints
 
@@ -722,11 +723,11 @@ Convert a value from base unit to target unit.
 
 ```javascript
 // Simple conversion
-const result = converter.convert(5.14, 'm/s', 'kn')
+const result = converter.convert(5.14, 'm/s', 'knot')
 
 console.log(result.value)      // 9.99...
-console.log(result.formatted)  // "10.0 kn"
-console.log(result.symbol)     // "kn"
+console.log(result.formatted)  // "10.0 knot"
+console.log(result.symbol)     // "knot"
 console.log(result.formula)    // "value * 1.94384"
 ```
 

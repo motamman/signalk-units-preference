@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.5-beta.1] - 2025-10-28
+
+### Fixed
+- **Preset Unit Key Mismatches**: Fixed 22 unit key mismatches across all preset files
+  - **Root Cause**: Preset files used abbreviated keys (e.g., "km", "ft", "deg") that didn't match the full conversion keys in standard-units-definitions.json (e.g., "kilometer", "foot", "degree")
+  - **Files Updated**:
+    - `presets/metric.json` - 4 fixes (km→kilometer, L→liter, deg→degree, h→hour)
+    - `presets/imperial-us.json` - 8 fixes (nm→naut-mile, ft→foot, gal→gallon, deg→degree, ft→foot, s→second, BTU→btu, lb→pound)
+    - `presets/imperial-uk.json` - 10 fixes (nm→naut-mile, ft→foot, gal(UK)→gallon-imp, deg→degree, ft→foot, hp→horsepower, h→hour, gal(UK)/h→gal-imp/h, BTU→btu, lb→pound)
+  - **Impact**: Preset application now works correctly without conversion errors
+  - **Locations**: `presets/metric.json`, `presets/imperial-us.json`, `presets/imperial-uk.json`
+  - **Note**: DateTime entries were intentionally left unchanged as they reference format names rather than conversion keys
+
+### Changed
+- **Documentation Architecture**: Updated README to emphasize client-side conversion approach
+  - **Removed**: All references to server-side conversion streams and dedicated WebSocket endpoints
+  - **Removed**: POST endpoints for server-side value conversion
+  - **Removed**: GET endpoint `?value=X` parameter for server-side conversion
+  - **Updated**: Integration Guide now focuses on fetching conversion metadata and performing client-side evaluation
+  - **Enhanced**: WebSocket examples now show complete flow - connect to SignalK stream, fetch conversion metadata via REST API, perform conversions client-side
+  - **Clarified**: All API endpoints now documented as providing "conversion metadata and formulas for client-side evaluation"
+  - **Impact**: Documentation now clearly communicates that the plugin provides conversion metadata (formulas, symbols, formats) rather than performing conversions server-side
+  - **Location**: `README.md` - Sections: Overview, Key Features, REST API Reference, Integration Guide, Public Conversions API
+
+### Documentation
+- **WebSocket Integration Examples**: Enhanced real-time conversion examples
+  - Added complete WebSocket connection setup in "Real-Time Value Conversion" section
+  - Shows connecting to SignalK's standard stream (`ws://localhost:3000/signalk/v1/stream`)
+  - Demonstrates fetching conversion metadata from REST API
+  - Shows client-side formula evaluation with cached metadata
+  - Removed stale references to deprecated server-side conversion approaches
+  - Locations: README.md lines 1188-1242, 1456-1600
+
 ## [0.7.3-beta.3] - 2025-10-26
 
 ### Added ⭐ Public API Endpoints
