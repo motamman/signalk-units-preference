@@ -181,8 +181,8 @@ export interface ConversionResponse {
 export interface ConvertValueResponse {
   /** Original value in base units */
   originalValue: number
-  /** Converted value in target units */
-  convertedValue: number
+  /** Converted value in target units (string for durations/dates, number for numeric conversions) */
+  convertedValue: number | string
   /** Target unit symbol */
   symbol: string
   /** Formatted display string */

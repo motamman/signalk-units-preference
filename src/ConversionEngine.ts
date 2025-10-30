@@ -257,7 +257,7 @@ export class ConversionEngine {
 
       return {
         originalValue: value,
-        convertedValue: typeof convertedValue === 'number' ? convertedValue : value,
+        convertedValue: typeof convertedValue === 'string' ? formatted : convertedValue,
         symbol,
         formatted,
         displayFormat

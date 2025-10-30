@@ -181,7 +181,28 @@ export class SignalKUnitsConverter {
       throw new Error(`No conversion metadata found for base unit: ${baseUnit}`)
     }
 
-    const conversion = unitMeta.conversions[targetUnit]
+    let conversion = unitMeta.conversions[targetUnit]
+
+    // For date/time base units, dynamically generate conversion if not found
+    if (!conversion && this.isDateTimeBaseUnit(baseUnit)) {
+      conversion = {
+        formula: 'value',
+        inverseFormula: 'value',
+        symbol: '',
+        dateFormat: targetUnit,
+        useLocalTime: targetUnit.endsWith('-local')
+      }
+    }
+
+    // For duration formats on seconds base unit, dynamically generate if not found
+    if (!conversion && baseUnit === 's' && this.isDurationFormat(targetUnit)) {
+      conversion = {
+        formula: this.getDurationFormula(targetUnit),
+        symbol: '',
+        displayFormat: 'duration'
+      }
+    }
+
     if (!conversion) {
       throw new Error(`No conversion found from ${baseUnit} to ${targetUnit}`)
     }
@@ -203,6 +224,7 @@ export class SignalKUnitsConverter {
     if (
       conversion.dateFormat ||
       baseUnit.toLowerCase().includes('rfc 3339') ||
+      baseUnit.toLowerCase().includes('iso-8601') ||
       baseUnit.toLowerCase().includes('epoch')
     ) {
       return this.convertDate(value as string | number, baseUnit, targetUnit, conversion)
@@ -217,8 +239,9 @@ export class SignalKUnitsConverter {
     const isDuration = typeof convertedValue === 'string'
     const formatted = this.formatValue(convertedValue, conversion)
 
+    // For durations and dates, value and formatted should be identical
     return {
-      value: convertedValue,
+      value: isDuration ? formatted : convertedValue,
       formatted,
       symbol: conversion.symbol,
       baseUnit: unitMeta.baseUnit,
@@ -289,6 +312,41 @@ export class SignalKUnitsConverter {
   }
 
   // Private helper methods
+
+  private isDateTimeBaseUnit(baseUnit: string): boolean {
+    const lower = baseUnit.toLowerCase()
+    return (
+      lower.includes('rfc 3339') ||
+      lower.includes('iso-8601') ||
+      lower.includes('epoch seconds')
+    )
+  }
+
+  private isDurationFormat(targetUnit: string): boolean {
+    const durationFormats = [
+      'DD:HH:MM:SS',
+      'HH:MM:SS',
+      'HH:MM:SS.mmm',
+      'MM:SS',
+      'MM:SS.mmm',
+      'duration-verbose',
+      'duration-compact'
+    ]
+    return durationFormats.includes(targetUnit)
+  }
+
+  private getDurationFormula(targetUnit: string): string {
+    const formulaMap: Record<string, string> = {
+      'DD:HH:MM:SS': 'formatDurationDHMS(value)',
+      'HH:MM:SS': 'formatDurationHMS(value)',
+      'HH:MM:SS.mmm': 'formatDurationHMSMillis(value)',
+      'MM:SS': 'formatDurationMS(value)',
+      'MM:SS.mmm': 'formatDurationMSMillis(value)',
+      'duration-verbose': 'formatDurationVerbose(value)',
+      'duration-compact': 'formatDurationCompact(value)'
+    }
+    return formulaMap[targetUnit] || 'value'
+  }
 
   private findUnitMetadata(baseUnit: string): UnitMetadata | null {
     // Try direct lookup first
@@ -363,9 +421,10 @@ export class SignalKUnitsConverter {
       }
 
       const epochSeconds = Math.floor(date.getTime() / 1000)
+      const formatted = String(epochSeconds)
       return {
-        value: epochSeconds,
-        formatted: String(epochSeconds),
+        value: formatted,
+        formatted,
         symbol: '',
         baseUnit,
         targetUnit,
