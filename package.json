@@ -70,6 +70,7 @@
     "presets/**/*",
     "!presets/custom/",
     "tsconfig.json",
+    "rollup.config.js",
     "README.md",
     "LICENSE"
   ],

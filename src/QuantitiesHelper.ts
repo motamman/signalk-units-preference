@@ -420,8 +420,8 @@ export function getSupportedKinds(): string[] {
   try {
     // Create a sample quantity to access kinds
     const qty = Qty('1 m')
-    // @ts-expect-error - accessing static method
-    const kinds = qty.constructor.getKinds?.() || []
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const kinds = (qty.constructor as any).getKinds?.() || []
     return Array.isArray(kinds) ? kinds : []
   } catch {
     return []
