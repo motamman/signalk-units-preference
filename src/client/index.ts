@@ -316,9 +316,7 @@ export class SignalKUnitsConverter {
   private isDateTimeBaseUnit(baseUnit: string): boolean {
     const lower = baseUnit.toLowerCase()
     return (
-      lower.includes('rfc 3339') ||
-      lower.includes('iso-8601') ||
-      lower.includes('epoch seconds')
+      lower.includes('rfc 3339') || lower.includes('iso-8601') || lower.includes('epoch seconds')
     )
   }
 
