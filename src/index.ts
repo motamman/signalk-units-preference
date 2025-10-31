@@ -919,9 +919,7 @@ module.exports = (app: ServerAPI): Plugin => {
         }
       })
 
-      // GET /plugins/signalk-units-preference/paths
-      // Return metadata definitions for all discovered SignalK paths
-      router.get('/paths', async (req: Request, res: Response) => {
+      const getPaths = async (req: Request, res: Response) => {
         try {
           // Use cache by default (30s TTL) to prevent API hammering
           // Client can add ?refresh=true query param to force refresh if needed
@@ -933,7 +931,11 @@ module.exports = (app: ServerAPI): Plugin => {
           const response = formatErrorResponse(error)
           res.status(response.status).json(response.body)
         }
-      })
+      }
+      // GET /plugins/signalk-units-preference/paths
+      // Return metadata definitions for all discovered SignalK paths
+      router.get('/paths', getPaths);
+      (app as any).get('/signalk/v2/api/selfPaths', getPaths);
 
       // Zones API - Plugin router endpoints (for UI/browser access)
       // Note: Main /signalk/v1/zones endpoints are registered in start() for Bearer token auth
