@@ -635,6 +635,7 @@ The plugin includes a JavaScript client library that makes it easy to use the Co
 **Key Features:**
 - Fetch conversion metadata from the REST API
 - Perform client-side conversions using formulas and formatting
+- Dynamic generation of date/time and duration format conversions (no metadata required)
 - Optional WebSocket connection for live preference updates
 - Works in browsers (via script tag or bundler) and Node.js
 - TypeScript support with full type definitions

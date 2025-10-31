@@ -5,6 +5,51 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.5-beta.3] - 2025-10-30
+
+### Fixed
+- **Duration and Date/Time Conversion Values**: Fixed server-side and client-side conversions to return consistent values
+  - **Root Cause**: Server-side `ConversionEngine.convertWithFormula()` returned original numeric seconds in `convertedValue` field for durations, while `formatted` contained the properly formatted string (e.g., "4424:02:15:28")
+  - **Solution**:
+    - Updated `ConversionEngine.ts` line 260 to return formatted string when formula returns string: `convertedValue: typeof convertedValue === 'string' ? formatted : convertedValue`
+    - Updated `src/client/index.ts` line 244 to ensure durations return formatted string: `value: isDuration ? formatted : convertedValue`
+    - Updated `ConvertValueResponse` type to allow `convertedValue: number | string` (previously only `number`)
+  - **Impact**: Both `converted` and `formatted` fields now contain identical string values for duration and date/time conversions
+  - **Example**: Duration conversion now returns `{ converted: "4424:02:15:28", formatted: "4424:02:15:28" }` instead of `{ converted: 382241728, formatted: "4424:02:15:28" }`
+  - **Location**: `src/ConversionEngine.ts:260`, `src/client/index.ts:244`, `src/types.ts:185`
+
+- **Client Library Dynamic Conversion Generation**: Fixed client library to handle date/time and duration conversions not present in metadata
+  - **Root Cause**: REST API `/signalk/v1/conversions` only returns currently selected conversion per path, so client couldn't convert to alternate date formats (e.g., `dd/mm/yyyy-am/pm-local` when metadata only had `short-date-local`)
+  - **Solution**:
+    - Added dynamic conversion generation for date/time base units (RFC 3339, ISO-8601, Epoch Seconds)
+    - Added dynamic conversion generation for duration formats on seconds base unit
+    - Added helper methods: `isDateTimeBaseUnit()`, `isDurationFormat()`, `getDurationFormula()`
+  - **Impact**: Client library can now convert to any date/time or duration format without needing it in the metadata
+  - **Location**: `src/client/index.ts:186-204, 306-348`
+
+- **npm Package Build Dependencies**: Fixed missing build configuration files in published npm package
+  - **Root Cause**: `rollup.config.js` and `tsconfig.client.json` were not included in package.json `files` array, causing build failures on remote installations
+  - **Solution**: Added `rollup.config.js` and `tsconfig.client.json` to package.json `files` array
+  - **Impact**: Plugin can now be installed and built successfully from npm/GitHub on remote servers
+  - **Location**: `package.json:73-74`
+
+- **TypeScript Compilation Error**: Fixed unused `@ts-expect-error` directive in QuantitiesHelper.ts
+  - **Root Cause**: TypeScript flagged unused `@ts-expect-error` comment when accessing js-quantities static method
+  - **Solution**: Replaced `@ts-expect-error` with proper type casting: `(qty.constructor as any).getKinds?.()`
+  - **Location**: `src/QuantitiesHelper.ts:423-424`
+
+- **Dependency Configuration**: Moved js-quantities from devDependencies to dependencies
+  - **Root Cause**: `src/QuantitiesHelper.ts` imports js-quantities at runtime, but it was only in devDependencies, causing "module not found" errors in production
+  - **Solution**: Moved `js-quantities` from devDependencies to dependencies in package.json
+  - **Impact**: Plugin installs correctly with all required runtime dependencies
+  - **Location**: `package.json:90`
+
+### Changed
+- **Type Safety**: Enhanced `ConvertValueResponse` interface to support both numeric and string conversion results
+  - Updated `convertedValue` field type from `number` to `number | string`
+  - Properly reflects that duration and date/time conversions return strings while numeric conversions return numbers
+  - Location: `src/types.ts:185`
+
 ## [0.7.5-beta.1] - 2025-10-28
 
 ### Fixed
